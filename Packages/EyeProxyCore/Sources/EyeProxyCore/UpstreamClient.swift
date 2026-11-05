@@ -28,12 +28,13 @@ final class UpstreamClient: Sendable {
         }
     }
 
-    /// 응답 완료 전 `timeout`이 지나거나 호출 Task가 취소되면 업스트림 연결을 닫고 throw 한다.
+    /// 업스트림에서 `timeout` 동안 아무것도 오지 않거나(유휴) 호출 Task가 취소되면 업스트림 연결을 닫고 throw 한다.
     func send(_ request: FlowRequest, tls: Bool) async throws -> FlowResponse {
         let sslContext = tls ? try tlsContext.get() : nil
         let loop = group.next()
         let promise = loop.makePromise(of: FlowResponse.self)
         let host = request.host
+        let timeout = self.timeout
         let channel: Channel
         do {
             channel = try await ClientBootstrap(group: loop)
@@ -46,7 +47,7 @@ final class UpstreamClient: Sendable {
                             try ops.addHandler(NIOSSLClientHandler(context: sslContext, serverHostname: isIP ? nil : host))
                         }
                         try ops.addHTTPClientHandlers()
-                        try ops.addHandler(ResponseCollector(promise: promise))
+                        try ops.addHandler(ResponseCollector(promise: promise, idleTimeout: timeout))
                     }
                 }
                 .connect(host: host, port: request.port).get()
@@ -54,12 +55,6 @@ final class UpstreamClient: Sendable {
             promise.fail(error)
             throw error
         }
-        let deadline = loop.scheduleTask(in: timeout) {
-            promise.fail(UpstreamClientError(description: "upstream timed out"))
-            channel.close(promise: nil)
-        }
-        promise.futureResult.whenComplete { _ in deadline.cancel() }
-
         let isDefaultPort = (request.scheme == "http" && request.port == 80) || (request.scheme == "https" && request.port == 443)
         let hostName = host.contains(":") ? "[\(host)]" : host
         var headers = HTTPHeaders([("Host", isDefaultPort ? hostName : "\(hostName):\(request.port)")]
@@ -91,31 +86,57 @@ private final class ResponseCollector: ChannelInboundHandler {
     private var promise: EventLoopPromise<FlowResponse>?
     private var head: HTTPResponseHead?
     private var body = Data()
+    private let idleTimeout: TimeAmount
+    private var deadline: Scheduled<Void>?
 
-    init(promise: EventLoopPromise<FlowResponse>) { self.promise = promise }
+    init(promise: EventLoopPromise<FlowResponse>, idleTimeout: TimeAmount) {
+        self.promise = promise
+        self.idleTimeout = idleTimeout
+    }
+
+    func channelActive(context: ChannelHandlerContext) {
+        armDeadline(context: context)
+        context.fireChannelActive()
+    }
+
+    /// ponytail: 30초 유휴 제한(마지막 수신 기준, 총 시간 제한 없음). 느린 대용량 응답도 바이트가 오는 한 끊지 않는다.
+    private func armDeadline(context: ChannelHandlerContext) {
+        deadline?.cancel()
+        deadline = context.eventLoop.assumeIsolated().scheduleTask(in: idleTimeout) {
+            self.complete(.failure(UpstreamClientError(description: "upstream timed out")))
+            context.close(promise: nil)
+        }
+    }
+
+    /// 완료 경로는 모두 여기로: 데드라인 취소 후 promise를 한 번만 완료한다.
+    private func complete(_ result: Result<FlowResponse, any Error>) {
+        deadline?.cancel()
+        deadline = nil
+        promise?.completeWith(result)
+        promise = nil
+    }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        guard promise != nil else { return }
+        armDeadline(context: context)
         switch unwrapInboundIn(data) {
         case .head(let h): head = h
         case .body(let b): body.append(contentsOf: b.readableBytesView)
         case .end:
             guard let head else { return }
-            promise?.succeed(FlowResponse(status: Int(head.status.code), reason: head.status.reasonPhrase,
-                                          headers: head.headers.map { HTTPHeader(name: $0.name, value: $0.value) }, body: body))
-            promise = nil
+            complete(.success(FlowResponse(status: Int(head.status.code), reason: head.status.reasonPhrase,
+                                           headers: head.headers.map { HTTPHeader(name: $0.name, value: $0.value) }, body: body)))
             context.close(promise: nil)
         }
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
-        promise?.fail(error)
-        promise = nil
+        complete(.failure(error))
         context.close(promise: nil)
     }
 
     func channelInactive(context: ChannelHandlerContext) {
-        promise?.fail(UpstreamClientError(description: "upstream closed before response completed"))
-        promise = nil
+        complete(.failure(UpstreamClientError(description: "upstream closed before response completed")))
         context.fireChannelInactive()
     }
 }
