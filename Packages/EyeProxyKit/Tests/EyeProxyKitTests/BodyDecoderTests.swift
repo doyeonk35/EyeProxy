@@ -8,7 +8,7 @@ private func h(_ n: String, _ v: String) -> HTTPHeader { .init(name: n, value: v
 
 @Test func decodesGzipJSON() throws {
     let gz = try gzip(Data(#"{"a":1}"#.utf8))
-    #expect(BodyDecoder.decode(body: gz, headers: [h("Content-Encoding", "gzip"), h("Content-Type", "application/json")]) == .json(pretty: "{\n  \"a\" : 1\n}"))
+    #expect(BodyDecoder.decode(body: gz, headers: [h("Content-Encoding", "gzip"), h("Content-Type", "application/json")]) == .json(pretty: "{\n  \"a\" : 1\n}", raw: "{\"a\":1}"))
 }
 
 @Test func gzipWithFNAMESkipsHeaderField() throws {
@@ -52,13 +52,13 @@ private func h(_ n: String, _ v: String) -> HTTPHeader { .init(name: n, value: v
 private func json(_ s: String) -> DecodedBody { BodyDecoder.decode(body: Data(s.utf8), headers: [h("Content-Type", "application/json")]) }
 
 @Test func jsonPreservesKeyOrderAndBigIntegers() {
-    #expect(json(#"{"z":1,"a":2}"#) == .json(pretty: "{\n  \"z\" : 1,\n  \"a\" : 2\n}"))
-    #expect(json("12345678901234567890") == .json(pretty: "12345678901234567890"))
-    #expect(json(#"{"n":12345678901234567890}"#) == .json(pretty: "{\n  \"n\" : 12345678901234567890\n}"))
+    #expect(json(#"{"z":1,"a":2}"#) == .json(pretty: "{\n  \"z\" : 1,\n  \"a\" : 2\n}", raw: #"{"z":1,"a":2}"#))
+    #expect(json("12345678901234567890") == .json(pretty: "12345678901234567890", raw: "12345678901234567890"))
+    #expect(json(#"{"n":12345678901234567890}"#) == .json(pretty: "{\n  \"n\" : 12345678901234567890\n}", raw: #"{"n":12345678901234567890}"#))
 }
 
 @Test func jsonNestedEmptyAndEscapes() {
-    #expect(json(#"{"a":[1,{"b":[]},{}],"c":"\u00e9\"x\\/"}"#) == .json(pretty: "{\n  \"a\" : [\n    1,\n    {\n      \"b\" : []\n    },\n    {}\n  ],\n  \"c\" : \"\\u00e9\\\"x\\\\/\"\n}"))
+    #expect(json(#"{"a":[1,{"b":[]},{}],"c":"\u00e9\"x\\/"}"#) == .json(pretty: "{\n  \"a\" : [\n    1,\n    {\n      \"b\" : []\n    },\n    {}\n  ],\n  \"c\" : \"\\u00e9\\\"x\\\\/\"\n}", raw: #"{"a":[1,{"b":[]},{}],"c":"\u00e9\"x\\/"}"#))
 }
 
 @Test func invalidJSONFallsBackToText() {
@@ -91,10 +91,10 @@ private func json(_ s: String) -> DecodedBody { BodyDecoder.decode(body: Data(s.
 }
 
 @Test func validJSONStillFormats() {
-    #expect(json("[]") == .json(pretty: "[]"))
-    #expect(json(" [ 1 , -2.5e+3 , true , null , \"x\" ] ") == .json(pretty: "[\n  1,\n  -2.5e+3,\n  true,\n  null,\n  \"x\"\n]"))
-    #expect(json(#"{"a":{"b":[0,{}]}}"#) == .json(pretty: "{\n  \"a\" : {\n    \"b\" : [\n      0,\n      {}\n    ]\n  }\n}"))
-    #expect(json("\"s\"") == .json(pretty: "\"s\""))
+    #expect(json("[]") == .json(pretty: "[]", raw: "[]"))
+    #expect(json(" [ 1 , -2.5e+3 , true , null , \"x\" ] ") == .json(pretty: "[\n  1,\n  -2.5e+3,\n  true,\n  null,\n  \"x\"\n]", raw: " [ 1 , -2.5e+3 , true , null , \"x\" ] "))
+    #expect(json(#"{"a":{"b":[0,{}]}}"#) == .json(pretty: "{\n  \"a\" : {\n    \"b\" : [\n      0,\n      {}\n    ]\n  }\n}", raw: #"{"a":{"b":[0,{}]}}"#))
+    #expect(json("\"s\"") == .json(pretty: "\"s\"", raw: "\"s\""))
 }
 
 @Test(.timeLimit(.minutes(1))) func deeplyNestedJSONFallsBackToText() {

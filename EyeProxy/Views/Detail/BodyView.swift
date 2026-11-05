@@ -47,7 +47,7 @@ struct BodyView: View {
         let d = BodyDecoder.decode(body: body, headers: headers)
         switch d {
         case .empty: return (d, "", false)
-        case .json(let s), .text(let s), .html(let s):
+        case .json(let s, _), .text(let s), .html(let s):
             let (t, cut) = capped(s)
             return (d, t, cut)
         case .image(let x), .binary(let x):
@@ -77,7 +77,7 @@ struct BodyView: View {
     @ViewBuilder private func content(_ l: Loaded) -> some View {
         switch l.decoded {
         case .empty: Text("(없음)").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .json(let pretty): JSONBody(pretty: pretty, display: l.display, truncated: l.truncated)
+        case .json(let pretty, _): JSONBody(pretty: pretty, display: l.display, truncated: l.truncated)
         case .text: MonoText(text: l.display, truncated: l.truncated)
         case .html: HTMLBody(html: l.display, truncated: l.truncated)
         case .image:
