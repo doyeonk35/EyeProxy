@@ -43,6 +43,8 @@ final class AppModel {
     var pendingProxyRestore: SystemProxyBackup?
     /// 디스크에 원본 백업이 있다 = 시스템 프록시가 EyeProxy를 가리키고 있다(캡처 중이거나 복원 전).
     private(set) var systemProxyBackupExists = false
+    /// 백업이 없는데 실효 프록시(`scutil --proxy`)가 EyeProxy를 가리킨다 = VPN 서비스에 복사본이 남았다.
+    private(set) var effectiveProxyLeftover = false
     /// 시스템 프록시·CA 설치·프로필 저장 실패. 키 윈도우에 alert로 표시한다.
     var systemError: String?
 
@@ -248,6 +250,7 @@ final class AppModel {
         let update = Task {
             await previous?.value
             await applyMacCapture(on, force: force)
+            await refreshEffectiveProxyWarning()
         }
         captureUpdate = update
         await update.value
@@ -287,6 +290,12 @@ final class AppModel {
         }
     }
 
+    /// 기기 윈도우가 열릴 때와 캡처 변경 뒤에 호출한다.
+    func refreshEffectiveProxyWarning() async {
+        let ours = await systemProxy.effectiveProxyIsOurs(ownPort: capturePort ?? runningPort ?? settings.port)
+        effectiveProxyLeftover = ours && systemProxy.pendingRestore() == nil
+    }
+
     /// 종료 전에 시스템 프록시를 되돌려야 하는가(캡처 중·변경 중·백업 잔여).
     var needsProxyCleanupOnQuit: Bool {
         macCaptureEnabled || macCaptureBusy || systemProxy.pendingRestore() != nil
@@ -316,6 +325,8 @@ final class AppModel {
         let text = switch error {
         case SystemProxyError.commandFailed(let s), MacKeychainError.installFailed(let s), SimulatorsError.failed(let s): s
         case SystemProxyError.noActiveService: String(localized: "활성 네트워크 서비스를 찾지 못했습니다")
+        case SystemProxyError.vpnProxyLeftover(let service):
+            String(localized: "VPN 서비스(\(service))에 EyeProxy 프록시가 남아 있습니다 — VPN을 재연결하세요")
         default: error.localizedDescription
         }
         if text.contains("-128") || text.localizedCaseInsensitiveContains("canceled") || text.localizedCaseInsensitiveContains("cancelled") {

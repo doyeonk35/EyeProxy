@@ -21,6 +21,7 @@ struct DevicesView: View {
         .formStyle(.grouped)
         .task {
             await model.refreshMacCAInstalled()
+            await model.refreshEffectiveProxyWarning()
             await model.refreshSimulators()
         }
     }
@@ -38,6 +39,10 @@ struct DevicesView: View {
             if model.systemProxyBackupExists {
                 Label("시스템 프록시가 EyeProxy로 설정되어 있음", systemImage: "network.badge.shield.half.filled")
                     .foregroundStyle(model.macCaptureEnabled ? Color.secondary : Color.orange)
+            }
+            if model.effectiveProxyLeftover {
+                Label("VPN 서비스에 EyeProxy 프록시가 남아 있습니다 — 캡처를 껐다 켜거나 VPN을 재연결하세요", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
             }
             LabeledContent {
                 Button("Mac에 CA 설치") { run { try await model.installCAOnMac() } }
