@@ -4,8 +4,13 @@ import WebKit
 /// 네트워크·스크립트 없이 HTML만 렌더링한다. (본문은 한 번만 로드: BodyView가 flow마다 새로 만들어진다)
 struct HTMLPreview: NSViewRepresentable {
     let html: String
+    /// 네트워크 차단 룰을 만들지 못하면 로드하지 않고 호출한다. (fail closed)
+    let onBlockFailure: @MainActor () -> Void
 
-    private static let blockAll = #"[{"trigger":{"url-filter":"^(https?|ftp|wss?)://"},"action":{"type":"block"}}]"#
+    // url-filter는 OR(|)을 지원하지 않아 스킴별 룰로 나눈다.
+    private static let blockAll = "[" + ["^https?://", "^ftp://", "^wss?://", "^file://"].map {
+        #"{"trigger":{"url-filter":"\#($0)"},"action":{"type":"block"}}"#
+    }.joined(separator: ",") + "]"
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -16,11 +21,14 @@ struct HTMLPreview: NSViewRepresentable {
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator
         let html = html
+        let onBlock = onBlockFailure
         // 하위 리소스(img/css) 네트워크 로딩도 룰 리스트로 차단한 뒤에 로드한다.
         Task { @MainActor in
-            if let list = try? await WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "eyeproxy.block", encodedContentRuleList: Self.blockAll) {
-                config.userContentController.add(list)
+            guard let list = try? await WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "eyeproxy.block", encodedContentRuleList: Self.blockAll) else {
+                onBlock()
+                return
             }
+            web.configuration.userContentController.add(list)
             web.loadHTMLString(html, baseURL: nil)
         }
         return web
