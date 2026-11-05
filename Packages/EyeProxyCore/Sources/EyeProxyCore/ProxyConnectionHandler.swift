@@ -12,6 +12,8 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
     private let upstream: UpstreamClient
     private var head: HTTPRequestHead?
     private var body = Data()
+    /// 클라이언트가 끊기면 취소해 업스트림 연결도 닫는다.
+    private var inFlight: Task<Void, Never>?
 
     init(server: ProxyServer, upstream: UpstreamClient) {
         self.server = server
@@ -30,11 +32,17 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
             self.head = nil
             switch head.method {
             case .CONNECT:   // Task 6에서 터널/MITM으로 교체
-                write(Self.plain(501, "Not Implemented"), version: head.version, keepAlive: false, context: context)
+                write(Self.plain(501, "Not Implemented"), to: head, keepAlive: false, context: context)
             default:
                 forward(head, body: body, context: context)
             }
         }
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        inFlight?.cancel()
+        inFlight = nil
+        context.fireChannelInactive()
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
@@ -44,27 +52,34 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
     private func forward(_ head: HTTPRequestHead, body: Data, context: ChannelHandlerContext) {
         let keepAlive = head.isKeepAlive
         guard let request = Self.flowRequest(from: head, body: body) else {
-            write(Self.plain(400, "Bad Request"), version: head.version, keepAlive: false, context: context)
+            write(Self.plain(400, "Bad Request"), to: head, keepAlive: false, context: context)
             return
         }
         let server = self.server, upstream = self.upstream
         let clientAddress = context.channel.remoteAddress?.ipAddress ?? "unknown"
-        context.eventLoop.makeFutureWithTask {
-            await server.exchange(request, clientAddress: clientAddress, upstream: upstream)
-        }.assumeIsolated().whenSuccess { response in
-            self.write(response, version: head.version, keepAlive: keepAlive, context: context)
+        let promise = context.eventLoop.makePromise(of: FlowResponse.self)
+        inFlight = Task { promise.succeed(await server.exchange(request, clientAddress: clientAddress, upstream: upstream)) }
+        promise.futureResult.assumeIsolated().whenSuccess { response in
+            self.inFlight = nil
+            self.write(response, to: head, keepAlive: keepAlive, context: context)
         }
     }
 
-    private func write(_ response: FlowResponse, version: HTTPVersion, keepAlive: Bool, context: ChannelHandlerContext) {
-        var headers = HTTPHeaders(response.headers
-            .filter { !Self.hopByHop.contains($0.name.lowercased()) }
-            .map { ($0.name, $0.value) })
-        headers.add(name: "Content-Length", value: String(response.body.count))
-        if !keepAlive { headers.add(name: "Connection", value: "close") }
+    /// 인코더 자동 프레이밍은 꺼져 있다. HEAD·1xx·204·304는 본문 없이 원 Content-Length를 그대로 두고,
+    /// 나머지는 버퍼링한 본문 길이로 Content-Length를 새로 쓴다.
+    private func write(_ response: FlowResponse, to request: HTTPRequestHead, keepAlive: Bool, context: ChannelHandlerContext) {
         let status = HTTPResponseStatus(statusCode: response.status, reasonPhrase: response.reason)
-        context.write(wrapOutboundOut(.head(HTTPResponseHead(version: version, status: status, headers: headers))), promise: nil)
-        if !response.body.isEmpty {
+        let hasBody = request.method != .HEAD && status.mayHaveResponseBody
+        var headers = HTTPHeaders(response.headers
+            .filter { h in
+                let name = h.name.lowercased()
+                return !Self.hopByHop.contains(name) && !(hasBody && name == "content-length")
+            }
+            .map { ($0.name, $0.value) })
+        if hasBody { headers.add(name: "Content-Length", value: String(response.body.count)) }
+        if !keepAlive { headers.add(name: "Connection", value: "close") }
+        context.write(wrapOutboundOut(.head(HTTPResponseHead(version: request.version, status: status, headers: headers))), promise: nil)
+        if hasBody && !response.body.isEmpty {
             context.write(wrapOutboundOut(.body(.byteBuffer(ByteBuffer(bytes: response.body)))), promise: nil)
         }
         let done = context.writeAndFlush(wrapOutboundOut(.end(nil)))
@@ -76,7 +91,8 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
     /// 절대 URI(`http://host:port/path?q`)만 받는다. origin-form은 Task 7(TLS 원 서버)에서 처리.
     static func flowRequest(from head: HTTPRequestHead, body: Data) -> FlowRequest? {
         guard let url = URLComponents(string: head.uri), let scheme = url.scheme?.lowercased(),
-              scheme == "http" || scheme == "https", let host = url.host, !host.isEmpty else { return nil }
+              scheme == "http" || scheme == "https", var host = url.host, !host.isEmpty else { return nil }
+        if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }   // IPv6 리터럴
         var path = url.percentEncodedPath.isEmpty ? "/" : url.percentEncodedPath
         if let query = url.percentEncodedQuery { path += "?" + query }
         let headers = head.headers
@@ -91,6 +107,6 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
     }
 
     private static let strippedRequestHeaders: Set<String> = ["proxy-connection", "proxy-authorization"]
-    /// 본문을 전부 버퍼링해 Content-Length를 새로 쓰므로 원래 프레이밍·연결 헤더는 버린다.
-    private static let hopByHop: Set<String> = ["content-length", "transfer-encoding", "connection", "keep-alive"]
+    /// 본문은 버퍼링돼 있으므로 원래 전송·연결 헤더는 버린다(content-length는 write에서 따로 처리).
+    private static let hopByHop: Set<String> = ["transfer-encoding", "connection", "keep-alive"]
 }

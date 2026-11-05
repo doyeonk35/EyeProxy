@@ -42,8 +42,11 @@ final class TestOrigin {
         return channel.localAddress!.port!
     }
 
+    /// 멱등. (이미 종료된 group에 shutdownGracefully를 다시 부르면 영원히 돌아오지 않는다.)
     func stop() async {
-        try? await channel?.close()
+        guard let channel else { return }
+        self.channel = nil
+        try? await channel.close()
         try? await group.shutdownGracefully()
     }
 }
@@ -77,7 +80,9 @@ private final class OriginHandler: ChannelInboundHandler {
             let response = handler(request)
             var headers = HTTPHeaders(response.headers.map { ($0.name, $0.value) })
             let chunked = response.header("Transfer-Encoding")?.lowercased() == "chunked"
-            if !chunked { headers.replaceOrAdd(name: "Content-Length", value: String(response.body.count)) }
+            if !chunked && response.header("Content-Length") == nil {
+                headers.add(name: "Content-Length", value: String(response.body.count))
+            }
             let status = HTTPResponseStatus(statusCode: response.status, reasonPhrase: response.reason)
             context.write(wrapOutboundOut(.head(HTTPResponseHead(version: head.version, status: status, headers: headers))), promise: nil)
             let bytes = [UInt8](response.body)
@@ -91,6 +96,36 @@ private final class OriginHandler: ChannelInboundHandler {
             self.head = nil
         }
     }
+}
+
+/// 연결을 받고 아무 응답도 하지 않는 서버. 받은 연결이 닫힐 때마다 `closed`에 알린다.
+final class HangingOrigin {
+    let closed: AsyncStream<Void>
+    private let closedSink: AsyncStream<Void>.Continuation
+    private var channel: Channel?
+
+    init() { (closed, closedSink) = AsyncStream.makeStream() }
+
+    func start() async throws -> Int {
+        let sink = closedSink
+        let channel = try await ServerBootstrap(group: MultiThreadedEventLoopGroup.singleton)
+            .childChannelInitializer { child in
+                child.closeFuture.whenComplete { _ in sink.yield() }
+                return child.eventLoop.makeSucceededVoidFuture()
+            }
+            .bind(host: "127.0.0.1", port: 0).get()
+        self.channel = channel
+        return channel.localAddress!.port!
+    }
+
+    func stop() async { try? await channel?.close() }
+}
+
+/// 프록시에 원시 바이트를 보내는 TCP 연결(응답은 읽지 않는다). 닫기는 호출자가.
+func rawConnect(port: Int, sending text: String) async throws -> Channel {
+    let channel = try await ClientBootstrap(group: MultiThreadedEventLoopGroup.singleton).connect(host: "127.0.0.1", port: port).get()
+    try await channel.writeAndFlush(ByteBuffer(string: text))
+    return channel
 }
 
 /// trustRootDER가 있으면 그 CA만 신뢰한다(Task 6/7 MITM 테스트용).

@@ -12,27 +12,31 @@ struct UpstreamClientError: Error, CustomStringConvertible {
 /// ponytail: 연결 재사용·스트리밍 없음. 수백 MB 응답이나 처리량이 문제되면 P2에서 풀링/스트리밍.
 final class UpstreamClient: Sendable {
     private let group: EventLoopGroup
-    /// 기본 시스템 신뢰. 생성 실패는 tls 요청 때 에러로 드러낸다.
-    private let tlsContext: NIOSSLContext?
+    private let timeout: TimeAmount
+    /// trustRootsDER가 nil이면 시스템 신뢰. 생성 실패는 tls 요청 때 에러로 드러낸다.
+    private let tlsContext: Result<NIOSSLContext, any Error>
 
-    init(group: EventLoopGroup) {
+    init(group: EventLoopGroup, trustRootsDER: [[UInt8]]? = nil, timeout: TimeAmount = .seconds(30)) {
         self.group = group
-        self.tlsContext = try? NIOSSLContext(configuration: .makeClientConfiguration())
+        self.timeout = timeout
+        self.tlsContext = Result {
+            var config = TLSConfiguration.makeClientConfiguration()
+            if let trustRootsDER {
+                config.trustRoots = .certificates(try trustRootsDER.map { try NIOSSLCertificate(bytes: $0, format: .der) })
+            }
+            return try NIOSSLContext(configuration: config)
+        }
     }
 
+    /// 응답 완료 전 `timeout`이 지나거나 호출 Task가 취소되면 업스트림 연결을 닫고 throw 한다.
     func send(_ request: FlowRequest, tls: Bool) async throws -> FlowResponse {
-        let sslContext: NIOSSLContext?
-        if tls {
-            guard let tlsContext else { throw UpstreamClientError(description: "TLS context unavailable") }
-            sslContext = tlsContext
-        } else {
-            sslContext = nil
-        }
-        let promise = group.next().makePromise(of: FlowResponse.self)
+        let sslContext = tls ? try tlsContext.get() : nil
+        let loop = group.next()
+        let promise = loop.makePromise(of: FlowResponse.self)
         let host = request.host
         let channel: Channel
         do {
-            channel = try await ClientBootstrap(group: group)
+            channel = try await ClientBootstrap(group: loop)
                 .channelInitializer { channel in
                     channel.eventLoop.makeCompletedFuture {
                         let ops = channel.pipeline.syncOperations
@@ -50,13 +54,18 @@ final class UpstreamClient: Sendable {
             promise.fail(error)
             throw error
         }
+        let deadline = loop.scheduleTask(in: timeout) {
+            promise.fail(UpstreamClientError(description: "upstream timed out"))
+            channel.close(promise: nil)
+        }
+        promise.futureResult.whenComplete { _ in deadline.cancel() }
 
-        var headers = HTTPHeaders(request.headers
-            .filter { !Self.framingHeaders.contains($0.name.lowercased()) }
-            .map { ($0.name, $0.value) })
+        let isDefaultPort = (request.scheme == "http" && request.port == 80) || (request.scheme == "https" && request.port == 443)
+        let hostName = host.contains(":") ? "[\(host)]" : host
+        var headers = HTTPHeaders([("Host", isDefaultPort ? hostName : "\(hostName):\(request.port)")]
+            + request.headers.filter { !Self.rewrittenHeaders.contains($0.name.lowercased()) }.map { ($0.name, $0.value) })
         let hadBody = !request.body.isEmpty || request.header("Content-Length") != nil || request.header("Transfer-Encoding") != nil
         if hadBody { headers.add(name: "Content-Length", value: String(request.body.count)) }
-        if !headers.contains(name: "Host") { headers.add(name: "Host", value: "\(host):\(request.port)") }
         headers.add(name: "Connection", value: "close")
         let head = HTTPRequestHead(version: .http1_1, method: HTTPMethod(rawValue: request.method), uri: request.path, headers: headers)
 
@@ -65,11 +74,15 @@ final class UpstreamClient: Sendable {
             channel.write(HTTPClientRequestPart.body(.byteBuffer(ByteBuffer(bytes: request.body))), promise: nil)
         }
         channel.writeAndFlush(HTTPClientRequestPart.end(nil), promise: nil)
-        return try await promise.futureResult.get()
+        return try await withTaskCancellationHandler {
+            try await promise.futureResult.get()
+        } onCancel: {
+            channel.close(promise: nil)
+        }
     }
 
-    /// 버퍼링한 본문으로 길이를 다시 정하므로 원래 프레이밍·연결 헤더는 버린다.
-    private static let framingHeaders: Set<String> = ["content-length", "transfer-encoding", "connection", "keep-alive"]
+    /// Host는 (인터셉터가 바꿨을 수 있는) host/port로, 프레이밍은 버퍼링한 본문으로 다시 쓴다.
+    private static let rewrittenHeaders: Set<String> = ["host", "content-length", "transfer-encoding", "connection", "keep-alive"]
 }
 
 private final class ResponseCollector: ChannelInboundHandler {
