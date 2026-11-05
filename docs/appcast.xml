@@ -1,0 +1,14 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>EyeProxy</title>
+        <item>
+            <title>0.1.0</title>
+            <pubDate>Thu, 05 Nov 2026 13:48:39 +0900</pubDate>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/doyeonk35/EyeProxy/releases/download/v0.1.0/EyeProxy-0.1.0.zip" length="6997172" type="application/octet-stream" sparkle:edSignature="2eBTabY+yHm8+Hbcbx4tHn4y86sgUKWRktgdHmnD8+K1n7qMAidutJOeC1R4MRbnV8yOoA7/z/a9IrzpU9gxDQ=="/>
+        </item>
+    </channel>
+</rss>
