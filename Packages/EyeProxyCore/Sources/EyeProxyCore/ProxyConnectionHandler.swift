@@ -2,6 +2,7 @@ import Foundation
 import NIOCore
 import NIOPosix
 import NIOHTTP1
+import NIOSSL
 
 /// 클라이언트 쪽 HTTP/1.1 상태 기계: head/body/end를 모아 `FlowRequest`로 만들고, 비동기 처리 결과를 이벤트루프에서 쓴다.
 /// ponytail: 파이프라이닝 미지원(응답 순서 보장 없음). URLSession·브라우저는 파이프라이닝하지 않는다.
@@ -15,10 +16,20 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
     private var body = Data()
     /// 클라이언트가 끊기면 취소해 업스트림 연결도 닫는다.
     private var inFlight: Task<Void, Never>?
+    /// MITM으로 TLS를 끝낸 연결이면 원 서버. 요청은 origin-form(`GET /path`)으로 온다.
+    private let tlsOrigin: (host: String, port: Int)?
 
-    init(server: ProxyServer, upstream: UpstreamClient) {
+    init(server: ProxyServer, upstream: UpstreamClient, tlsOrigin: (host: String, port: Int)? = nil) {
         self.server = server
         self.upstream = upstream
+        self.tlsOrigin = tlsOrigin
+    }
+
+    /// 프레이밍은 `write`가 전부 정한다(HEAD/204/304의 원 Content-Length 보존).
+    static func makeResponseEncoder() -> HTTPResponseEncoder {
+        var config = HTTPResponseEncoder.Configuration()
+        config.automaticallySetFramingHeaders = false
+        return HTTPResponseEncoder(configuration: config)
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -47,19 +58,42 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
+        if let tlsOrigin, let message = Self.tlsFailureMessage(error) {
+            server.emit(.connectionLog(ConnectionLogEntry(id: UUID(), date: Date(), clientAddress: context.channel.remoteAddress?.ipAddress ?? "unknown",
+                                                          host: tlsOrigin.host, port: tlsOrigin.port, message: message)))
+        }
         context.close(promise: nil)
+    }
+
+    /// 클라이언트 쪽 TLS 실패를 로그 문구로. 핸드셰이크 실패는 대개 기기가 CA를 믿지 않아 보낸 alert(unknown_ca 등)다.
+    /// TLS가 아닌 오류와 close_notify 없는 종료는 nil(로그 안 함).
+    static func tlsFailureMessage(_ error: any Error) -> String? {
+        switch error {
+        case NIOSSLError.uncleanShutdown:
+            return nil
+        case NIOSSLError.handshakeFailed(let underlying):
+            // 예: "...SSL routines:OPENSSL_internal:TLSV1_ALERT_UNKNOWN_CA" → "unknown_ca"
+            let text = String(describing: underlying)
+            let reason = text.firstMatch(of: /OPENSSL_internal:(?:(?:SSLV3|TLSV1)_ALERT_)?([A-Z0-9_]+)/).map { $0.1.lowercased() } ?? text
+            return "기기가 EyeProxy 인증서를 신뢰하지 않습니다 (\(reason)). 기기의 인증서 신뢰 설정을 확인하세요."
+        case is NIOSSLError, is BoringSSLError:
+            return String(describing: error)
+        default:
+            return nil
+        }
     }
 
     private func forward(_ head: HTTPRequestHead, body: Data, context: ChannelHandlerContext) {
         let keepAlive = head.isKeepAlive
-        guard let request = Self.flowRequest(from: head, body: body) else {
+        guard let request = Self.flowRequest(from: head, body: body, tlsOrigin: tlsOrigin) else {
             write(Self.plain(400, "Bad Request"), to: head, keepAlive: false, context: context)
             return
         }
         let server = self.server, upstream = self.upstream
         let clientAddress = context.channel.remoteAddress?.ipAddress ?? "unknown"
         let promise = context.eventLoop.makePromise(of: FlowResponse.self)
-        inFlight = Task { promise.succeed(await server.exchange(request, clientAddress: clientAddress, upstream: upstream)) }
+        let isDecrypted = tlsOrigin != nil
+        inFlight = Task { promise.succeed(await server.exchange(request, clientAddress: clientAddress, upstream: upstream, isDecrypted: isDecrypted)) }
         promise.futureResult.assumeIsolated().whenSuccess { response in
             self.inFlight = nil
             self.write(response, to: head, keepAlive: keepAlive, context: context)
@@ -73,13 +107,58 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
             return
         }
         let server = self.server
-        let decision = context.eventLoop.makePromise(of: Bool.self)
-        decision.completeWithTask { await server.sslPolicy.shouldDecrypt(host: host) }
-        decision.futureResult.assumeIsolated().whenSuccess { shouldDecrypt in
-            if shouldDecrypt {   // Task 7: MITM으로 교체
-                self.write(Self.plain(501, "Not Implemented"), to: head, keepAlive: false, context: context)
-            } else {
+        // nil = 터널, 컨텍스트 = MITM
+        let decision = context.eventLoop.makePromise(of: NIOSSLContext?.self)
+        decision.completeWithTask {
+            guard await server.sslPolicy.shouldDecrypt(host: host) else { return nil }
+            return try await server.leafContext(for: host)
+        }
+        decision.futureResult.assumeIsolated().whenComplete { result in
+            switch result {
+            case .success(nil):
                 self.tunnel(head, host: host, port: port, context: context)
+            case .success(let sslContext?):
+                self.intercept(head, host: host, port: port, sslContext: sslContext, context: context)
+            case .failure(let error):   // 리프 발급 실패
+                server.emit(.connectionLog(ConnectionLogEntry(id: UUID(), date: Date(), clientAddress: context.channel.remoteAddress?.ipAddress ?? "unknown",
+                                                              host: host, port: port, message: String(describing: error))))
+                self.write(Self.plain(502, "Bad Gateway"), to: head, keepAlive: false, context: context)
+            }
+        }
+    }
+
+    /// MITM: 200 → [decoder, encoder, proxy]를 [TLS, decoder, encoder, proxy(tlsOrigin)]로 바꾼다.
+    /// TLS 핸들러를 옛 디코더 바로 뒤에 먼저 꽂아, 디코더 제거 때 넘어오는 이미 읽힌 바이트(ClientHello)가 TLS로 가게 한다.
+    private func intercept(_ head: HTTPRequestHead, host: String, port: Int, sslContext: NIOSSLContext, context: ChannelHandlerContext) {
+        guard context.channel.isActive else { return }
+        let status = HTTPResponseStatus.custom(code: 200, reasonPhrase: "Connection Established")
+        context.write(wrapOutboundOut(.head(HTTPResponseHead(version: head.version, status: status))), promise: nil)
+        context.writeAndFlush(wrapOutboundOut(.end(nil)), promise: nil)
+
+        let ops = context.pipeline.syncOperations
+        let channel = context.channel
+        let tls = NIOSSLServerHandler(context: sslContext)
+        let next = ProxyConnectionHandler(server: server, upstream: upstream, tlsOrigin: (host, port))
+        do {
+            try ops.addHandler(tls, position: .after(ops.context(name: "http-decoder").handler))
+        } catch {
+            context.close(promise: nil)
+            return
+        }
+        ops.removeHandler(name: "http-encoder", promise: nil)
+        // 디코더 제거는 다음 틱에 끝난다(그 전에 남은 바이트를 TLS로 넘긴다). 같은 이름은 그 뒤에야 다시 쓸 수 있다.
+        ops.removeHandler(name: "http-decoder").assumeIsolated().whenSuccess {
+            do {
+                let ops = channel.pipeline.syncOperations
+                let decoder = ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes))
+                let encoder = Self.makeResponseEncoder()
+                try ops.addHandler(decoder, name: "http-decoder", position: .after(tls))
+                try ops.addHandler(encoder, name: "http-encoder", position: .after(decoder))
+                ops.removeHandler(context: context, promise: nil)   // 기본 제거는 동기라 "proxy" 이름이 바로 빈다
+                try ops.addHandler(next, name: "proxy", position: .after(encoder))
+                channel.pipeline.fireChannelReadComplete()   // TLS가 넘겨받은 바이트에 대한 응답을 flush
+            } catch {
+                channel.close(promise: nil)
             }
         }
     }
@@ -164,16 +243,21 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
         }
     }
 
-    /// 절대 URI(`http://host:port/path?q`)만 받는다. origin-form은 Task 7(TLS 원 서버)에서 처리.
-    static func flowRequest(from head: HTTPRequestHead, body: Data) -> FlowRequest? {
+    /// 평문 프록시 요청은 절대 URI(`http://host:port/path?q`), MITM 연결(tlsOrigin)은 origin-form(`/path?q`)만 받는다.
+    static func flowRequest(from head: HTTPRequestHead, body: Data, tlsOrigin: (host: String, port: Int)? = nil) -> FlowRequest? {
+        let headers = head.headers
+            .filter { !strippedRequestHeaders.contains($0.name.lowercased()) }
+            .map { HTTPHeader(name: $0.name, value: $0.value) }
+        if let tlsOrigin {
+            guard head.uri.hasPrefix("/") else { return nil }
+            return FlowRequest(method: head.method.rawValue, scheme: "https", host: tlsOrigin.host, port: tlsOrigin.port,
+                               path: head.uri, headers: headers, body: body)
+        }
         guard let url = URLComponents(string: head.uri), let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https", var host = url.host, !host.isEmpty else { return nil }
         if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }   // IPv6 리터럴
         var path = url.percentEncodedPath.isEmpty ? "/" : url.percentEncodedPath
         if let query = url.percentEncodedQuery { path += "?" + query }
-        let headers = head.headers
-            .filter { !strippedRequestHeaders.contains($0.name.lowercased()) }
-            .map { HTTPHeader(name: $0.name, value: $0.value) }
         return FlowRequest(method: head.method.rawValue, scheme: scheme, host: host,
                            port: url.port ?? (scheme == "https" ? 443 : 80), path: path, headers: headers, body: body)
     }

@@ -2,6 +2,7 @@ import Foundation
 import NIOCore
 import NIOPosix
 import NIOHTTP1
+import NIOSSL
 
 public struct ProxyConfiguration: Sendable {
     public var bindHost: String
@@ -35,6 +36,9 @@ public actor ProxyServer {
     private var running: (group: MultiThreadedEventLoopGroup, channel: Channel)?
     /// bind 대기 중인 start. 재진입한 start/stop은 이것을 기다린다.
     private var starting: Task<Int, Error>?
+    /// MITM 리프 컨텍스트. 키는 `CertificateAuthority.leaf`와 같은 소문자 호스트.
+    /// ponytail: 무제한 캐시. 호스트 수천 개가 문제되면 LRU.
+    private var leafContexts: [String: NIOSSLContext] = [:]
 
     public init(configuration: ProxyConfiguration, certificateAuthority: CertificateAuthority, interceptors: InterceptorChain) {
         (events, eventSink) = AsyncStream.makeStream()
@@ -61,17 +65,13 @@ public actor ProxyServer {
     private func bind() async throws -> (group: MultiThreadedEventLoopGroup, channel: Channel) {
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 2)
         let upstream = UpstreamClient(group: group, trustRootsDER: configuration.upstreamTrustRootsDER)
-        // 프레이밍은 ProxyConnectionHandler.write가 전부 정한다(HEAD/204/304의 원 Content-Length 보존).
-        var config = HTTPResponseEncoder.Configuration()
-        config.automaticallySetFramingHeaders = false
-        let encoderConfig = config
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
             .childChannelInitializer { [self] channel in
                 channel.eventLoop.makeCompletedFuture {
                     let ops = channel.pipeline.syncOperations
                     try ops.addHandler(ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes)), name: "http-decoder")
-                    try ops.addHandler(HTTPResponseEncoder(configuration: encoderConfig), name: "http-encoder")
+                    try ops.addHandler(ProxyConnectionHandler.makeResponseEncoder(), name: "http-encoder")
                     try ops.addHandler(ProxyConnectionHandler(server: self, upstream: upstream), name: "proxy")
                 }
             }
@@ -95,14 +95,28 @@ public actor ProxyServer {
     public func update(sslPolicy: SSLProxyingPolicy) { self.sslPolicy = sslPolicy }
     public func update(interceptors: InterceptorChain) { self.interceptors = interceptors }
 
+    /// CONNECT 대상 호스트용 서버 TLS 컨텍스트(ALPN http/1.1만). 호스트당 한 번 만든다.
+    func leafContext(for rawHost: String) throws -> NIOSSLContext {
+        let host = rawHost.lowercased()
+        if let cached = leafContexts[host] { return cached }
+        let leaf = try certificateAuthority.leaf(for: host)
+        var config = TLSConfiguration.makeServerConfiguration(
+            certificateChain: [.certificate(try NIOSSLCertificate(bytes: leaf.certificateDER, format: .der))],
+            privateKey: .privateKey(try NIOSSLPrivateKey(bytes: leaf.privateKeyDER, format: .der)))
+        config.applicationProtocols = ["http/1.1"]
+        let context = try NIOSSLContext(configuration: config)
+        leafContexts[host] = context
+        return context
+    }
+
     /// 이벤트루프(터널 등)에서 바로 이벤트를 낸다.
     nonisolated func emit(_ event: FlowEvent) { eventSink.yield(event) }
 
     /// 요청 하나의 수명: 이벤트 → 요청 인터셉터 → 업스트림 → 응답 인터셉터 → 이벤트. 실패는 502로 바꿔 돌려준다.
-    func exchange(_ request: FlowRequest, clientAddress: String, upstream: UpstreamClient) async -> FlowResponse {
+    func exchange(_ request: FlowRequest, clientAddress: String, upstream: UpstreamClient, isDecrypted: Bool = false) async -> FlowResponse {
         let id = FlowID()
         let context = FlowContext(id: id, clientAddress: clientAddress)
-        eventSink.yield(.requestStarted(Flow(id: id, clientAddress: clientAddress, startedAt: Date(), request: request)))
+        eventSink.yield(.requestStarted(Flow(id: id, clientAddress: clientAddress, startedAt: Date(), request: request, isDecrypted: isDecrypted)))
         let chain = interceptors
         switch await chain.runRequest(request, context: context) {
         case .respond(let response):
@@ -115,11 +129,18 @@ public actor ProxyServer {
                 eventSink.yield(.responseReceived(id: id, response: response, completedAt: Date()))
                 return response
             } catch {
-                let message = Task.isCancelled ? "client disconnected" : String(describing: error)
+                let message = Task.isCancelled ? "client disconnected"
+                    : Self.isCertificateError(error) ? "업스트림 인증서 오류: \(error)" : String(describing: error)
                 eventSink.yield(.failed(id: id, error: message, completedAt: Date()))
                 return FlowResponse(status: 502, reason: "Bad Gateway", headers: [.init(name: "Content-Type", value: "text/plain")],
                                     body: Data("EyeProxy: upstream error: \(message)".utf8))
             }
         }
+    }
+
+    /// 업스트림 TLS 검증 실패: 체인 검증은 핸드셰이크 실패로, 호스트명 불일치는 NIOSSLExtraError로 온다.
+    private static func isCertificateError(_ error: any Error) -> Bool {
+        if case NIOSSLError.handshakeFailed = error { return true }
+        return error is NIOSSLExtraError
     }
 }
