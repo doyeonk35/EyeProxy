@@ -70,7 +70,9 @@ final class AppModel {
     private static func loadOrCreateCA() -> (CertificateAuthority, String?) {
         do {
             if let ca = try CertificateAuthority.load(from: caDirectory) { return (ca, nil) }
-            let ca = try CertificateAuthority.generate()
+            // 팀원끼리 기기를 같이 쓸 때 구별되도록 호스트 이름을 넣는다. 기존 CA는 그대로 둔다.
+            let host = ProcessInfo.processInfo.hostName.split(separator: ".").first.map(String.init) ?? "Mac"
+            let ca = try CertificateAuthority.generate(commonName: "EyeProxy Root CA (\(host))")
             do {
                 try ca.save(to: caDirectory)
                 return (ca, nil)
