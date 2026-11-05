@@ -119,3 +119,10 @@ gh api -X POST repos/doyeonk35/EyeProxy/pages -f build_type=legacy -f 'source[br
   - A-3 kill -9 → 재실행 → 복원 알럿(Return=복원): 통과. 프롬프트 1회, 결과 A-2와 동일.
   - Safari → EyeProxy 목록에 행 표시 확인(VPN 경유).
   - 관찰: GlobalProtect는 Wi-Fi 프록시 변경을 양방향 모두 실시간으로 따라오지 않음(연결 시점에만 복사). Proxyman도 같은 구조이며 항상 켜 둔 채 쓰기 때문에 드러나지 않았음.
+  - A-6 관리자 프롬프트 취소: 통과(상태 정리됨). 초기에는 알럿이 안 떠서 수정(d4f3103) 후 통과.
+  - A-7 포트 9090 충돌(Proxyman `*:9090`): 감지됨. 점유 앱 표시·다시 시도 추가(0f10016).
+  - B-8 Mac CA 설치: 통과(지문 일치, 신뢰 설정 등록, Safari HTTPS 복호화).
+  - B-9 시뮬레이터 CA: 통과(iOS 시뮬 Safari 복호화 행).
+  - C-10 Apple TV 실기기: 연결·복호화 동작(사용자 확인).
+  - 현장 수정: 툴바 상태 캡슐 여백(565f602), 프로필 Mac IP Picker 초기값(5894909).
+  - 남은 것: C-11 iPhone, C-12 미신뢰 로그, C-13 공용 기기 2인 CA, C-14 LAN 업스트림 프롬프트, C-15 하루 사용, A-4/5(포트 변경·네트워크 전환) — 필요 시.
