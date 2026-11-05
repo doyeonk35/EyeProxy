@@ -45,6 +45,12 @@ public enum SystemProxyCommands {
         return c
     }
 
+    /// 백업의 서비스가 서비스 목록에 없으면(삭제·이름 변경) 되돌릴 곳이 없다. 목록을 못 읽었으면(빈 출력) false.
+    public static func isOrphaned(_ backup: SystemProxyBackup, serviceOrder output: String) -> Bool {
+        let names = parseServiceOrder(output).map(\.name)
+        return !names.isEmpty && !names.contains(backup.service)
+    }
+
     /// `-listnetworkserviceorder` 출력 → 서비스 목록. `(*) Name` 헤더는 비활성.
     public static func parseServiceOrder(_ output: String) -> [(name: String, device: String, enabled: Bool)] {
         var result: [(name: String, device: String, enabled: Bool)] = []
@@ -101,7 +107,18 @@ public final class SystemProxy: Sendable {
         throw SystemProxyError.noActiveService
     }
 
+    /// 서비스가 사라진 백업은 영원히 복원에 실패하므로 지운다. 지웠으면 true.
+    @discardableResult
+    private func dropOrphanedBackup() async -> Bool {
+        guard let b = pendingRestore(),
+              let order = try? await Shell.run(Self.networksetup, ["-listnetworkserviceorder"]), order.status == 0,
+              SystemProxyCommands.isOrphaned(b, serviceOrder: order.stdout) else { return false }
+        try? FileManager.default.removeItem(at: backupURL)
+        return true
+    }
+
     public func enable(host: String, port: Int, bypass: [String]) async throws {
+        await dropOrphanedBackup()
         let svc = try await activeService()
         // 다른 서비스에 남은 EyeProxy 프록시를 되돌리고 백업을 지워야 현재 서비스의 원본을 새로 백업할 수 있다.
         let stale = SystemProxyCommands.restoreStale(pendingRestore(), currentService: svc)
@@ -136,6 +153,8 @@ public final class SystemProxy: Sendable {
     }
 
     public func disable() async throws {
+        // 서비스가 사라졌으면 되돌릴 곳도 없다. 다른(현재) 서비스의 사용자 프록시를 끄지 않는다.
+        if await dropOrphanedBackup() { return }
         if let b = pendingRestore() {
             try await apply(SystemProxyCommands.restore(b))
         } else {
@@ -157,6 +176,7 @@ public final class SystemProxy: Sendable {
         let quote = { (s: String) in "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
         let script = cmds.map { ([Self.networksetup] + $0).map(quote).joined(separator: " ") }.joined(separator: "; ")
         do { _ = try await PrivilegedShell.run(script) }
-        catch { throw SystemProxyError.commandFailed("\(error)") }
+        catch ShellError.privilegedFailed(let stderr) { throw SystemProxyError.commandFailed(stderr) }  // 취소 시 "User canceled. (-128)"
+        catch { throw SystemProxyError.commandFailed(error.localizedDescription) }
     }
 }

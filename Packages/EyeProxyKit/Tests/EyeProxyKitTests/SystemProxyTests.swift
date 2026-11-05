@@ -59,3 +59,9 @@ An asterisk (*) denotes that a network service is disabled.
     #expect(SystemProxyCommands.restoreStale(b, currentService: "Wi-Fi").isEmpty)
     #expect(SystemProxyCommands.restoreStale(nil, currentService: "Wi-Fi").isEmpty)
 }
+@Test func backupForMissingServiceIsOrphaned() {
+    let b = SystemProxyBackup(service: "Gone", httpEnabled: false, httpHost: "", httpPort: 0, httpsEnabled: false, httpsHost: "", httpsPort: 0, bypass: [])
+    #expect(SystemProxyCommands.isOrphaned(b, serviceOrder: serviceOrderSample))
+    #expect(!SystemProxyCommands.isOrphaned(SystemProxyBackup(service: "Wi-Fi", httpEnabled: false, httpHost: "", httpPort: 0, httpsEnabled: false, httpsHost: "", httpsPort: 0, bypass: []), serviceOrder: serviceOrderSample))
+    #expect(!SystemProxyCommands.isOrphaned(b, serviceOrder: ""))  // 목록을 못 읽으면 지우지 않는다
+}
