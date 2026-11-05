@@ -1,3 +1,4 @@
+import AppKit
 import EyeProxyKit
 import SwiftUI
 
@@ -6,24 +7,76 @@ struct SidebarView: View {
 
     var body: some View {
         @Bindable var model = model
+        let tree = model.sidebarTree
         List(selection: $model.sidebarSelection) {
             Label("전체", systemImage: "tray.full")
                 .badge(model.session.flows.count)
                 .tag(SidebarItem.allFlows)
+            Section("고정") {
+                if tree.pinned.isEmpty {
+                    Text("호스트를 우클릭해 고정").foregroundStyle(.secondary)
+                }
+                ForEach(tree.pinned, id: \.host) { node in
+                    hostRow(node, icon: "pin.fill", tag: .host(node.host))
+                }
+            }
             Section("기기") {
-                ForEach(model.sidebarTree.devices, id: \.address) { node in
-                    Label(node.displayName, systemImage: node.kind == .thisMac ? "laptopcomputer" : "display")
-                        .badge(node.count)
-                        .tag(SidebarItem.scope(FlowScope(device: node.address)))
+                ForEach(tree.devices, id: \.address) { device in
+                    DisclosureGroup {
+                        ForEach(device.apps, id: \.groupKey) { app in
+                            DisclosureGroup {
+                                ForEach(app.hosts, id: \.host) { node in
+                                    hostRow(node, icon: "globe", tag: .scope(FlowScope(device: device.address, process: app.groupKey, host: node.host)))
+                                }
+                            } label: {
+                                Label { Text(app.displayName) } icon: { appIcon(app.path) }
+                                    .badge(app.count)
+                                    .tag(SidebarItem.scope(FlowScope(device: device.address, process: app.groupKey)))
+                            }
+                        }
+                        ForEach(device.hosts, id: \.host) { node in
+                            hostRow(node, icon: "globe", tag: .scope(FlowScope(device: device.address, host: node.host)))
+                        }
+                    } label: {
+                        Label(device.displayName, systemImage: icon(device.kind))
+                            .badge(device.count)
+                            .tag(SidebarItem.scope(FlowScope(device: device.address)))
+                    }
                 }
             }
             Section("도메인") {
-                ForEach(model.sidebarTree.hosts, id: \.host) { node in
-                    Label(node.host, systemImage: "globe")
-                        .badge(node.count)
-                        .tag(SidebarItem.host(node.host))
+                ForEach(tree.hosts, id: \.host) { node in
+                    hostRow(node, icon: "globe", tag: .host(node.host))
                 }
             }
+        }
+    }
+
+    private func hostRow(_ node: HostNode, icon: String, tag: SidebarItem) -> some View {
+        let isPinned = model.settings.pinnedHosts.contains(node.host)
+        return Label(node.host, systemImage: icon)
+            .badge(node.count)
+            .tag(tag)
+            .contextMenu {
+                Button(isPinned ? "고정 해제" : "고정") { model.settings.togglePin(node.host) }
+            }
+    }
+
+    @ViewBuilder private func appIcon(_ path: String?) -> some View {
+        if let path {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: path)).resizable().frame(width: 16, height: 16)
+        } else {
+            Image(systemName: "app.dashed")
+        }
+    }
+
+    private func icon(_ kind: DeviceKind) -> String {
+        switch kind {
+        case .thisMac: "laptopcomputer"
+        case .appleTV: "appletv"
+        case .iPhone: "iphone"
+        case .iPad: "ipad"
+        case .unknown: "display"
         }
     }
 }
