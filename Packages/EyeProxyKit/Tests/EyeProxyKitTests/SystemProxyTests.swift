@@ -66,17 +66,21 @@ An asterisk (*) denotes that a network service is disabled.
     #expect(!SystemProxyCommands.isOrphaned(b, serviceOrder: ""))  // 목록을 못 읽으면 지우지 않는다
 }
 
-@Test func turnOffOwnTouchesOnly127Proxies() {
+@Test func turnOffOwnTouchesOnlyOurPort() {
     let own = (enabled: true, host: "127.0.0.1", port: 9090)
     let other = (enabled: true, host: "10.0.0.1", port: 8080)
-    #expect(SystemProxyCommands.turnOffOwn(service: "Wi-Fi", http: own, https: other) == [["-setwebproxystate", "Wi-Fi", "off"]])
-    #expect(SystemProxyCommands.turnOffOwn(service: "Wi-Fi", http: other, https: own) == [["-setsecurewebproxystate", "Wi-Fi", "off"]])
-    #expect(SystemProxyCommands.turnOffOwn(service: "Wi-Fi", http: other, https: other).isEmpty)
-    #expect(SystemProxyCommands.turnOffOwn(service: "Wi-Fi", http: (false, "127.0.0.1", 9090), https: (false, "", 0)).isEmpty)
+    let cntlm = (enabled: true, host: "127.0.0.1", port: 3128)
+    #expect(SystemProxyCommands.turnOffOwn(service: "Wi-Fi", http: own, https: other, port: 9090) == [["-setwebproxystate", "Wi-Fi", "off"]])
+    #expect(SystemProxyCommands.turnOffOwn(service: "Wi-Fi", http: other, https: own, port: 9090) == [["-setsecurewebproxystate", "Wi-Fi", "off"]])
+    #expect(SystemProxyCommands.turnOffOwn(service: "Wi-Fi", http: other, https: other, port: 9090).isEmpty)
+    #expect(SystemProxyCommands.turnOffOwn(service: "Wi-Fi", http: cntlm, https: cntlm, port: 9090).isEmpty)
+    #expect(SystemProxyCommands.turnOffOwn(service: "Wi-Fi", http: (false, "127.0.0.1", 9090), https: (false, "", 0), port: 9090).isEmpty)
 }
 @Test func ownProxyIsNeverRecordedAsOriginal() {
-    let o = SystemProxyCommands.originalProxy((enabled: true, host: "127.0.0.1", port: 9090))
+    let o = SystemProxyCommands.originalProxy((enabled: true, host: "127.0.0.1", port: 9090), ownPort: 9090)
     #expect(!o.enabled && o.host.isEmpty && o.port == 0)
-    let keep = SystemProxyCommands.originalProxy((enabled: true, host: "10.0.0.1", port: 8080))
+    let keep = SystemProxyCommands.originalProxy((enabled: true, host: "10.0.0.1", port: 8080), ownPort: 9090)
     #expect(keep.enabled && keep.host == "10.0.0.1" && keep.port == 8080)
+    let cntlm = SystemProxyCommands.originalProxy((enabled: true, host: "127.0.0.1", port: 3128), ownPort: 9090)
+    #expect(cntlm.enabled && cntlm.host == "127.0.0.1" && cntlm.port == 3128)  // 다른 포트의 로컬 프록시는 사용자의 것
 }

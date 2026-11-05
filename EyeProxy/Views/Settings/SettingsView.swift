@@ -15,16 +15,18 @@ struct SettingsView: View {
 private struct GeneralSettings: View {
     @Environment(AppModel.self) private var model
     @State private var draft = ""
+    @FocusState private var focused: Bool
 
-    private var runningPort: Int? { if case .running(let p) = model.serverState { p } else { nil } }
+    private var runningPort: Int? { model.runningPort }
     private var parsed: Int? { Int(draft).flatMap { (1024...65535).contains($0) ? $0 : nil } }
 
     var body: some View {
         Form {
             TextField("포트", text: $draft)
+                .focused($focused)
                 .onSubmit(commit)
-                .onChange(of: draft) { _, _ in commit() }
-            if !draft.isEmpty, parsed == nil {
+                .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
+            if parsed == nil, !focused {
                 Text("1024–65535 사이의 숫자를 입력하세요").foregroundStyle(.red)
             }
             if model.settings.port != runningPort {
@@ -39,8 +41,9 @@ private struct GeneralSettings: View {
         .onAppear { draft = String(model.settings.port) }
     }
 
+    /// 입력 중에는 저장하지 않는다(엔터·포커스 해제 때만). 잘못된 값이면 저장된 값으로 되돌린다.
     private func commit() {
-        if let p = parsed, p != model.settings.port { model.settings.port = p }
+        if let p = parsed { model.settings.port = p } else { draft = String(model.settings.port) }
     }
 }
 
@@ -94,7 +97,7 @@ private struct StringListEditor: View {
         HStack {
             TextField(placeholder, text: $draft).onSubmit(add)
             Button("추가", action: add)
-                .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Button("삭제") {
                 items.removeAll { $0 == selection }
                 selection = nil
@@ -105,9 +108,9 @@ private struct StringListEditor: View {
     }
 
     private func add() {
-        let v = draft.trimmingCharacters(in: .whitespaces)
+        let v = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         draft = ""
-        guard !v.isEmpty, !items.contains(v) else { return }
+        guard !v.isEmpty, !items.contains(where: { $0.caseInsensitiveCompare(v) == .orderedSame }) else { return }
         items.append(v)
         onChange()
     }

@@ -31,7 +31,7 @@ struct DevicesView: View {
         Section("이 Mac") {
             Toggle(isOn: Binding(get: { model.macCaptureEnabled }, set: { on in Task { await model.setMacCapture(on) } })) {
                 Text("이 Mac 캡처")
-                Text("시스템 HTTP·HTTPS 프록시를 127.0.0.1:\(String(model.settings.port))로 설정합니다. 끄거나 종료하면 되돌립니다.")
+                Text("시스템 HTTP·HTTPS 프록시를 127.0.0.1:\(String(model.runningPort ?? model.settings.port))로 설정합니다. 끄거나 종료하면 되돌립니다.")
             }
             // 서버가 안 떠 있을 때 켜면 Mac 인터넷이 끊긴다. 끄기는 언제나 허용.
             .disabled(model.macCaptureBusy || (!model.macCaptureEnabled && !serverRunning))

@@ -52,6 +52,9 @@ final class AppModel {
     @ObservationIgnored private var consumer: Task<Void, Never>?
     @ObservationIgnored private var settingsUpdate: Task<Void, Never>?
     @ObservationIgnored private var captureUpdate: Task<Void, Never>?
+    @ObservationIgnored private var restartUpdate: Task<Void, Never>?
+    /// 시스템 프록시를 마지막으로 켠 포트(끌 때 "우리 것"을 가려내는 기준).
+    @ObservationIgnored private var capturePort: Int?
 
     init() {
         try? FileManager.default.createDirectory(at: Self.supportDirectory, withIntermediateDirectories: true)
@@ -121,13 +124,25 @@ final class AppModel {
 
     /// 호출 순서대로 직렬화한다. 각 갱신은 실행 시점의 설정을 읽으므로 마지막 토글이 이긴다.
     /// 포트 변경 적용. Mac 캡처 중이었으면 시스템 프록시도 새 포트로 맞추고, 서버가 못 뜨면 되돌린다.
+    /// 호출 순서대로 직렬화하고, 진행 중인 캡처 변경이 끝난 뒤의 상태를 읽는다.
     func restartServer() async {
-        let wasCapturing = macCaptureEnabled
-        await stopServer()
-        await startServer()
-        guard wasCapturing else { return }
-        if case .running = serverState { await setMacCapture(true, force: true) } else { await setMacCapture(false) }
+        let previous = restartUpdate
+        let update = Task {
+            await previous?.value
+            await captureUpdate?.value
+            let wasCapturing = macCaptureEnabled
+            await stopServer()
+            await startServer()
+            if case .failed(let message) = serverState { systemError = message }
+            guard wasCapturing else { return }
+            if case .running = serverState { await setMacCapture(true, force: true) } else { await setMacCapture(false) }
+        }
+        restartUpdate = update
+        await update.value
     }
+
+    /// 실제로 떠 있는 서버의 포트. 설정값(settings.port)은 재시작 전까지 적용되지 않을 수 있다.
+    var runningPort: Int? { if case .running(let p) = serverState { p } else { nil } }
 
     func applySettingsToServer() async {
         let previous = settingsUpdate
@@ -187,6 +202,7 @@ final class AppModel {
         do {
             let loaded = try await Task.detached { try SessionDocument.load(from: url) }.value
             session.replace(flows: loaded.flows, connectionLog: loaded.connectionLog)
+            filter = FlowFilter()
             selectedFlowID = nil
             sidebarSelection = .allFlows
         } catch {
@@ -238,6 +254,12 @@ final class AppModel {
     private func applyMacCapture(_ on: Bool, force: Bool) async {
         if on && quitting { return }
         // 끄기는 캡처 중이 아니어도 백업이 남아 있으면 복원한다(유지 후 실패·비정상 종료 잔여).
+        // 서버가 떠 있지 않거나 설정 포트가 아직 적용 전이면 죽은 포트를 가리키게 된다 → 실제 실행 포트로만 켠다.
+        let runningPort = self.runningPort
+        if on, runningPort == nil {
+            systemError = String(localized: "서버가 실행 중이 아니어서 시스템 프록시를 켤 수 없습니다")
+            return
+        }
         let needed = on ? (force || !macCaptureEnabled) : (macCaptureEnabled || systemProxy.pendingRestore() != nil)
         guard needed else { return }
         macCaptureBusy = true
@@ -247,14 +269,17 @@ final class AppModel {
         }
         do {
             if on {
-                try await systemProxy.enable(host: "127.0.0.1", port: settings.port, bypass: settings.bypassHosts)
+                try await systemProxy.enable(host: "127.0.0.1", port: runningPort ?? settings.port, bypass: settings.bypassHosts)
+                capturePort = runningPort
             } else {
-                try await systemProxy.disable()
+                try await systemProxy.disable(ownPort: capturePort ?? runningPort ?? settings.port)
             }
             macCaptureEnabled = on
         } catch {
             // 켜기 실패(관리자 인증 취소 등): 일부만 적용됐을 수 있으니 백업으로 되돌린다. 백업 없으면 원본을 모르므로 건드리지 않는다.
-            if on, systemProxy.pendingRestore() != nil { try? await systemProxy.disable() }
+            if on, systemProxy.pendingRestore() != nil { try? await systemProxy.disable(ownPort: capturePort ?? runningPort ?? settings.port) }
+            // 백업이 남아 있으면 프록시는 아직 EyeProxy를 가리킨다. 복원에 성공했다면 꺼진 상태다.
+            if on { macCaptureEnabled = systemProxy.pendingRestore() != nil }
             systemError = on ? String(localized: "시스템 프록시를 켜지 못했습니다: \(Self.describe(error))")
                              : String(localized: "시스템 프록시를 되돌리지 못했습니다: \(Self.describe(error))")
         }
@@ -333,7 +358,7 @@ final class AppModel {
         panel.allowedContentTypes = [.init(filenameExtension: "mobileconfig") ?? .xml]
         guard panel.runModal() == .OK, let url = panel.url else { return false }
         let data = MobileConfig.wifiProxyProfile(ssid: ssid, security: security, password: security == .none ? nil : password,
-                                                 proxyHost: proxyHost, proxyPort: settings.port)
+                                                 proxyHost: proxyHost, proxyPort: runningPort ?? settings.port)
         // 비밀번호가 평문으로 들어가므로 처음부터 0600으로 만든다(덮어쓰기면 기존 파일을 지우고 새로 만든다).
         try? FileManager.default.removeItem(at: url)
         guard FileManager.default.createFile(atPath: url.path, contents: data, attributes: [.posixPermissions: 0o600]) else {

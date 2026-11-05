@@ -28,7 +28,7 @@ struct ProfileFormView: View {
                 ForEach(addresses, id: \.self) { Text(verbatim: $0).tag($0) }
             }
         }
-        LabeledContent("포트") { Text(verbatim: String(model.settings.port)) }
+        LabeledContent("포트") { Text(verbatim: String(model.runningPort ?? model.settings.port)) }
         HStack {
             Spacer()
             Button("프로필 저장…") {
