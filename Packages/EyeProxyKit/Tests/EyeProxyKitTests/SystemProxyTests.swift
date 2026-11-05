@@ -104,12 +104,51 @@ private let vpnProxiesOurs = """
   SOCKSEnable : 0
 }
 """
+/// `scutil --proxy`: 최상위 값 뒤에 정렬되는 `__SCOPED__`의 인터페이스별 값이 최상위를 덮어쓰면 안 된다.
+private func scopedSample(top: (String, Int), scoped: (String, Int)) -> String { """
+<dictionary> {
+  ExceptionsList : <array> {
+    0 : dns.google
+  }
+  FTPPassive : 1
+  HTTPEnable : 1
+  HTTPPort : \(top.1)
+  HTTPProxy : \(top.0)
+  HTTPSEnable : 1
+  HTTPSPort : \(top.1)
+  HTTPSProxy : \(top.0)
+  __SCOPED__ : <dictionary> {
+    en0 : <dictionary> {
+      ExceptionsList : <array> {
+        0 : localhost
+      }
+      HTTPEnable : 1
+      HTTPPort : \(scoped.1)
+      HTTPProxy : \(scoped.0)
+      HTTPSEnable : 1
+      HTTPSPort : \(scoped.1)
+      HTTPSProxy : \(scoped.0)
+    }
+    utun6 : <dictionary> {
+      HTTPEnable : 0
+      HTTPSEnable : 0
+    }
+  }
+}
+""" }
 @Test func parsesScutilProxy() {
     let p = SystemProxyCommands.parseScutilProxy(vpnProxiesOurs)
     #expect(p.httpEnabled && p.httpHost == "127.0.0.1" && p.httpPort == 9090)
     #expect(p.httpsEnabled && p.httpsHost == "127.0.0.1" && p.httpsPort == 9090)
     let off = SystemProxyCommands.parseScutilProxy("<dictionary> {\n  FTPPassive : 1\n  HTTPEnable : 0\n  HTTPSEnable : 0\n}\n")
     #expect(off == SystemProxyCommands.EffectiveProxy())
+}
+@Test func scopedValuesDoNotOverrideTopLevel() {
+    let ours = SystemProxyCommands.parseScutilProxy(scopedSample(top: ("127.0.0.1", 9090), scoped: ("10.0.0.1", 8080)))
+    #expect(ours.httpHost == "127.0.0.1" && ours.httpPort == 9090 && SystemProxyCommands.isOurs(ours, ownPort: 9090))
+    let notOurs = SystemProxyCommands.parseScutilProxy(scopedSample(top: ("10.0.0.1", 8080), scoped: ("127.0.0.1", 9090)))
+    #expect(notOurs.httpsHost == "10.0.0.1" && notOurs.httpsPort == 8080 && !SystemProxyCommands.isOurs(notOurs, ownPort: 9090))
+    #expect(SystemProxyCommands.parseScutilProxyDictionary(scopedSample(top: ("127.0.0.1", 9090), scoped: ("1", 1))).exceptions == ["dns.google"])
 }
 @Test func parsesPrimaryService() {
     #expect(SystemProxyCommands.parsePrimaryService("<dictionary> {\n  PrimaryInterface : utun6\n  PrimaryService : gpd.pan\n  Router : 172.29.0.162\n}\n") == "gpd.pan")
@@ -118,14 +157,17 @@ private let vpnProxiesOurs = """
 @Test func parsesProxyDictionaryKeepingOtherScalars() {
     let d = SystemProxyCommands.parseScutilProxyDictionary(vpnProxiesOurs)
     #expect(d.exceptions == ["dns.google", "one.one.one.one"])
-    #expect(d.ftpPassive)
+    #expect(d.ftpPassive && !d.droppedContainer)
     #expect(d.other.map(\.key) == ["ProxyAutoConfigEnable", "SOCKSEnable"] && d.other.map(\.value) == ["0", "0"])
 }
+private func script(_ d: SystemProxyCommands.ProxyDictionary, id: String = "gpd.pan") -> String? {
+    SystemProxyCommands.scutilDisableProxyScript(serviceID: id, d, ownPort: 9090)
+}
+private func dict(exceptions: [String] = [], other: [(key: String, value: String)] = []) -> SystemProxyCommands.ProxyDictionary {
+    var d = SystemProxyCommands.ProxyDictionary(); d.ftpPassive = true; d.exceptions = exceptions; d.other = other; return d
+}
 @Test func disableScriptTurnsOffHTTPAndKeepsRest() {
-    let d = SystemProxyCommands.parseScutilProxyDictionary(vpnProxiesOurs)
-    let s = SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: d.exceptions, ftpPassive: d.ftpPassive,
-                                                         other: d.other.map { ($0.key, $0.value) })
-    #expect(s == """
+    #expect(script(SystemProxyCommands.parseScutilProxyDictionary(vpnProxiesOurs)) == """
     d.init
     d.add FTPPassive # 1
     d.add HTTPEnable # 0
@@ -136,17 +178,48 @@ private let vpnProxiesOurs = """
     set State:/Network/Service/gpd.pan/Proxies
     quit
     """)
-    let bare = SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: [], ftpPassive: false, other: [])
-    #expect(bare?.contains("ExceptionsList") == false && bare?.contains("d.add FTPPassive # 0") == true)
-    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: ["*.local", "169.254/16"], ftpPassive: true, other: []) != nil)
+    var bare = SystemProxyCommands.ProxyDictionary(); bare.ftpPassive = false
+    #expect(script(bare)?.contains("ExceptionsList") == false && script(bare)?.contains("d.add FTPPassive # 0") == true)
+    #expect(script(dict(exceptions: ["*.local", "169.254/16", "fe80::1"])) != nil)
+}
+@Test func disableScriptKeepsSideThatIsNotOurs() {
+    var d = dict()
+    d.proxy = .init(httpEnabled: true, httpHost: "127.0.0.1", httpPort: 9090, httpsEnabled: true, httpsHost: "proxy.corp.example", httpsPort: 8080)
+    let s = script(d) ?? ""
+    #expect(s.contains("d.add HTTPEnable # 0"))
+    #expect(s.contains("d.add HTTPSEnable # 1\nd.add HTTPSProxy proxy.corp.example\nd.add HTTPSPort # 8080"))
+    d.proxy = .init(httpEnabled: true, httpHost: "127.0.0.1", httpPort: 3128, httpsEnabled: false, httpsHost: "127.0.0.1", httpsPort: 9090)
+    let cntlm = script(d) ?? ""   // 다른 포트의 로컬 프록시는 사용자의 것, 꺼진 쪽은 꺼진 채
+    #expect(cntlm.contains("d.add HTTPEnable # 1\nd.add HTTPProxy 127.0.0.1\nd.add HTTPPort # 3128") && cntlm.contains("d.add HTTPSEnable # 0"))
+}
+@Test func disableScriptTypesValues() {
+    let s = script(dict(other: [("ExcludeSimpleHostnames", "TRUE"), ("SOCKSEnable", "0"), ("ProxyAutoConfigURLString", "http://wpad/x.pac?a=b")])) ?? ""
+    #expect(s.contains("d.add ExcludeSimpleHostnames ? TRUE\n") && s.contains("d.add SOCKSEnable # 0\n"))
+    #expect(s.contains("d.add ProxyAutoConfigURLString http://wpad/x.pac?a=b\n"))
+}
+@Test func disableScriptFailsClosedOnNestedContainer() {
+    let d = SystemProxyCommands.parseScutilProxyDictionary(vpnProxiesOurs.replacingOccurrences(of: "  FTPPassive : 1\n",
+        with: "  FTPPassive : 1\n  SupplementalMatchDomains : <array> {\n    0 : corp.example\n  }\n"))
+    #expect(d.droppedContainer && d.exceptions == ["dns.google", "one.one.one.one"])
+    #expect(script(d) == nil)
 }
 @Test func disableScriptRejectsUntrustedText() {
-    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan\nremove State:/x", exceptions: [], ftpPassive: true, other: []) == nil)
-    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "a b", exceptions: [], ftpPassive: true, other: []) == nil)
-    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: ["a b"], ftpPassive: true, other: []) == nil)
-    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: ["x'; rm"], ftpPassive: true, other: []) == nil)
-    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: [], ftpPassive: true, other: [("K\nquit", "1")]) == nil)
-    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: [], ftpPassive: true, other: [("K", "a b")]) == nil)
+    #expect(script(dict(), id: "gpd.pan\nremove State:/x") == nil)
+    #expect(script(dict(), id: "a b") == nil)
+    #expect(script(dict(exceptions: ["a b"])) == nil)
+    #expect(script(dict(exceptions: ["x'; rm"])) == nil)
+    #expect(script(dict(exceptions: ["a#b"])) == nil)
+    #expect(script(dict(exceptions: ["a\"b"])) == nil)
+    #expect(script(dict(exceptions: ["a\nquit"])) == nil)
+    for flag in ["*", "?", "%", "-", "#"] {
+        #expect(script(dict(exceptions: [flag])) == nil)
+        #expect(script(dict(other: [("K", flag)])) == nil)
+    }
+    #expect(script(dict(other: [("K\nquit", "1")])) == nil)
+    #expect(script(dict(other: [("K", "a b")])) == nil)
+    #expect(script(dict(other: [("K", "a\nset State:/x")])) == nil)
+    var d = dict(); d.proxy = .init(httpEnabled: true, httpHost: "evil\nquit", httpPort: 80)
+    #expect(script(d) == nil)
 }
 @Test func isOursMatchesOnlyOwnPort() {
     var p = SystemProxyCommands.EffectiveProxy()

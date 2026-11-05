@@ -100,16 +100,38 @@ public enum SystemProxyCommands {
         public var httpsEnabled = false, httpsHost = "", httpsPort = 0
     }
 
-    /// `  Key : Value` 줄 → (key, value). 중첩 항목(`0 : a`)도 그대로 돌려주므로 호출자가 깊이를 본다.
-    private static func scutilEntry(_ line: Substring) -> (key: String, value: String)? {
-        guard let r = line.range(of: " : ") else { return nil }
-        return (line[..<r.lowerBound].trimmingCharacters(in: .whitespaces), line[r.upperBound...].trimmingCharacters(in: .whitespaces))
+    /// `show State:/Network/Service/<id>/Proxies` 사전. other: HTTP·HTTPS·FTPPassive 외의 최상위 스칼라.
+    /// droppedContainer: ExceptionsList 외의 중첩 배열·사전이 있었다(다시 쓰면 잃으므로 스크립트를 만들지 않는다).
+    public struct ProxyDictionary: Sendable {
+        public var exceptions: [String] = [], ftpPassive = false
+        public var proxy = EffectiveProxy()
+        public var other: [(key: String, value: String)] = []
+        public var droppedContainer = false
+    }
+
+    /// 최상위(깊이 1) 항목만. 컨테이너(`Key : <array> {`)는 items에 바로 아래 스칼라 값을 담는다(그보다 깊은 내용은 버림).
+    /// `scutil --proxy`의 `__SCOPED__ : <dictionary> { en0 : {…} }` 같은 중첩 값이 최상위 값을 덮어쓰지 않게 한다.
+    private static func scutilTopLevel(_ output: String) -> [(key: String, value: String, items: [String]?)] {
+        var result: [(key: String, value: String, items: [String]?)] = []
+        var depth = 0
+        for raw in output.split(whereSeparator: \.isNewline) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line == "}" { depth -= 1; continue }
+            let entry = line.range(of: " : ").map { (String(line[..<$0.lowerBound]), String(line[$0.upperBound...])) }
+            if line.hasSuffix("{") {
+                if depth == 1, let (k, v) = entry { result.append((k, v, [])) }
+                depth += 1
+            } else if let (k, v) = entry {
+                if depth == 1 { result.append((k, v, nil)) }
+                else if depth == 2, let last = result.indices.last, result[last].items != nil { result[last].items?.append(v) }
+            }
+        }
+        return result
     }
 
     public static func parseScutilProxy(_ output: String) -> EffectiveProxy {
         var p = EffectiveProxy()
-        for line in output.split(whereSeparator: \.isNewline) {
-            guard let (k, v) = scutilEntry(line) else { continue }
+        for (k, v, items) in scutilTopLevel(output) where items == nil {
             switch k {
             case "HTTPEnable": p.httpEnabled = v == "1"
             case "HTTPProxy": p.httpHost = v
@@ -125,48 +147,56 @@ public enum SystemProxyCommands {
 
     /// `show State:/Network/Global/IPv4` → `PrimaryService` (물리 서비스는 UUID, GlobalProtect는 `gpd.pan`).
     public static func parsePrimaryService(_ output: String) -> String? {
-        output.split(whereSeparator: \.isNewline).lazy.compactMap(scutilEntry).first { $0.key == "PrimaryService" }?.value
+        scutilTopLevel(output).first { $0.key == "PrimaryService" && $0.items == nil }?.value
     }
 
-    /// `show State:/Network/Service/<id>/Proxies` → 바이패스 목록, FTPPassive, 그 밖의 최상위 스칼라(HTTP·HTTPS 제외).
-    /// ponytail: ExceptionsList 외의 중첩 배열·사전은 버린다. HTTP·HTTPS를 끄는 데는 영향이 없다.
-    public static func parseScutilProxyDictionary(_ output: String) -> (exceptions: [String], ftpPassive: Bool, other: [(key: String, value: String)]) {
-        var exceptions: [String] = [], ftpPassive = false, other: [(key: String, value: String)] = []
-        var depth = 0, inExceptions = false
-        for raw in output.split(whereSeparator: \.isNewline) {
-            let line = raw.trimmingCharacters(in: .whitespaces)
-            if line == "}" { depth -= 1; if depth <= 1 { inExceptions = false }; continue }
-            if line.hasSuffix("{") {
-                if depth == 1, scutilEntry(raw)?.key == "ExceptionsList" { inExceptions = true }
-                depth += 1; continue
+    public static func parseScutilProxyDictionary(_ output: String) -> ProxyDictionary {
+        var d = ProxyDictionary()
+        d.proxy = parseScutilProxy(output)
+        for (k, v, items) in scutilTopLevel(output) {
+            if let items {
+                if k == "ExceptionsList" { d.exceptions = items } else { d.droppedContainer = true }
+                continue
             }
-            guard let (k, v) = scutilEntry(raw) else { continue }
-            if depth == 2, inExceptions { exceptions.append(v); continue }
-            guard depth == 1 else { continue }
             switch k {
-            case "FTPPassive": ftpPassive = v == "1"
+            case "FTPPassive": d.ftpPassive = v == "1"
             case "HTTPEnable", "HTTPProxy", "HTTPPort", "HTTPSEnable", "HTTPSProxy", "HTTPSPort": break
-            default: other.append((k, v))
+            default: d.other.append((k, v))
             }
         }
-        return (exceptions, ftpPassive, other)
+        return d
     }
 
     /// 서비스 ID·키·값을 그대로 scutil 대화형 명령에 넣으므로 공백·따옴표·줄바꿈이 없는 것만 받는다.
     static func isSafeServiceID(_ s: String) -> Bool { s.wholeMatch(of: /[A-Za-z0-9._-]+/) != nil }
+    /// 영숫자가 하나는 있어야 `*`·`?`·`%`·`#`·`-` 단독 토큰(scutil 타입 플래그)으로 읽히지 않는다.
+    private static func hasAlnum(_ s: String) -> Bool { s.contains { $0.isASCII && ($0.isLetter || $0.isNumber) } }
     /// 바이패스 항목: 기본값 `*.local`, `169.254/16`, IPv6 때문에 `*`·`/`·`:`도 허용.
-    private static func isSafeException(_ s: String) -> Bool { s.wholeMatch(of: /[A-Za-z0-9._*\/:-]+/) != nil }
+    private static func isSafeException(_ s: String) -> Bool { hasAlnum(s) && s.wholeMatch(of: /[A-Za-z0-9._*\/:-]+/) != nil }
+    /// 문자열 값(PAC URL·프록시 호스트 등).
+    private static func isSafeValue(_ s: String) -> Bool { hasAlnum(s) && s.wholeMatch(of: /[A-Za-z0-9._*\/:?=&%+~@-]+/) != nil }
 
-    /// VPN 서비스의 State 프록시를 HTTP·HTTPS 끔으로 다시 쓰는 scutil 스크립트(표준 입력용). 나머지 항목은 보존.
-    /// 검증되지 않는 텍스트가 섞이면 nil — 신뢰할 수 없는 출력으로 루트 권한 스크립트를 만들지 않는다.
-    public static func scutilDisableProxyScript(serviceID: String, exceptions: [String], ftpPassive: Bool, other: [(String, String)]) -> String? {
-        guard isSafeServiceID(serviceID), exceptions.allSatisfy(isSafeException) else { return nil }
-        var lines = ["d.init", "d.add FTPPassive # \(ftpPassive ? 1 : 0)", "d.add HTTPEnable # 0", "d.add HTTPSEnable # 0"]
-        if !exceptions.isEmpty { lines.append("d.add ExceptionsList * " + exceptions.joined(separator: " ")) }
-        for (k, v) in other {
+    /// VPN 서비스의 State 프록시에서 EyeProxy(127.0.0.1:ownPort)인 HTTP·HTTPS만 끄는 scutil 스크립트(표준 입력용).
+    /// 우리 것이 아닌 쪽(회사 프록시 등)과 나머지 항목은 그대로 다시 쓴다. `d.init`+`set`은 키 전체를 바꾸므로
+    /// 옮길 수 없는 중첩 항목이 있거나 검증되지 않는 텍스트가 섞이면 nil — 신뢰할 수 없는 출력으로 루트 권한 스크립트를 만들지 않는다.
+    public static func scutilDisableProxyScript(serviceID: String, _ d: ProxyDictionary, ownPort: Int) -> String? {
+        guard isSafeServiceID(serviceID), !d.droppedContainer, d.exceptions.allSatisfy(isSafeException) else { return nil }
+        var lines = ["d.init", "d.add FTPPassive # \(d.ftpPassive ? 1 : 0)"]
+        for (prefix, on, host, port) in [("HTTP", d.proxy.httpEnabled, d.proxy.httpHost, d.proxy.httpPort),
+                                         ("HTTPS", d.proxy.httpsEnabled, d.proxy.httpsHost, d.proxy.httpsPort)] {
+            if on, !(host == ownHost && port == ownPort) {
+                guard isSafeValue(host) else { return nil }
+                lines += ["d.add \(prefix)Enable # 1", "d.add \(prefix)Proxy \(host)", "d.add \(prefix)Port # \(port)"]
+            } else {
+                lines.append("d.add \(prefix)Enable # 0")
+            }
+        }
+        if !d.exceptions.isEmpty { lines.append("d.add ExceptionsList * " + d.exceptions.joined(separator: " ")) }
+        for (k, v) in d.other {
             guard k.wholeMatch(of: /[A-Za-z0-9]+/) != nil else { return nil }
             if Int(v) != nil { lines.append("d.add \(k) # \(v)") }
-            else if v.wholeMatch(of: /[A-Za-z0-9._*\/:?=&%+~@-]+/) != nil { lines.append("d.add \(k) \(v)") }  // PAC URL 등 문자열
+            else if v == "TRUE" || v == "FALSE" { lines.append("d.add \(k) ? \(v)") }
+            else if isSafeValue(v) { lines.append("d.add \(k) \(v)") }
             else { return nil }
         }
         lines += ["set State:/Network/Service/\(serviceID)/Proxies", "quit"]
@@ -320,12 +350,12 @@ public final class SystemProxy: Sendable {
         let key = "State:/Network/Service/\(id)/Proxies"
         let current = try await scutilShow(key)
         guard SystemProxyCommands.isOurs(SystemProxyCommands.parseScutilProxy(current), ownPort: ownPort) else { return }
-        let d = SystemProxyCommands.parseScutilProxyDictionary(current)
-        guard let script = SystemProxyCommands.scutilDisableProxyScript(serviceID: id, exceptions: d.exceptions, ftpPassive: d.ftpPassive,
-                                                                      other: d.other.map { ($0.key, $0.value) })
+        guard let script = SystemProxyCommands.scutilDisableProxyScript(serviceID: id, SystemProxyCommands.parseScutilProxyDictionary(current),
+                                                                      ownPort: ownPort)
         else { throw SystemProxyError.vpnProxyLeftover(service: id) }
         do { _ = try await PrivilegedShell.run("\(Self.scutil) <<'EYEPROXY_EOF'\n\(script)\nEYEPROXY_EOF") }
         catch ShellError.privilegedFailed(let stderr) { throw SystemProxyError.commandFailed(stderr) }  // 취소 시 "User canceled. (-128)"
+        catch { throw SystemProxyError.commandFailed(error.localizedDescription) }
         // configd가 실효 프록시를 다시 계산할 시간을 준다(최대 약 2초).
         for _ in 0..<4 where await effectiveProxyIsOurs(ownPort: ownPort) { try? await Task.sleep(for: .milliseconds(500)) }
         if await effectiveProxyIsOurs(ownPort: ownPort) { throw SystemProxyError.vpnProxyLeftover(service: id) }
