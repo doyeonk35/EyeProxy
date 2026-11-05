@@ -83,6 +83,8 @@ public struct ConnectionLogEntry: Equatable, Codable, Sendable, Identifiable {
 public struct Flow: Equatable, Codable, Sendable, Identifiable {
     public let id: FlowID
     public let clientAddress: String
+    /// 클라이언트 소켓의 로컬 포트 (프로세스 식별용). 이전 저장분 디코딩을 위해 옵셔널.
+    public let clientPort: Int?
     public let startedAt: Date
     public var request: FlowRequest
     public var response: FlowResponse?
@@ -93,10 +95,11 @@ public struct Flow: Equatable, Codable, Sendable, Identifiable {
     /// CONNECT 패스스루 항목이면 true (request.method == "CONNECT")
     public var isTunnel: Bool
 
-    public init(id: FlowID, clientAddress: String, startedAt: Date, request: FlowRequest, response: FlowResponse? = nil,
+    public init(id: FlowID, clientAddress: String, clientPort: Int? = nil, startedAt: Date, request: FlowRequest, response: FlowResponse? = nil,
                 completedAt: Date? = nil, error: String? = nil, isDecrypted: Bool = false, isTunnel: Bool = false) {
         self.id = id
         self.clientAddress = clientAddress
+        self.clientPort = clientPort
         self.startedAt = startedAt
         self.request = request
         self.response = response

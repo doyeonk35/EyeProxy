@@ -22,6 +22,7 @@ struct ProxyServerHTTPTests {
         let (status, headers, body) = try await fetchViaProxy("http://127.0.0.1:\(originPort)/a?b=1", proxyPort: port)
         #expect(status == 200); #expect(headers["X-Echo-Path"] == "/a?b=1"); #expect(body == Data("hello".utf8))
         guard case .requestStarted(let flow) = await iterator.next() else { Issue.record("no requestStarted"); return }
+        #expect((flow.clientPort ?? 0) > 0)
         #expect(flow.request.host == "127.0.0.1" && flow.request.port == originPort && flow.request.scheme == "http")
         #expect(flow.clientAddress == "127.0.0.1")
         guard case .responseReceived(let id, let res, _) = await iterator.next() else { Issue.record("no responseReceived"); return }
