@@ -26,22 +26,25 @@ struct DevicesView: View {
         }
     }
 
+    /// VPN 복사본이 남아 있으면 켜진 것으로 보여 "끄기"로 정리할 수 있게 한다.
+    private var captureShownOn: Bool { model.macCaptureEnabled || model.effectiveProxyLeftover }
+
     private var serverRunning: Bool { if case .running = model.serverState { true } else { false } }
 
     private var macSection: some View {
         Section("이 Mac") {
-            Toggle(isOn: Binding(get: { model.macCaptureEnabled }, set: { on in Task { await model.setMacCapture(on) } })) {
+            Toggle(isOn: Binding(get: { captureShownOn }, set: { on in Task { await model.setMacCapture(on) } })) {
                 Text("이 Mac 캡처")
                 Text("시스템 HTTP·HTTPS 프록시를 127.0.0.1:\(String(model.runningPort ?? model.settings.port))로 설정합니다. 끄거나 종료하면 되돌립니다.")
             }
             // 서버가 안 떠 있을 때 켜면 Mac 인터넷이 끊긴다. 끄기는 언제나 허용.
-            .disabled(model.macCaptureBusy || (!model.macCaptureEnabled && !serverRunning))
+            .disabled(model.macCaptureBusy || (!captureShownOn && !serverRunning))
             if model.systemProxyBackupExists {
                 Label("시스템 프록시가 EyeProxy로 설정되어 있음", systemImage: "network.badge.shield.half.filled")
                     .foregroundStyle(model.macCaptureEnabled ? Color.secondary : Color.orange)
             }
             if model.effectiveProxyLeftover {
-                Label("VPN 서비스에 EyeProxy 프록시가 남아 있습니다 — 캡처를 껐다 켜거나 VPN을 재연결하세요", systemImage: "exclamationmark.triangle.fill")
+                Label("VPN 서비스에 EyeProxy 프록시가 남아 있습니다 — 캡처를 끄거나 VPN을 재연결하세요", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
             }
             LabeledContent {

@@ -44,6 +44,7 @@ final class AppModel {
     /// 디스크에 원본 백업이 있다 = 시스템 프록시가 EyeProxy를 가리키고 있다(캡처 중이거나 복원 전).
     private(set) var systemProxyBackupExists = false
     /// 백업이 없는데 실효 프록시(`scutil --proxy`)가 EyeProxy를 가리킨다 = VPN 서비스에 복사본이 남았다.
+    /// 이때 토글은 켜진 것으로 보이고, 끄면 disable이 복사본을 정리한다.
     private(set) var effectiveProxyLeftover = false
     /// 시스템 프록시·CA 설치·프로필 저장 실패. 키 윈도우에 alert로 표시한다.
     var systemError: String?
@@ -65,6 +66,8 @@ final class AppModel {
         // 이 실행은 아직 캡처를 켜지 않았으므로 백업이 있으면 이전 실행이 복원하지 못한 것이다.
         pendingProxyRestore = systemProxy.pendingRestore()
         systemProxyBackupExists = pendingProxyRestore != nil
+        // 백업 없이 VPN 복사본만 남은 경우(종료 때 관리자 인증 취소 등)도 시작 시 알린다.
+        Task { await refreshEffectiveProxyWarning() }
     }
 
     /// 손상(한쪽 파일만 있음·읽기 실패)이면 기존 파일을 덮어쓰지 않고 이번 실행만 임시 CA를 쓴다.
@@ -258,14 +261,15 @@ final class AppModel {
 
     private func applyMacCapture(_ on: Bool, force: Bool) async {
         if on && quitting { return }
-        // 끄기는 캡처 중이 아니어도 백업이 남아 있으면 복원한다(유지 후 실패·비정상 종료 잔여).
+        // 끄기는 캡처 중이 아니어도 백업이나 VPN 복사본이 남아 있으면 복원한다(유지 후 실패·비정상 종료 잔여).
         // 서버가 떠 있지 않거나 설정 포트가 아직 적용 전이면 죽은 포트를 가리키게 된다 → 실제 실행 포트로만 켠다.
         let runningPort = self.runningPort
         if on, runningPort == nil {
             systemError = String(localized: "서버가 실행 중이 아니어서 시스템 프록시를 켤 수 없습니다")
             return
         }
-        let needed = on ? (force || !macCaptureEnabled) : (macCaptureEnabled || systemProxy.pendingRestore() != nil)
+        let needed = on ? (force || !macCaptureEnabled)
+                        : (macCaptureEnabled || systemProxy.pendingRestore() != nil || effectiveProxyLeftover)
         guard needed else { return }
         macCaptureBusy = true
         defer {
@@ -298,7 +302,7 @@ final class AppModel {
 
     /// 종료 전에 시스템 프록시를 되돌려야 하는가(캡처 중·변경 중·백업 잔여).
     var needsProxyCleanupOnQuit: Bool {
-        macCaptureEnabled || macCaptureBusy || systemProxy.pendingRestore() != nil
+        macCaptureEnabled || macCaptureBusy || systemProxy.pendingRestore() != nil || effectiveProxyLeftover
     }
 
     func prepareForQuit() async {
