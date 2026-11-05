@@ -19,6 +19,9 @@ struct DevicesView: View {
             ConnectionLogSection()
         }
         .formStyle(.grouped)
+        .onAppear { model.devicesWindowOpen = true }
+        .onDisappear { model.devicesWindowOpen = false }
+        .systemErrorAlert(model, presenting: true)
         .task {
             await model.refreshMacCAInstalled()
             await model.refreshEffectiveProxyWarning()
@@ -39,6 +42,13 @@ struct DevicesView: View {
             }
             // 서버가 안 떠 있을 때 켜면 Mac 인터넷이 끊긴다. 끄기는 언제나 허용.
             .disabled(model.macCaptureBusy || (!captureShownOn && !serverRunning))
+            if let error = model.systemError {
+                LabeledContent {
+                    Button("지우기") { model.systemError = nil }
+                } label: {
+                    Label("마지막 오류: \(error)", systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+                }
+            }
             if model.systemProxyBackupExists {
                 Label("시스템 프록시가 EyeProxy로 설정되어 있음", systemImage: "network.badge.shield.half.filled")
                     .foregroundStyle(model.macCaptureEnabled ? Color.secondary : Color.orange)

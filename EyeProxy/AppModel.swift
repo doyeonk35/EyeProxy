@@ -48,8 +48,10 @@ final class AppModel {
     private(set) var effectiveProxyLeftover = false
     /// 기본 서비스가 VPN(GlobalProtect 등)이다 → 켜고 끌 때 VPN State 키를 관리자 권한으로 쓴다.
     private(set) var vpnPrimaryDetected = false
-    /// 시스템 프록시·CA 설치·프로필 저장 실패. 키 윈도우에 alert로 표시한다.
+    /// 시스템 프록시·CA 설치·프로필 저장 실패. 기기 창(없으면 메인 창)에 alert로 표시한다.
     var systemError: String?
+    /// 기기 창이 열려 있으면 오류 alert는 그 창이 맡는다(메인 창은 띄우지 않음).
+    var devicesWindowOpen = false
 
     /// 종료 중이면 시스템 프록시를 다시 켜지 않는다(종료 경로가 끈 뒤에 켜지는 경쟁 방지).
     @ObservationIgnored var quitting = false

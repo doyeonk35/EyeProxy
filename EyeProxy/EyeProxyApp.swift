@@ -15,7 +15,7 @@ import SwiftUI
                 .frame(minWidth: 1100, minHeight: 700)
                 .task { await model.startServer() }
                 .pendingProxyRestoreAlert(model)
-                .systemErrorAlert(model)
+                .systemErrorAlert(model, presenting: !model.devicesWindowOpen)
         }
         .commands {
             // 툴바 버튼의 keyboardShortcut은 동작하지 않아 메뉴 막대에 둔다.
@@ -46,13 +46,12 @@ import SwiftUI
         Settings {
             SettingsView()
                 .environment(model)
-                .systemErrorAlert(model)
         }
         Window("기기", id: "devices") {
             DevicesView()
                 .environment(model)
                 .frame(minWidth: 640, minHeight: 600)
-                .systemErrorAlert(model)
+                .systemErrorAlert(model, presenting: true)
         }
     }
 }
@@ -109,8 +108,16 @@ private struct OpenDevicesButton: View {
 }
 
 extension View {
-    /// 기기·메인 윈도우가 함께 떠 있어도 키 윈도우 한 곳에만 띄운다.
-    func systemErrorAlert(_ model: AppModel) -> some View { modifier(SystemErrorAlert(model: model)) }
+    /// 관리자 인증창 등 다른 프로세스가 앞에 있어도 표시되도록 활성 상태에 묶지 않는다.
+    /// 기기 창이 열려 있으면 거기서만(`presenting`), 닫혀 있으면 메인 창에서 띄워 한 번만 보이게 한다.
+    func systemErrorAlert(_ model: AppModel, presenting: Bool) -> some View {
+        alert("오류", isPresented: Binding(get: { presenting && model.systemError != nil },
+                                         set: { if !$0 { model.systemError = nil } })) {
+            Button("확인", role: .cancel) { model.systemError = nil }
+        } message: {
+            Text(model.systemError ?? "")
+        }
+    }
 
     func pendingProxyRestoreAlert(_ model: AppModel) -> some View {
         alert("이전 실행이 비정상 종료되어 시스템 프록시가 남아 있습니다. 복원할까요?",
@@ -120,20 +127,6 @@ extension View {
             Button("유지") { Task { await model.adoptPendingProxy() } }
         } message: {
             if let b = model.pendingProxyRestore { Text("네트워크 서비스: \(b.service)") }
-        }
-    }
-}
-
-private struct SystemErrorAlert: ViewModifier {
-    let model: AppModel
-    @Environment(\.appearsActive) private var appearsActive
-
-    func body(content: Content) -> some View {
-        content.alert("오류", isPresented: Binding(get: { appearsActive && model.systemError != nil },
-                                                 set: { if !$0 { model.systemError = nil } })) {
-            Button("확인", role: .cancel) { model.systemError = nil }
-        } message: {
-            Text(model.systemError ?? "")
         }
     }
 }
