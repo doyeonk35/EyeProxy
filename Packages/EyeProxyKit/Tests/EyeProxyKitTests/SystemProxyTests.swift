@@ -65,3 +65,18 @@ An asterisk (*) denotes that a network service is disabled.
     #expect(!SystemProxyCommands.isOrphaned(SystemProxyBackup(service: "Wi-Fi", httpEnabled: false, httpHost: "", httpPort: 0, httpsEnabled: false, httpsHost: "", httpsPort: 0, bypass: []), serviceOrder: serviceOrderSample))
     #expect(!SystemProxyCommands.isOrphaned(b, serviceOrder: ""))  // 목록을 못 읽으면 지우지 않는다
 }
+
+@Test func turnOffOwnTouchesOnly127Proxies() {
+    let own = (enabled: true, host: "127.0.0.1", port: 9090)
+    let other = (enabled: true, host: "10.0.0.1", port: 8080)
+    #expect(SystemProxyCommands.turnOffOwn(service: "Wi-Fi", http: own, https: other) == [["-setwebproxystate", "Wi-Fi", "off"]])
+    #expect(SystemProxyCommands.turnOffOwn(service: "Wi-Fi", http: other, https: own) == [["-setsecurewebproxystate", "Wi-Fi", "off"]])
+    #expect(SystemProxyCommands.turnOffOwn(service: "Wi-Fi", http: other, https: other).isEmpty)
+    #expect(SystemProxyCommands.turnOffOwn(service: "Wi-Fi", http: (false, "127.0.0.1", 9090), https: (false, "", 0)).isEmpty)
+}
+@Test func ownProxyIsNeverRecordedAsOriginal() {
+    let o = SystemProxyCommands.originalProxy((enabled: true, host: "127.0.0.1", port: 9090))
+    #expect(!o.enabled && o.host.isEmpty && o.port == 0)
+    let keep = SystemProxyCommands.originalProxy((enabled: true, host: "10.0.0.1", port: 8080))
+    #expect(keep.enabled && keep.host == "10.0.0.1" && keep.port == 8080)
+}

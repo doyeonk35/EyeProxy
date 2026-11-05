@@ -46,6 +46,8 @@ final class AppModel {
     /// 시스템 프록시·CA 설치·프로필 저장 실패. 키 윈도우에 alert로 표시한다.
     var systemError: String?
 
+    /// 종료 중이면 시스템 프록시를 다시 켜지 않는다(종료 경로가 끈 뒤에 켜지는 경쟁 방지).
+    @ObservationIgnored var quitting = false
     @ObservationIgnored private var server: ProxyServer?
     @ObservationIgnored private var consumer: Task<Void, Never>?
     @ObservationIgnored private var settingsUpdate: Task<Void, Never>?
@@ -182,6 +184,7 @@ final class AppModel {
     }
 
     private func applyMacCapture(_ on: Bool) async {
+        if on && quitting { return }
         // 끄기는 캡처 중이 아니어도 백업이 남아 있으면 복원한다(유지 후 실패·비정상 종료 잔여).
         let needed = on ? !macCaptureEnabled : (macCaptureEnabled || systemProxy.pendingRestore() != nil)
         guard needed else { return }
@@ -211,6 +214,7 @@ final class AppModel {
     }
 
     func prepareForQuit() async {
+        quitting = true
         await setMacCapture(false)   // 진행 중인 변경 뒤에 직렬화된다
         await stopServer()
     }
@@ -221,8 +225,10 @@ final class AppModel {
     }
 
     /// "유지": 남은 프록시를 이번 실행의 캡처로 채택한다. 원본 백업은 그대로 두고 현재 포트로 다시 맞춘다.
+    /// 서버가 떠 있지 않으면 채택하지 않는다(프록시가 죽은 포트를 가리켜 인터넷이 끊긴다) — 기기 화면에서 복원할 수 있다.
     func adoptPendingProxy() async {
         pendingProxyRestore = nil
+        guard case .running = serverState else { return }
         await setMacCapture(true)
     }
 

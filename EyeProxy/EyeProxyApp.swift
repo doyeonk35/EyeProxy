@@ -51,6 +51,7 @@ private struct OpenDevicesButton: View {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if quitTask != nil { return .terminateLater }
         guard model.needsProxyCleanupOnQuit else { return .terminateNow }
+        model.quitting = true
         quitTask = Task {
             await model.prepareForQuit()
             sender.reply(toApplicationShouldTerminate: true)
@@ -71,8 +72,8 @@ extension View {
     func pendingProxyRestoreAlert(_ model: AppModel) -> some View {
         alert("이전 실행이 비정상 종료되어 시스템 프록시가 남아 있습니다. 복원할까요?",
               isPresented: Binding(get: { model.pendingProxyRestore != nil }, set: { if !$0 { model.pendingProxyRestore = nil } })) {
-            Button("복원") { Task { await model.restorePendingProxy() } }
-            Button("유지", role: .cancel) { Task { await model.adoptPendingProxy() } }
+            Button("복원", role: .cancel) { Task { await model.restorePendingProxy() } }
+            Button("유지") { Task { await model.adoptPendingProxy() } }
         } message: {
             if let b = model.pendingProxyRestore { Text("네트워크 서비스: \(b.service)") }
         }

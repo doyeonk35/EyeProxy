@@ -51,6 +51,24 @@ public enum SystemProxyCommands {
         return !names.isEmpty && !names.contains(backup.service)
     }
 
+    /// EyeProxy 자신의 주소(127.0.0.1)인 프록시만 끄는 명령. 다른 프록시는 건드리지 않는다.
+    /// 이름이 바뀐 서비스는 설정을 그대로 가지므로, 백업을 잃은 뒤에도 남은 EyeProxy 설정을 치우는 데 쓴다.
+    public static func turnOffOwn(service svc: String,
+                                  http: (enabled: Bool, host: String, port: Int),
+                                  https: (enabled: Bool, host: String, port: Int)) -> [[String]] {
+        var c: [[String]] = []
+        if http.enabled, http.host == ownHost { c.append(["-setwebproxystate", svc, "off"]) }
+        if https.enabled, https.host == ownHost { c.append(["-setsecurewebproxystate", svc, "off"]) }
+        return c
+    }
+
+    /// 원본으로 기록할 프록시 값. 127.0.0.1은 EyeProxy 잔여물이므로 원본이 아니라 "꺼짐·주소 없음"으로 기록한다.
+    public static func originalProxy(_ p: (enabled: Bool, host: String, port: Int)) -> (enabled: Bool, host: String, port: Int) {
+        p.host == ownHost ? (false, "", 0) : p
+    }
+
+    static let ownHost = "127.0.0.1"
+
     /// `-listnetworkserviceorder` 출력 → 서비스 목록. `(*) Name` 헤더는 비활성.
     public static func parseServiceOrder(_ output: String) -> [(name: String, device: String, enabled: Bool)] {
         var result: [(name: String, device: String, enabled: Bool)] = []
@@ -108,17 +126,28 @@ public final class SystemProxy: Sendable {
     }
 
     /// 서비스가 사라진 백업은 영원히 복원에 실패하므로 지운다. 지웠으면 true.
+    /// 이름만 바뀐 서비스는 EyeProxy 프록시 설정이 그대로이므로, 지우기 전에 현재 활성 서비스의 127.0.0.1 프록시를 끈다
+    /// (실패하면 백업을 남겨 다음에 다시 시도한다).
     @discardableResult
-    private func dropOrphanedBackup() async -> Bool {
+    private func dropOrphanedBackup() async throws -> Bool {
         guard let b = pendingRestore(),
               let order = try? await Shell.run(Self.networksetup, ["-listnetworkserviceorder"]), order.status == 0,
               SystemProxyCommands.isOrphaned(b, serviceOrder: order.stdout) else { return false }
+        if let svc = try? await activeService() {
+            try await apply(SystemProxyCommands.turnOffOwn(service: svc, http: readProxy("-getwebproxy", svc), https: readProxy("-getsecurewebproxy", svc)))
+        }
         try? FileManager.default.removeItem(at: backupURL)
         return true
     }
 
+    private func readProxy(_ action: String, _ svc: String) async throws -> (enabled: Bool, host: String, port: Int) {
+        let r = try await Shell.run(Self.networksetup, [action, svc])
+        guard r.status == 0 else { throw SystemProxyError.commandFailed(action) }
+        return SystemProxyCommands.parseGetWebProxy(r.stdout)
+    }
+
     public func enable(host: String, port: Int, bypass: [String]) async throws {
-        await dropOrphanedBackup()
+        try await dropOrphanedBackup()
         let svc = try await activeService()
         // 다른 서비스에 남은 EyeProxy 프록시를 되돌리고 백업을 지워야 현재 서비스의 원본을 새로 백업할 수 있다.
         let stale = SystemProxyCommands.restoreStale(pendingRestore(), currentService: svc)
@@ -134,11 +163,14 @@ public final class SystemProxy: Sendable {
             }
             let http = SystemProxyCommands.parseGetWebProxy(try await read("-getwebproxy"))
             let https = SystemProxyCommands.parseGetWebProxy(try await read("-getsecurewebproxy"))
+            // 127.0.0.1이 이미 켜져 있으면 EyeProxy 잔여물(백업을 잃음)이다. 원본으로 기록하지 말고 끈 뒤 꺼짐으로 기록한다.
+            try await apply(SystemProxyCommands.turnOffOwn(service: svc, http: http, https: https))
+            let (http0, https0) = (SystemProxyCommands.originalProxy(http), SystemProxyCommands.originalProxy(https))
             let by = try await read("-getproxybypassdomains")
                 .split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty && !$0.hasPrefix("There aren't any") }
-            try saveBackupIfAbsent(SystemProxyBackup(service: svc, httpEnabled: http.enabled, httpHost: http.host, httpPort: http.port,
-                                                     httpsEnabled: https.enabled, httpsHost: https.host, httpsPort: https.port, bypass: by))
+            try saveBackupIfAbsent(SystemProxyBackup(service: svc, httpEnabled: http0.enabled, httpHost: http0.host, httpPort: http0.port,
+                                                     httpsEnabled: https0.enabled, httpsHost: https0.host, httpsPort: https0.port, bypass: by))
         }
         try await apply(SystemProxyCommands.enable(service: svc, host: host, port: port, bypass: bypass))
     }
@@ -154,7 +186,7 @@ public final class SystemProxy: Sendable {
 
     public func disable() async throws {
         // 서비스가 사라졌으면 되돌릴 곳도 없다. 다른(현재) 서비스의 사용자 프록시를 끄지 않는다.
-        if await dropOrphanedBackup() { return }
+        if try await dropOrphanedBackup() { return }
         if let b = pendingRestore() {
             try await apply(SystemProxyCommands.restore(b))
         } else {
