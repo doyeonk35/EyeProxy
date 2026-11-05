@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import NIOSSL
 @testable import EyeProxyCore
 
 private struct MarkResponse: ResponseInterceptor {
@@ -82,6 +83,18 @@ struct ProxyServerMITMTests {
         _ = try await fetchViaProxy("https://localhost:\(originPort)/", proxyPort: port, trustRootDER: ca.certificateDER)
         #expect(await nextStarted(&it)?.isDecrypted == true)
         await server.stop(); await origin.stop()
+    }
+
+    @Test func tlsFailureMessageHintsTrustOnlyForCertificateAlerts() {
+        // BoringSSLError의 임의 오류 텍스트는 공개 API로 만들 수 없어 문자열 판정(trustHint)과 합성 가능한 오류(eofDuringHandshake)로 나눠 본다.
+        let hint = ProxyConnectionHandler.trustHint("error:10000416:SSL routines:OPENSSL_internal:SSLV3_ALERT_CERTIFICATE_UNKNOWN")
+        #expect(hint?.contains("신뢰") == true && hint?.contains("(certificate_unknown)") == true)
+        #expect(ProxyConnectionHandler.trustHint("error:10000418:SSL routines:OPENSSL_internal:TLSV1_ALERT_UNKNOWN_CA")?.contains("(unknown_ca)") == true)
+        #expect(ProxyConnectionHandler.trustHint("error:1000009c:SSL routines:OPENSSL_internal:HTTP_REQUEST") == nil)
+        #expect(ProxyConnectionHandler.trustHint("error:10000410:SSL routines:OPENSSL_internal:SSLV3_ALERT_HANDSHAKE_FAILURE") == nil)
+        let raw = ProxyConnectionHandler.tlsFailureMessage(NIOSSLError.handshakeFailed(.sslError([.eofDuringHandshake])))
+        #expect(raw?.contains("EOF during handshake") == true && raw?.contains("신뢰") == false)
+        #expect(ProxyConnectionHandler.tlsFailureMessage(NIOSSLError.uncleanShutdown) == nil)
     }
 
     @Test func upstreamCertificateFailureYields502() async throws {

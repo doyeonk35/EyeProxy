@@ -72,10 +72,16 @@ public final class CertificateAuthority: Sendable {
         return ""
     }
 
-    public func leaf(for rawHost: String) throws -> LeafCertificate {
+    /// 리프·캐시 키용 호스트: 소문자, 끝 점 제거, IPv6 대괄호 제거.
+    static func normalizedHost(_ rawHost: String) -> String {
         var host = rawHost.lowercased()
         if host.hasSuffix(".") { host.removeLast() }
         if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
+        return host
+    }
+
+    public func leaf(for rawHost: String) throws -> LeafCertificate {
+        let host = Self.normalizedHost(rawHost)
         if let hit = cache.withLock({ $0[host] }) { return hit }
         let leafKey = P256.Signing.PrivateKey()
         let now = Date()

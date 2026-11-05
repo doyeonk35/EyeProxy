@@ -36,7 +36,7 @@ public actor ProxyServer {
     private var running: (group: MultiThreadedEventLoopGroup, channel: Channel)?
     /// bind 대기 중인 start. 재진입한 start/stop은 이것을 기다린다.
     private var starting: Task<Int, Error>?
-    /// MITM 리프 컨텍스트. 키는 `CertificateAuthority.leaf`와 같은 소문자 호스트.
+    /// MITM 리프 컨텍스트. 키는 `CertificateAuthority.normalizedHost`(리프 캐시와 같은 정규화).
     /// ponytail: 무제한 캐시. 호스트 수천 개가 문제되면 LRU.
     private var leafContexts: [String: NIOSSLContext] = [:]
 
@@ -97,7 +97,7 @@ public actor ProxyServer {
 
     /// CONNECT 대상 호스트용 서버 TLS 컨텍스트(ALPN http/1.1만). 호스트당 한 번 만든다.
     func leafContext(for rawHost: String) throws -> NIOSSLContext {
-        let host = rawHost.lowercased()
+        let host = CertificateAuthority.normalizedHost(rawHost)
         if let cached = leafContexts[host] { return cached }
         let leaf = try certificateAuthority.leaf(for: host)
         var config = TLSConfiguration.makeServerConfiguration(
@@ -130,7 +130,7 @@ public actor ProxyServer {
                 return response
             } catch {
                 let message = Task.isCancelled ? "client disconnected"
-                    : Self.isCertificateError(error) ? "업스트림 인증서 오류: \(error)" : String(describing: error)
+                    : Self.upstreamTLSLabel(error).map { "\($0): \(error)" } ?? String(describing: error)
                 eventSink.yield(.failed(id: id, error: message, completedAt: Date()))
                 return FlowResponse(status: 502, reason: "Bad Gateway", headers: [.init(name: "Content-Type", value: "text/plain")],
                                     body: Data("EyeProxy: upstream error: \(message)".utf8))
@@ -138,9 +138,11 @@ public actor ProxyServer {
         }
     }
 
-    /// 업스트림 TLS 검증 실패: 체인 검증은 핸드셰이크 실패로, 호스트명 불일치는 NIOSSLExtraError로 온다.
-    private static func isCertificateError(_ error: any Error) -> Bool {
-        if case NIOSSLError.handshakeFailed = error { return true }
-        return error is NIOSSLExtraError
+    /// 업스트림 TLS 오류 분류. 체인 검증 실패는 CERTIFICATE_VERIFY_FAILED 핸드셰이크 실패로, 호스트명 불일치는 NIOSSLExtraError로 온다.
+    private static func upstreamTLSLabel(_ error: any Error) -> String? {
+        if (error as? NIOSSLExtraError) == .failedToValidateHostname { return "업스트림 인증서 오류" }
+        if case NIOSSLError.handshakeFailed(let underlying) = error, "\(underlying)".contains("CERTIFICATE_VERIFY_FAILED") { return "업스트림 인증서 오류" }
+        if error is NIOSSLError || error is NIOSSLExtraError || error is BoringSSLError { return "업스트림 TLS 오류" }
+        return nil
     }
 }

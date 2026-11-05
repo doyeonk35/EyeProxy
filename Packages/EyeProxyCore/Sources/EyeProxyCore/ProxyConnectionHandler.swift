@@ -43,6 +43,8 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
             guard let head else { return }
             self.head = nil
             switch head.method {
+            case .CONNECT where tlsOrigin != nil:   // 복호화된 연결 안에서 CONNECT를 다시 중첩하지 않는다
+                write(Self.plain(405, "Method Not Allowed"), to: head, keepAlive: false, context: context)
             case .CONNECT:
                 connect(head, context: context)
             default:
@@ -65,23 +67,31 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
         context.close(promise: nil)
     }
 
-    /// 클라이언트 쪽 TLS 실패를 로그 문구로. 핸드셰이크 실패는 대개 기기가 CA를 믿지 않아 보낸 alert(unknown_ca 등)다.
+    /// 클라이언트 쪽 TLS 실패를 로그 문구로. 인증서 alert면 신뢰 안내, 그 외 TLS 오류는 원문.
     /// TLS가 아닌 오류와 close_notify 없는 종료는 nil(로그 안 함).
     static func tlsFailureMessage(_ error: any Error) -> String? {
         switch error {
         case NIOSSLError.uncleanShutdown:
             return nil
         case NIOSSLError.handshakeFailed(let underlying):
-            // 예: "...SSL routines:OPENSSL_internal:TLSV1_ALERT_UNKNOWN_CA" → "unknown_ca"
-            let text = String(describing: underlying)
-            let reason = text.firstMatch(of: /OPENSSL_internal:(?:(?:SSLV3|TLSV1)_ALERT_)?([A-Z0-9_]+)/).map { $0.1.lowercased() } ?? text
-            return "기기가 EyeProxy 인증서를 신뢰하지 않습니다 (\(reason)). 기기의 인증서 신뢰 설정을 확인하세요."
+            return trustHint(String(describing: underlying)) ?? String(describing: error)
         case is NIOSSLError, is BoringSSLError:
             return String(describing: error)
         default:
             return nil
         }
     }
+
+    /// 기기가 CA를 믿지 않아 보낸 인증서 alert일 때만 안내 문구. 예: "...OPENSSL_internal:TLSV1_ALERT_UNKNOWN_CA" → "unknown_ca"
+    static func trustHint(_ boringSSLText: String) -> String? {
+        guard let alert = boringSSLText.firstMatch(of: /(?:SSLV3|TLSV1)_ALERT_([A-Z_]+)/).map({ $0.1.lowercased() }),
+              certificateAlerts.contains(alert) else { return nil }
+        return "기기가 EyeProxy 인증서를 신뢰하지 않습니다 (\(alert)). 기기의 인증서 신뢰 설정을 확인하세요."
+    }
+
+    private static let certificateAlerts: Set<String> = [
+        "unknown_ca", "bad_certificate", "certificate_unknown", "unsupported_certificate", "certificate_expired", "certificate_revoked",
+    ]
 
     private func forward(_ head: HTTPRequestHead, body: Data, context: ChannelHandlerContext) {
         let keepAlive = head.isKeepAlive
@@ -147,8 +157,9 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
         }
         ops.removeHandler(name: "http-encoder", promise: nil)
         // 디코더 제거는 다음 틱에 끝난다(그 전에 남은 바이트를 TLS로 넘긴다). 같은 이름은 그 뒤에야 다시 쓸 수 있다.
-        ops.removeHandler(name: "http-decoder").assumeIsolated().whenSuccess {
+        ops.removeHandler(name: "http-decoder").assumeIsolated().whenComplete { removal in
             do {
+                try removal.get()
                 let ops = channel.pipeline.syncOperations
                 let decoder = ByteToMessageHandler(HTTPRequestDecoder(leftOverBytesStrategy: .forwardBytes))
                 let encoder = Self.makeResponseEncoder()
@@ -194,7 +205,9 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
             let ops = context.pipeline.syncOperations
             let channel = context.channel
             // 디코더 제거는 다음 틱에 끝나며, 이미 읽힌 바이트(.forwardBytes)는 그때 GlueHandler로 간다. 그 뒤 flush를 위해 readComplete.
-            ops.removeHandler(name: "http-decoder").whenSuccess { channel.pipeline.fireChannelReadComplete() }
+            ops.removeHandler(name: "http-decoder").whenComplete { removal in
+                if case .failure = removal { channel.close(promise: nil) } else { channel.pipeline.fireChannelReadComplete() }
+            }
             ops.removeHandler(name: "http-encoder", promise: nil)
             let (local, remote) = TunnelGlueHandler.matchedPair()
             do {
