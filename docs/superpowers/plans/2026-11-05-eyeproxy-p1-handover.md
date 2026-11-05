@@ -111,3 +111,11 @@ gh api -X POST repos/doyeonk35/EyeProxy/pages -f build_type=legacy -f 'source[br
 - Cookies 탭(스펙 §4.3), Xcode 27 DeviceHub 안내(§7.1) 누락.
 - SystemProxyBackup에 적용 포트 저장(실행 간 포트 변경+크래시 시 옛 포트 잔여물 오인 방지).
 - Sparkle 패키지 버전이 `from: 2.7.0`으로 플로팅(.xcodeproj 미추적) → 재현 빌드 불가.
+
+## 4. 검증 기록 (Task 18)
+- 2026-11-05, 사용자 Mac(macOS 27.2, GlobalProtect VPN 상시, 기본 서비스 `gpd.pan`/utun6, 네트워크 위치 "집"):
+  - A-1 켜기/끄기: 통과. VPN 상태에서 Wi-Fi 설정만으로는 전역 프록시가 바뀌지 않음을 확인 → VPN 서비스 키 미러링(c65012e)으로 해결. 켤 때 관리자 프롬프트 1회, 전역·앱 관점 프록시 127.0.0.1:9090, 백업에 VPN 스냅샷 저장.
+  - A-2 ⌘Q: 통과. 프롬프트 1회, Wi-Fi off·전역 0·백업 삭제, VPN 키 원본(off, FTPPassive 1, 예외 5개) 복원.
+  - A-3 kill -9 → 재실행 → 복원 알럿(Return=복원): 통과. 프롬프트 1회, 결과 A-2와 동일.
+  - Safari → EyeProxy 목록에 행 표시 확인(VPN 경유).
+  - 관찰: GlobalProtect는 Wi-Fi 프록시 변경을 양방향 모두 실시간으로 따라오지 않음(연결 시점에만 복사). Proxyman도 같은 구조이며 항상 켜 둔 채 쓰기 때문에 드러나지 않았음.
