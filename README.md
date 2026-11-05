@@ -18,9 +18,37 @@ macOS용 MITM 디버깅 프록시 (Proxyman류). Mac·시뮬레이터·Apple TV�
 
 - **Mac**: 위 첫 실행 절차. 브라우저·앱 트래픽이 바로 잡힌다.
 - **시뮬레이터**: `기기…` 창의 시뮬레이터 섹션에서 부팅된 iOS·tvOS 시뮬레이터마다 **CA 설치** → 시뮬레이터 앱 재실행.
-- **Apple TV·iPhone·iPad**: 기기 추가 마법사에서 SSID·보안 유형·비밀번호·Mac IP·포트를 입력해 `EyeProxy-<SSID>.mobileconfig`(Wi-Fi + 수동 프록시)를 저장한다. Apple TV는 Apple Configurator로 페어링 후 프로필을 드래그, iPhone·iPad는 AirDrop·메일로 전달한다. 그다음 기기에서 `http://eyeproxy/ssl`로 CA 프로필을 설치하고 `인증서 신뢰 설정`에서 신뢰한다. (프로필에 Wi-Fi 비밀번호가 평문으로 들어가며 앱은 비밀번호를 저장하지 않는다.)
+- **Apple TV·iPhone·iPad**: 기기 창(⌘D) › **실기기 프로필 만들기**에서 SSID·보안 유형·비밀번호·Mac IP·포트를 입력해 `EyeProxy-<SSID>.mobileconfig`(Wi-Fi + 수동 프록시)를 저장한다. Apple TV는 Apple Configurator로 페어링 후 프로필을 드래그, iPhone·iPad는 AirDrop·메일로 전달한다. 그다음 기기에서 `http://eyeproxy/ssl`로 CA 프로필을 설치하고 `인증서 신뢰 설정`에서 신뢰한다. (프로필에 Wi-Fi 비밀번호가 평문으로 들어가며 앱은 비밀번호를 저장하지 않는다.)
 
 자세한 내용은 `docs/superpowers/specs/2026-11-05-eyeproxy-design.md` §7.
+
+## 문제 해결
+
+### 네트워크 복구(긴급)
+
+"이 Mac 캡처"가 켜진 채 EyeProxy가 죽어 Mac 인터넷이 안 되면: EyeProxy를 다시 켜고 **복원**을 고른다. 앱을 켤 수 없으면 터미널에서 끈다(`Wi-Fi` 자리에 `networksetup -listallnetworkservices`로 확인한 서비스 이름).
+
+```bash
+networksetup -setwebproxystate "Wi-Fi" off
+networksetup -setsecurewebproxystate "Wi-Fi" off
+```
+
+### 포트 9090 충돌
+
+Proxyman 등 다른 프록시가 9090을 쓰고 있으면 시작에 실패한다. 그 앱을 끄거나 설정에서 포트를 바꾼다.
+
+### 방화벽
+
+첫 실행 때 "들어오는 연결 허용" 창이 뜨면 **허용**해야 Apple TV·iPhone이 연결된다.
+
+### 업데이트·다운로드
+
+GitHub 레포가 private이면 Sparkle 업데이트와 Release 다운로드가 동작하지 않는다(공개 레포 또는 유료 플랜 필요).
+
+## 알려진 제한(P1)
+
+- HTTP/1.1만 지원하고 응답 전체를 버퍼링한다. `*`를 SSL 목록에 넣으면 WebSocket·SSE 스트림이 끊길 수 있다.
+- 복호화하는 호스트의 CONNECT 행은 목록에 표시되지 않고, 기기 쪽 TLS 핸드셰이크 실패는 기기 창의 연결 로그에만 보인다.
 
 ## 빌드·테스트
 
@@ -33,7 +61,7 @@ xcodebuild build -scheme EyeProxy -configuration Debug -destination 'platform=ma
 
 ## 모듈 구조
 
-`EyeProxy`(SwiftUI 앱) → `EyeProxyKit`(세션·규칙 저장, 기기 온보딩, 시스템 프록시·키체인·simctl 연동) → `EyeProxyCore`(NIO 기반 프록시 엔진, TLS MITM, HTTP/1.1·HTTP/2·WebSocket 파싱, 인터셉터 훅). 의존은 위에서 아래로만 흐르고 Core는 UI를 import하지 않는다.
+`EyeProxy`(SwiftUI 앱) → `EyeProxyKit`(세션·규칙 저장, 기기 온보딩, 시스템 프록시·키체인·simctl 연동) → `EyeProxyCore`(NIO 기반 프록시 엔진, TLS MITM, HTTP/1.1 파싱(HTTP/2·WebSocket은 P2/P3), 인터셉터 훅). 의존은 위에서 아래로만 흐르고 Core는 UI를 import하지 않는다.
 
 ## 릴리스
 
@@ -46,5 +74,7 @@ git tag v<version>
 git push origin main --tags
 gh release create v<version> releases/<version>/EyeProxy-<version>.zip --title "v<version>"
 ```
+
+Sparkle 서명 키: TVAccountManager와 같은 EdDSA 키를 공유한다(키체인 보관).
 
 appcast는 GitHub Pages(`main`/`docs`)로 서빙된다: `https://doyeonk35.github.io/EyeProxy/appcast.xml`
