@@ -19,3 +19,12 @@ import Testing
     s.replace(flows: [f]); #expect(s.connectionLog.isEmpty && s.flow(f.id) != nil)
     s.clear(); #expect(s.flows.isEmpty && s.flow(f.id) == nil)
 }
+
+@Test @MainActor func replaceRestoresConnectionLogAndIndex() {
+    let s = SessionStore(); let f = Flow.fixture(client: "1", decrypted: true)
+    let entry = ConnectionLogEntry(id: UUID(), date: .now, clientAddress: "1", host: "h", port: 1, message: "m")
+    s.replace(flows: [f], connectionLog: [entry])
+    #expect(s.flow(f.id) != nil && s.connectionLog.count == 1)
+    s.replace(flows: [])
+    #expect(s.connectionLog.isEmpty)
+}

@@ -30,10 +30,10 @@ public final class SessionStore {
         }
     }
 
-    public func replace(flows: [Flow]) {
+    public func replace(flows: [Flow], connectionLog: [ConnectionLogEntry] = []) {
         self.flows = flows
         index = Dictionary(flows.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { _, last in last })
-        connectionLog = []
+        self.connectionLog = connectionLog
     }
 
     public func clear() { replace(flows: []) }

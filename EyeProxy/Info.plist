@@ -21,5 +21,25 @@
     <string>https://doyeonk35.github.io/EyeProxy/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string></string>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.tv.eyeproxy.session</string>
+            <key>UTTypeDescription</key>
+            <string>EyeProxy Session</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>com.apple.package</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>eyeproxy</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
 </dict>
 </plist>

@@ -1,4 +1,5 @@
 import AppKit
+import EyeProxyKit
 import SwiftUI
 
 @main struct EyeProxyApp: App {
@@ -19,11 +20,28 @@ import SwiftUI
             CommandMenu("프록시") {
                 Toggle("기록", isOn: Bindable(model.settings).isRecording)
                     .keyboardShortcut("r")
-                Button("목록 지우기") { model.clear() }
-                    .keyboardShortcut("k")
                 Divider()
                 OpenDevicesButton()
             }
+            CommandGroup(after: .newItem) {
+                Button("세션 열기…") { Task { await model.openSession() } }
+                    .keyboardShortcut("o")
+                Button("세션 저장…") { Task { await model.saveSession() } }
+                    .keyboardShortcut("s")
+                Button("세션 지우기") { model.clear() }
+                    .keyboardShortcut("k")
+            }
+            CommandGroup(after: .pasteboard) {
+                CopyCurlButton(model: model)
+            }
+            CommandGroup(after: .toolbar) {
+                LayoutPicker(model: model)
+            }
+        }
+        Settings {
+            SettingsView()
+                .environment(model)
+                .systemErrorAlert(model)
         }
         Window("기기", id: "devices") {
             DevicesView()
@@ -31,6 +49,26 @@ import SwiftUI
                 .frame(minWidth: 640, minHeight: 600)
                 .systemErrorAlert(model)
         }
+    }
+}
+
+private struct CopyCurlButton: View {
+    let model: AppModel
+    var body: some View {
+        Button("cURL로 복사") { if let id = model.selectedFlowID { model.copyCurl(id) } }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .disabled(model.selectedFlowID == nil)
+    }
+}
+
+private struct LayoutPicker: View {
+    let model: AppModel
+    var body: some View {
+        Picker("레이아웃", selection: Bindable(model.settings).layout) {
+            Text("레이아웃 A").tag(FlowLayout.classic)
+            Text("레이아웃 B").tag(FlowLayout.sideBySide)
+        }
+        .pickerStyle(.inline)
     }
 }
 

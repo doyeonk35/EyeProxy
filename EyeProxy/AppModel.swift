@@ -120,6 +120,15 @@ final class AppModel {
     }
 
     /// 호출 순서대로 직렬화한다. 각 갱신은 실행 시점의 설정을 읽으므로 마지막 토글이 이긴다.
+    /// 포트 변경 적용. Mac 캡처 중이었으면 시스템 프록시도 새 포트로 맞추고, 서버가 못 뜨면 되돌린다.
+    func restartServer() async {
+        let wasCapturing = macCaptureEnabled
+        await stopServer()
+        await startServer()
+        guard wasCapturing else { return }
+        if case .running = serverState { await setMacCapture(true, force: true) } else { await setMacCapture(false) }
+    }
+
     func applySettingsToServer() async {
         let previous = settingsUpdate
         let update = Task {
@@ -152,6 +161,48 @@ final class AppModel {
         if case .host = sidebarSelection { sidebarSelection = .allFlows }
     }
 
+    // MARK: - 세션 파일 · cURL
+
+    func saveSession() async {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [Self.sessionType]
+        let stamp = DateFormatter()
+        stamp.locale = Locale(identifier: "en_US_POSIX")
+        stamp.dateFormat = "yyyyMMdd-HHmm"
+        panel.nameFieldStringValue = "EyeProxy-\(stamp.string(from: .now)).\(SessionDocument.pathExtension)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let (flows, log) = (session.flows, session.connectionLog)
+        do {
+            try await Task.detached { try SessionDocument.save(flows: flows, connectionLog: log, to: url) }.value
+        } catch {
+            systemError = String(localized: "세션을 저장하지 못했습니다: \(error.localizedDescription)")
+        }
+    }
+
+    func openSession() async {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [Self.sessionType]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let loaded = try await Task.detached { try SessionDocument.load(from: url) }.value
+            session.replace(flows: loaded.flows, connectionLog: loaded.connectionLog)
+            selectedFlowID = nil
+            sidebarSelection = .allFlows
+        } catch {
+            systemError = String(localized: "세션을 열지 못했습니다: \(error.localizedDescription)")
+        }
+    }
+
+    func copyCurl(_ id: FlowID) {
+        guard let flow = session.flow(id) else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(CurlExport.command(for: flow.request), forType: .string)
+    }
+
+    /// Info.plist의 UTExportedTypeDeclarations와 일치해야 한다.
+    private static let sessionType = UTType(exportedAs: "com.tv.eyeproxy.session", conformingTo: .package)
+
     // MARK: - 목록
 
     var visibleFlows: [Flow] {
@@ -173,20 +224,21 @@ final class AppModel {
     // MARK: - 온보딩
 
     /// 호출 순서대로 직렬화한다(종료 경로가 진행 중인 켜기·끄기를 기다릴 수 있게).
-    func setMacCapture(_ on: Bool) async {
+    /// force: 이미 켜져 있어도 현재 포트로 다시 적용한다(포트 변경 후 재시작).
+    func setMacCapture(_ on: Bool, force: Bool = false) async {
         let previous = captureUpdate
         let update = Task {
             await previous?.value
-            await applyMacCapture(on)
+            await applyMacCapture(on, force: force)
         }
         captureUpdate = update
         await update.value
     }
 
-    private func applyMacCapture(_ on: Bool) async {
+    private func applyMacCapture(_ on: Bool, force: Bool) async {
         if on && quitting { return }
         // 끄기는 캡처 중이 아니어도 백업이 남아 있으면 복원한다(유지 후 실패·비정상 종료 잔여).
-        let needed = on ? !macCaptureEnabled : (macCaptureEnabled || systemProxy.pendingRestore() != nil)
+        let needed = on ? (force || !macCaptureEnabled) : (macCaptureEnabled || systemProxy.pendingRestore() != nil)
         guard needed else { return }
         macCaptureBusy = true
         defer {
