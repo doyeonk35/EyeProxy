@@ -6,8 +6,8 @@ options:
   xcodeVersion: "16.0"
   generateEmptyDirectories: true
   defaultConfig: Debug
-  developmentLanguage: en
-  knownRegions: [en, ko, Base]
+  developmentLanguage: ko
+  knownRegions: [ko, en, Base]
 settings:
   base:
     SWIFT_VERSION: "6.0"
