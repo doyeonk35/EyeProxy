@@ -4,7 +4,7 @@ import Foundation
 public enum CurlExport {
     public static func command(for request: FlowRequest) -> String {
         var parts = ["curl"]
-        if request.method.uppercased() != "GET" { parts += ["-X", request.method] }
+        if request.method.uppercased() != "GET" { parts += ["-X", quote(request.method)] }
         parts.append(quote(request.url))
         for h in request.headers where !["content-length", "host"].contains(h.name.lowercased()) {
             parts += ["-H", quote("\(h.name): \(h.value)")]

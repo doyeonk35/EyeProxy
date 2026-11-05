@@ -27,7 +27,8 @@ public enum MobileConfig {
     /// 루트 CA(com.apple.security.root). displayName "EyeProxy CA (<commonName>)".
     public static func caProfile(certificateDER: [UInt8], commonName rawCN: String) -> Data {
         let commonName = xmlSafe(rawCN)
-        let id = "com.tv.eyeproxy.ca"
+        // CA마다 다른 식별자: 공용 기기에서 팀원끼리 CA를 덮어쓰지 않고, 같은 CA 재설치는 제자리 갱신.
+        let id = "com.tv.eyeproxy.ca." + SHA256.hash(data: certificateDER).prefix(4).map { String(format: "%02x", $0) }.joined()
         let name = "EyeProxy CA (\(commonName))"
         let seed = Data((id + "|").utf8) + Data(certificateDER)
         var ca = payload(type: "com.apple.security.root", identifier: id + ".payload", name: name, seed: seed + Data("|payload".utf8))

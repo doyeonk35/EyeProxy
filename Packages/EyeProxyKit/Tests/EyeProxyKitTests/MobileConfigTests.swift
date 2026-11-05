@@ -37,6 +37,14 @@ private func parse(_ data: Data) throws -> [String: Any] {
     #expect(ca["PayloadType"] as? String == "com.apple.security.root")
     #expect(ca["PayloadContent"] as? Data == Data(der))
     #expect(data == MobileConfig.caProfile(certificateDER: der, commonName: "Test CA"))  // 결정적 UUID
+    #expect(plist["PayloadIdentifier"] as? String == "com.tv.eyeproxy.ca.9f64a747")   // SHA256([1,2,3,4]) 앞 8 hex
+    #expect(ca["PayloadIdentifier"] as? String == "com.tv.eyeproxy.ca.9f64a747.payload")
+}
+
+@Test func differentCAsGetDifferentIdentifiers() throws {
+    let a = try parse(MobileConfig.caProfile(certificateDER: [1, 2, 3, 4], commonName: "x"))
+    let b = try parse(MobileConfig.caProfile(certificateDER: [5, 6, 7, 8], commonName: "x"))
+    #expect(a["PayloadIdentifier"] as? String != b["PayloadIdentifier"] as? String)
 }
 
 @Test func wifiProfileStripsInvalidXMLCharacters() throws {

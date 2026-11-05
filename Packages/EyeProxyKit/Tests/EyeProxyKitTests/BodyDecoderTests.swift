@@ -27,6 +27,12 @@ private func h(_ n: String, _ v: String) -> HTTPHeader { .init(name: n, value: v
     #expect(BodyDecoder.decompressed(body: Data([0x78, 0x9c]) + raw, contentEncoding: "deflate") == Data("abc".utf8))
 }
 
+@Test func inflateStopsAtOutputLimit() throws {
+    let zeros = try compress(Data(count: 1 << 20), COMPRESSION_ZLIB)
+    #expect(BodyDecoder.inflate(zeros, COMPRESSION_ZLIB, limit: 1 << 20)?.count == 1 << 20)
+    #expect(BodyDecoder.inflate(zeros, COMPRESSION_ZLIB, limit: (1 << 20) - 1) == nil)
+}
+
 @Test func badOrUnknownEncodingIsBinary() {
     let body = Data([1, 2, 3, 4])
     #expect(BodyDecoder.decode(body: body, headers: [h("Content-Encoding", "gzip")]) == .binary(body))

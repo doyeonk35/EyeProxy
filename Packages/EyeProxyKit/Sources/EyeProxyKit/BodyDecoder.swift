@@ -137,7 +137,8 @@ public enum BodyDecoder {
         return inflate(Data(b[p...]), COMPRESSION_ZLIB)
     }
 
-    private static func inflate(_ input: some DataProtocol, _ algorithm: compression_algorithm) -> Data? {
+    /// ponytail: 해제 결과 256 MB 상한(압축 폭탄). 넘으면 nil → 원본을 binary로 보여준다.
+    static func inflate(_ input: some DataProtocol, _ algorithm: compression_algorithm, limit: Int = 256 * 1024 * 1024) -> Data? {
         let src = [UInt8](input)
         let chunk = 64 * 1024
         let dst = UnsafeMutablePointer<UInt8>.allocate(capacity: chunk)
@@ -155,6 +156,7 @@ public enum BodyDecoder {
                 sp.pointee.dst_size = chunk
                 let status = compression_stream_process(sp, Int32(COMPRESSION_STREAM_FINALIZE.rawValue))
                 out.append(dst, count: chunk - sp.pointee.dst_size)
+                if out.count > limit { return nil }
                 switch status {
                 case COMPRESSION_STATUS_END: return out
                 case COMPRESSION_STATUS_OK: continue
