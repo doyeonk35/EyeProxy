@@ -6,12 +6,14 @@ import Testing
 struct ProxyServerTunnelTests {
     @Test func httpsNotInSSLListIsTunneledUnchanged() async throws {
         let ca = try CertificateAuthority.generate()
-        let origin = TestOrigin(tls: try ca.leaf(for: "localhost")) { _ in FlowResponse(status: 200, reason: "OK", headers: [], body: Data("secret".utf8)) }
+        // 원 서버는 별도 CA. 클라이언트는 그 CA만 믿으므로 프록시(ca)가 위조할 수 없다 → TLS 성공 = 진짜 패스스루.
+        let originCA = try CertificateAuthority.generate()
+        let origin = TestOrigin(tls: try originCA.leaf(for: "localhost")) { _ in FlowResponse(status: 200, reason: "OK", headers: [], body: Data("secret".utf8)) }
         let originPort = try await origin.start()
         let server = ProxyServer(configuration: .init(port: 0, sslPolicy: .init(patterns: [])), certificateAuthority: ca, interceptors: .init())
         let port = try await server.start()
         var it = server.events.makeAsyncIterator()
-        let (status, _, body) = try await fetchViaProxy("https://localhost:\(originPort)/x", proxyPort: port, trustRootDER: ca.certificateDER)
+        let (status, _, body) = try await fetchViaProxy("https://localhost:\(originPort)/x", proxyPort: port, trustRootDER: originCA.certificateDER)
         #expect(status == 200 && body == Data("secret".utf8))
         guard case .requestStarted(let flow) = await it.next() else { Issue.record("x"); return }
         #expect(flow.isTunnel && flow.request.method == "CONNECT" && flow.request.host == "localhost" && flow.request.port == originPort)

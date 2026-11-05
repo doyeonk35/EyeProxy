@@ -172,7 +172,7 @@ func fetchViaProxy(_ url: String, proxyPort: Int, method: String = "GET", body: 
 struct ConnectRefused: Error { let status: String }
 
 /// URLSession(Network.framework)은 루프백 목적지의 https에 프록시를 쓰지 않고 직접 붙는다(실측: CONNECT가 안 온다).
-/// 그래서 https는 NIO로 직접 `CONNECT` → 200 확인 → 같은 연결 위에서 TLS(trustRootDER만 신뢰, SNI=host) → HTTP/1.1 요청.
+/// 그래서 https는 NIO로 직접 `CONNECT` → 200 확인 → 같은 연결 위에서 TLS(trustRootDER만 신뢰, nil이면 시스템 신뢰; 전체 검증, SNI=host) → HTTP/1.1 요청.
 /// CONNECT가 200이 아니면 `ConnectRefused`를 던진다.
 private func fetchViaCONNECT(_ url: URL, proxyPort: Int, method: String, body: Data?, headers: [String: String],
                              trustRootDER: [UInt8]?) async throws -> (Int, [String: String], Data) {
@@ -187,14 +187,23 @@ private func fetchViaCONNECT(_ url: URL, proxyPort: Int, method: String, body: D
     let request = HTTPRequestHead(version: .http1_1, method: HTTPMethod(rawValue: method), uri: path, headers: requestHeaders)
     let loop = MultiThreadedEventLoopGroup.singleton.next()
     let promise = loop.makePromise(of: (Int, [String: String], Data).self)
-    let channel = try await ClientBootstrap(group: loop)
-        .channelInitializer { channel in
-            channel.eventLoop.makeCompletedFuture {
-                try channel.pipeline.syncOperations.addHandler(ConnectThenRequest(
-                    authority: "\(host):\(port)", sslContext: sslContext, request: request, body: body, promise: promise))
+    // 조용한 프록시가 테스트를 멈추지 않도록 자체 데드라인. (완료된 promise를 다시 fail 해도 무시된다.)
+    let deadline = loop.scheduleTask(in: .seconds(10)) { promise.fail(ConnectRefused(status: "timed out")) }
+    defer { deadline.cancel() }
+    let channel: Channel
+    do {
+        channel = try await ClientBootstrap(group: loop)
+            .channelInitializer { channel in
+                channel.eventLoop.makeCompletedFuture {
+                    try channel.pipeline.syncOperations.addHandler(ConnectThenRequest(
+                        authority: "\(host):\(port)", sslContext: sslContext, request: request, body: body, promise: promise))
+                }
             }
-        }
-        .connect(host: "127.0.0.1", port: proxyPort).get()
+            .connect(host: "127.0.0.1", port: proxyPort).get()
+    } catch {
+        promise.fail(error)   // 안 그러면 NIO의 leaking-promise 검사가 테스트 프로세스를 죽인다
+        throw error
+    }
     defer { channel.close(promise: nil) }
     return try await promise.futureResult.get()
 }
