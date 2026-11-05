@@ -9,41 +9,8 @@ struct ConnectedDevicesSection: View {
             if model.devices.devices.isEmpty {
                 Text("아직 트래픽을 보낸 기기가 없습니다").foregroundStyle(.secondary)
             }
-            ForEach(model.devices.devices) { device in
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading) {
-                        TextField("이름", text: nameBinding(device), prompt: Text(device.displayName))
-                            .labelsHidden()
-                        Text(device.address).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                    }
-                    Picker("종류", selection: kindBinding(device)) {
-                        ForEach(DeviceKind.allCases, id: \.self) { Text(Self.label($0)).tag($0) }
-                    }
-                    .labelsHidden()
-                    .frame(width: 110)
-                    VStack(alignment: .trailing) {
-                        Text(device.lastSeen, format: .relative(presentation: .named))
-                        Text("요청 \(device.flowCount) · 복호화 \(device.decryptedCount) · TLS 실패 \(device.tlsFailureCount)")
-                            .foregroundStyle(device.tlsFailureCount > 0 ? .orange : .secondary)
-                    }
-                    .font(.caption)
-                    .frame(minWidth: 200, alignment: .trailing)
-                }
-            }
+            ForEach(model.devices.devices) { DeviceRow(device: $0) }
         }
-    }
-
-    private func nameBinding(_ device: Device) -> Binding<String> {
-        Binding(get: { device.name ?? "" }, set: { update(device, name: $0.isEmpty ? nil : $0, kind: device.kind) })
-    }
-
-    private func kindBinding(_ device: Device) -> Binding<DeviceKind> {
-        Binding(get: { device.kind }, set: { update(device, name: device.name, kind: $0) })
-    }
-
-    private func update(_ device: Device, name: String?, kind: DeviceKind) {
-        model.devices.rename(device.address, name: name, kind: kind)
-        try? model.devices.save()   // 실패해도 메모리에는 남고 종료 시 다시 저장한다
     }
 
     static func label(_ kind: DeviceKind) -> String {
@@ -54,6 +21,53 @@ struct ConnectedDevicesSection: View {
         case .iPad: "iPad"
         case .unknown: String(localized: "알 수 없음")
         }
+    }
+}
+
+/// 이름은 Enter·포커스 해제 시에만 반영·저장한다(키 입력마다 디스크에 쓰지 않게).
+private struct DeviceRow: View {
+    @Environment(AppModel.self) private var model
+    let device: Device
+    @State private var draft = ""
+    @FocusState private var nameFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading) {
+                TextField("이름", text: $draft, prompt: Text(device.displayName))
+                    .labelsHidden()
+                    .focused($nameFocused)
+                    .onSubmit(commitName)
+                    .onChange(of: nameFocused) { if !nameFocused { commitName() } }
+                Text(device.address).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+            Picker("종류", selection: Binding(get: { device.kind }, set: { update(name: device.name, kind: $0) })) {
+                ForEach(DeviceKind.allCases, id: \.self) { Text(ConnectedDevicesSection.label($0)).tag($0) }
+            }
+            .labelsHidden()
+            .frame(width: 110)
+            VStack(alignment: .trailing) {
+                Text("\(Text(device.lastSeen, style: .relative)) 전")
+                Text("요청 \(device.flowCount) · 복호화 \(device.decryptedCount) · TLS 실패 \(device.tlsFailureCount)")
+                    .foregroundStyle(device.tlsFailureCount > 0 ? .orange : .secondary)
+            }
+            .font(.caption)
+            .frame(minWidth: 200, alignment: .trailing)
+        }
+        .onAppear { draft = device.name ?? "" }
+    }
+
+    private func commitName() {
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = trimmed.isEmpty ? nil : trimmed
+        draft = name ?? ""
+        guard name != device.name else { return }
+        update(name: name, kind: device.kind)
+    }
+
+    private func update(name: String?, kind: DeviceKind) {
+        model.devices.rename(device.address, name: name, kind: kind)
+        try? model.devices.save()   // 실패해도 메모리에는 남고 종료 시 다시 저장한다
     }
 }
 

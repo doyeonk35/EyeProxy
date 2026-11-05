@@ -49,7 +49,9 @@ struct ProfileFormView: View {
 
     private func save() {
         Task {
-            await model.saveWiFiProfile(ssid: ssid, security: security, password: needsPassword ? password : nil, proxyHost: host)
+            if await model.saveWiFiProfile(ssid: ssid, security: security, password: needsPassword ? password : nil, proxyHost: host) {
+                password = ""   // 저장 후 메모리에도 남기지 않는다
+            }
         }
     }
 }

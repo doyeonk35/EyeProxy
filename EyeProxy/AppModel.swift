@@ -41,12 +41,15 @@ final class AppModel {
     private(set) var bootedSimulators: [SimulatorDevice] = []
     /// 시작 시 남아 있던 시스템 프록시 백업(비정상 종료). nil로 만들면 alert가 닫힌다.
     var pendingProxyRestore: SystemProxyBackup?
+    /// 디스크에 원본 백업이 있다 = 시스템 프록시가 EyeProxy를 가리키고 있다(캡처 중이거나 복원 전).
+    private(set) var systemProxyBackupExists = false
     /// 시스템 프록시·CA 설치·프로필 저장 실패. 키 윈도우에 alert로 표시한다.
     var systemError: String?
 
     @ObservationIgnored private var server: ProxyServer?
     @ObservationIgnored private var consumer: Task<Void, Never>?
     @ObservationIgnored private var settingsUpdate: Task<Void, Never>?
+    @ObservationIgnored private var captureUpdate: Task<Void, Never>?
 
     init() {
         try? FileManager.default.createDirectory(at: Self.supportDirectory, withIntermediateDirectories: true)
@@ -54,6 +57,7 @@ final class AppModel {
         (certificateAuthority, caSaveError) = Self.loadOrCreateCA()
         // 이 실행은 아직 캡처를 켜지 않았으므로 백업이 있으면 이전 실행이 복원하지 못한 것이다.
         pendingProxyRestore = systemProxy.pendingRestore()
+        systemProxyBackupExists = pendingProxyRestore != nil
     }
 
     /// 손상(한쪽 파일만 있음·읽기 실패)이면 기존 파일을 덮어쓰지 않고 이번 실행만 임시 CA를 쓴다.
@@ -166,10 +170,26 @@ final class AppModel {
 
     // MARK: - 온보딩
 
+    /// 호출 순서대로 직렬화한다(종료 경로가 진행 중인 켜기·끄기를 기다릴 수 있게).
     func setMacCapture(_ on: Bool) async {
-        guard !macCaptureBusy, on != macCaptureEnabled else { return }
+        let previous = captureUpdate
+        let update = Task {
+            await previous?.value
+            await applyMacCapture(on)
+        }
+        captureUpdate = update
+        await update.value
+    }
+
+    private func applyMacCapture(_ on: Bool) async {
+        // 끄기는 캡처 중이 아니어도 백업이 남아 있으면 복원한다(유지 후 실패·비정상 종료 잔여).
+        let needed = on ? !macCaptureEnabled : (macCaptureEnabled || systemProxy.pendingRestore() != nil)
+        guard needed else { return }
         macCaptureBusy = true
-        defer { macCaptureBusy = false }
+        defer {
+            macCaptureBusy = false
+            systemProxyBackupExists = systemProxy.pendingRestore() != nil
+        }
         do {
             if on {
                 try await systemProxy.enable(host: "127.0.0.1", port: settings.port, bypass: settings.bypassHosts)
@@ -178,16 +198,45 @@ final class AppModel {
             }
             macCaptureEnabled = on
         } catch {
-            systemError = on ? String(localized: "시스템 프록시를 켜지 못했습니다: \(String(describing: error))")
-                             : String(localized: "시스템 프록시를 되돌리지 못했습니다: \(String(describing: error))")
+            // 켜기 실패(관리자 인증 취소 등): 일부만 적용됐을 수 있으니 백업으로 되돌린다. 백업 없으면 원본을 모르므로 건드리지 않는다.
+            if on, systemProxy.pendingRestore() != nil { try? await systemProxy.disable() }
+            systemError = on ? String(localized: "시스템 프록시를 켜지 못했습니다: \(Self.describe(error))")
+                             : String(localized: "시스템 프록시를 되돌리지 못했습니다: \(Self.describe(error))")
         }
+    }
+
+    /// 종료 전에 시스템 프록시를 되돌려야 하는가(캡처 중·변경 중·백업 잔여).
+    var needsProxyCleanupOnQuit: Bool {
+        macCaptureEnabled || macCaptureBusy || systemProxy.pendingRestore() != nil
+    }
+
+    func prepareForQuit() async {
+        await setMacCapture(false)   // 진행 중인 변경 뒤에 직렬화된다
+        await stopServer()
     }
 
     func restorePendingProxy() async {
         pendingProxyRestore = nil
-        do { try await systemProxy.disable() } catch {
-            systemError = String(localized: "시스템 프록시를 되돌리지 못했습니다: \(String(describing: error))")
+        await setMacCapture(false)
+    }
+
+    /// "유지": 남은 프록시를 이번 실행의 캡처로 채택한다. 원본 백업은 그대로 두고 현재 포트로 다시 맞춘다.
+    func adoptPendingProxy() async {
+        pendingProxyRestore = nil
+        await setMacCapture(true)
+    }
+
+    /// 사용자에게 보일 오류 문구. 관리자 인증 취소(osascript -128)는 따로 알린다.
+    static func describe(_ error: Error) -> String {
+        let text = switch error {
+        case SystemProxyError.commandFailed(let s), MacKeychainError.installFailed(let s), SimulatorsError.failed(let s): s
+        case SystemProxyError.noActiveService: String(localized: "활성 네트워크 서비스를 찾지 못했습니다")
+        default: error.localizedDescription
         }
+        if text.contains("-128") || text.localizedCaseInsensitiveContains("canceled") || text.localizedCaseInsensitiveContains("cancelled") {
+            return String(localized: "관리자 인증이 취소되었습니다")
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// 실행 중인 CA의 PEM. 디스크 CA와 다를 수 있으므로(손상 시 임시 CA) 메모리 CA를 임시 파일로 쓴다.
@@ -217,19 +266,22 @@ final class AppModel {
     }
 
     /// 평문 비밀번호 경고는 호출 전에 뷰가 띄운다. 비밀번호는 파일에만 들어가고 앱은 보관하지 않는다.
-    func saveWiFiProfile(ssid: String, security: WiFiSecurity, password: String?, proxyHost: String) async {
+    /// 저장했으면 true.
+    @discardableResult
+    func saveWiFiProfile(ssid: String, security: WiFiSecurity, password: String?, proxyHost: String) async -> Bool {
         let panel = NSSavePanel()
         let safeName = ssid.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
         panel.nameFieldStringValue = "EyeProxy-\(safeName).mobileconfig"
         panel.allowedContentTypes = [.init(filenameExtension: "mobileconfig") ?? .xml]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
         let data = MobileConfig.wifiProxyProfile(ssid: ssid, security: security, password: security == .none ? nil : password,
                                                  proxyHost: proxyHost, proxyPort: settings.port)
-        do {
-            try data.write(to: url, options: .atomic)
-            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-        } catch {
-            systemError = String(localized: "프로필을 저장하지 못했습니다: \(error.localizedDescription)")
+        // 비밀번호가 평문으로 들어가므로 처음부터 0600으로 만든다(덮어쓰기면 기존 파일을 지우고 새로 만든다).
+        try? FileManager.default.removeItem(at: url)
+        guard FileManager.default.createFile(atPath: url.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
+            systemError = String(localized: "프로필을 저장하지 못했습니다: \(url.path)")
+            return false
         }
+        return true
     }
 }

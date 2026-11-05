@@ -35,6 +35,10 @@ struct DevicesView: View {
             }
             // 서버가 안 떠 있을 때 켜면 Mac 인터넷이 끊긴다. 끄기는 언제나 허용.
             .disabled(model.macCaptureBusy || (!model.macCaptureEnabled && !serverRunning))
+            if model.systemProxyBackupExists {
+                Label("시스템 프록시가 EyeProxy로 설정되어 있음", systemImage: "network.badge.shield.half.filled")
+                    .foregroundStyle(model.macCaptureEnabled ? Color.secondary : Color.orange)
+            }
             LabeledContent {
                 Button("Mac에 CA 설치") { run { try await model.installCAOnMac() } }
                     .disabled(model.macCAInstalled || busy)
@@ -108,7 +112,7 @@ struct DevicesView: View {
         busy = true
         Task {
             defer { busy = false }
-            do { try await action() } catch { model.systemError = String(localized: "CA를 설치하지 못했습니다: \(String(describing: error))") }
+            do { try await action() } catch { model.systemError = String(localized: "CA를 설치하지 못했습니다: \(AppModel.describe(error))") }
         }
     }
 }

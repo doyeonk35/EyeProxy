@@ -44,13 +44,15 @@ private struct OpenDevicesButton: View {
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
+    private var quitTask: Task<Void, Never>?
 
-    /// 캡처가 켜져 있으면 시스템 프록시를 되돌린 뒤 종료한다(실패해도 기록 후 종료 — 다음 실행에서 복원 제안).
+    /// 시스템 프록시가 EyeProxy를 가리킬 수 있으면(캡처 중·변경 중·백업 잔여) 진행 중인 변경을 기다려 되돌린 뒤 종료한다.
+    /// 실패해도 오류를 기록하고 종료 — 백업이 남아 다음 실행에서 복원을 제안한다. 두 번째 ⌘Q는 같은 작업을 기다린다.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard model.macCaptureEnabled else { return .terminateNow }
-        Task {
-            await model.setMacCapture(false)
-            await model.stopServer()
+        if quitTask != nil { return .terminateLater }
+        guard model.needsProxyCleanupOnQuit else { return .terminateNow }
+        quitTask = Task {
+            await model.prepareForQuit()
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
@@ -70,7 +72,7 @@ extension View {
         alert("이전 실행이 비정상 종료되어 시스템 프록시가 남아 있습니다. 복원할까요?",
               isPresented: Binding(get: { model.pendingProxyRestore != nil }, set: { if !$0 { model.pendingProxyRestore = nil } })) {
             Button("복원") { Task { await model.restorePendingProxy() } }
-            Button("유지", role: .cancel) { model.pendingProxyRestore = nil }
+            Button("유지", role: .cancel) { Task { await model.adoptPendingProxy() } }
         } message: {
             if let b = model.pendingProxyRestore { Text("네트워크 서비스: \(b.service)") }
         }
