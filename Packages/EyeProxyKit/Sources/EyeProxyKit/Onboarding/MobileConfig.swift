@@ -7,7 +7,8 @@ public enum WiFiSecurity: String, CaseIterable, Sendable {
 
 public enum MobileConfig {
     /// Wi-Fi(com.apple.wifi.managed) + 수동 프록시. 반환은 XML plist Data.
-    public static func wifiProxyProfile(ssid rawSSID: String, security: WiFiSecurity, password rawPassword: String?, proxyHost: String, proxyPort: Int, organization: String = "EyeProxy") -> Data {
+    public static func wifiProxyProfile(ssid rawSSID: String, security: WiFiSecurity, password rawPassword: String?, proxyHost rawHost: String, proxyPort: Int, organization rawOrg: String = "EyeProxy") -> Data {
+        let proxyHost = xmlSafe(rawHost), organization = xmlSafe(rawOrg)
         let ssid = xmlSafe(rawSSID), password = rawPassword.map(xmlSafe)
         let id = "com.tv.eyeproxy.wifi.\(ssid)"
         let name = "EyeProxy 프록시 (\(ssid))"
@@ -24,7 +25,8 @@ public enum MobileConfig {
     }
 
     /// 루트 CA(com.apple.security.root). displayName "EyeProxy CA (<commonName>)".
-    public static func caProfile(certificateDER: [UInt8], commonName: String) -> Data {
+    public static func caProfile(certificateDER: [UInt8], commonName rawCN: String) -> Data {
+        let commonName = xmlSafe(rawCN)
         let id = "com.tv.eyeproxy.ca"
         let name = "EyeProxy CA (\(commonName))"
         let seed = Data((id + "|").utf8) + Data(certificateDER)
@@ -52,7 +54,7 @@ public enum MobileConfig {
     /// 같은 입력 → 같은 UUID. 프로파일이 재현 가능하고 기기에서 재설치 시 같은 항목으로 갱신된다.
     /// XML 1.0에서 허용되지 않는 제어 문자를 제거한다(탭·LF·CR 제외). plist 직렬화 크래시 방지.
     private static func xmlSafe(_ s: String) -> String {
-        String(String.UnicodeScalarView(s.unicodeScalars.filter { $0.value >= 0x20 || $0 == "\t" || $0 == "\n" || $0 == "\r" }))
+        String(String.UnicodeScalarView(s.unicodeScalars.filter { ($0.value >= 0x20 && $0.value != 0xFFFE && $0.value != 0xFFFF) || $0 == "\t" || $0 == "\n" || $0 == "\r" }))
     }
 
     private static func stableUUID(_ seed: Data) -> String {

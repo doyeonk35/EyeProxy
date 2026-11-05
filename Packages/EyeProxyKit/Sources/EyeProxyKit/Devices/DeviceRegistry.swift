@@ -33,7 +33,7 @@ public struct Device: Identifiable, Codable, Equatable, Sendable {
 @Observable @MainActor
 public final class DeviceRegistry {
     public private(set) var devices: [Device] = []
-    @ObservationIgnored private let storageURL: URL?
+    @ObservationIgnored private var storageURL: URL?
 
     public init(storageURL: URL?) {
         self.storageURL = storageURL
@@ -43,10 +43,15 @@ public final class DeviceRegistry {
         do {
             devices = try decoder.decode([Device].self, from: data)
         } catch {
-            // 손상된 파일을 덮어쓰지 않도록 옆으로 치워 둔다.
-            let stamp = Int(Date().timeIntervalSince1970)
-            let aside = storageURL.deletingPathExtension().appendingPathExtension("corrupt-\(stamp).json")
-            try? FileManager.default.moveItem(at: storageURL, to: aside)
+            // 손상된 파일을 덮어쓰지 않도록 옆으로 치워 둔다. 실패하면 save()를 막아 원본을 보존한다.
+            let fm = FileManager.default
+            let stamp = Int(Date().timeIntervalSince1970 * 1000)
+            let base = storageURL.deletingPathExtension()
+            let first = base.appendingPathExtension("corrupt-\(stamp).json")
+            let second = base.appendingPathExtension("corrupt-\(stamp)-\(UUID().uuidString).json")
+            if (try? fm.moveItem(at: storageURL, to: first)) == nil, (try? fm.moveItem(at: storageURL, to: second)) == nil {
+                self.storageURL = nil
+            }
         }
     }
 

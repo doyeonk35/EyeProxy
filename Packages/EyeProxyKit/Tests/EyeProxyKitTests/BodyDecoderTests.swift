@@ -42,3 +42,38 @@ private func h(_ n: String, _ v: String) -> HTTPHeader { .init(name: n, value: v
     #expect(BodyDecoder.decode(body: Data("{bad".utf8), headers: [h("Content-Type", "application/ld+json")]) == .text("{bad"))
     #expect(BodyDecoder.decode(body: Data("x".utf8), headers: []) == .text("x"))
 }
+
+private func json(_ s: String) -> DecodedBody { BodyDecoder.decode(body: Data(s.utf8), headers: [h("Content-Type", "application/json")]) }
+
+@Test func jsonPreservesKeyOrderAndBigIntegers() {
+    #expect(json(#"{"z":1,"a":2}"#) == .json(pretty: "{\n  \"z\" : 1,\n  \"a\" : 2\n}"))
+    #expect(json("12345678901234567890") == .json(pretty: "12345678901234567890"))
+    #expect(json(#"{"n":12345678901234567890}"#) == .json(pretty: "{\n  \"n\" : 12345678901234567890\n}"))
+}
+
+@Test func jsonNestedEmptyAndEscapes() {
+    #expect(json(#"{"a":[1,{"b":[]},{}],"c":"\u00e9\"x\\/"}"#) == .json(pretty: "{\n  \"a\" : [\n    1,\n    {\n      \"b\" : []\n    },\n    {}\n  ],\n  \"c\" : \"\\u00e9\\\"x\\\\/\"\n}"))
+}
+
+@Test func invalidJSONFallsBackToText() {
+    for bad in ["{\"a\":", "{\"a\":1", "[1,2}", "nope", "{\"a\"", "}"] { #expect(json(bad) == .text(bad)) }
+}
+
+@Test func emptyBodyWithContentEncodingIsEmpty() {
+    #expect(BodyDecoder.decode(body: Data(), headers: [h("Content-Encoding", "gzip")]) == .empty)
+}
+
+@Test func malformedGzipDoesNotCrash() throws {
+    let ok = try gzip(Data("hello hello hello".utf8))
+    let cases: [Data] = [
+        Data([0x1f, 0x8b, 8, 8, 0, 0, 0, 0, 0, 0xff] + Array("name-without-nul".utf8) + [UInt8](repeating: 7, count: 8)),  // FNAME 미종료
+        Data([0x1f, 0x8b, 8, 4, 0, 0, 0, 0, 0, 0xff, 0xff, 0xff] + [UInt8](repeating: 1, count: 8)),                      // FEXTRA 길이 초과
+        Data([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 0xff]),                                                                    // 헤더만
+        Data([0x1f, 0x8b, 8, 2, 0, 0, 0, 0, 0, 0xff]),                                                                    // FHCRC만
+        ok.prefix(10 + (ok.count - 18) / 2),                                                                                // deflate 중간 절단
+    ]
+    for c in cases {
+        #expect(BodyDecoder.decompressed(body: c, contentEncoding: "gzip") == nil)
+        #expect(BodyDecoder.decode(body: c, headers: [h("Content-Encoding", "gzip")]) == .binary(c))
+    }
+}

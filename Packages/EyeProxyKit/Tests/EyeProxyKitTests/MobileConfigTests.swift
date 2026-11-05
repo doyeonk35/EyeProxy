@@ -45,7 +45,19 @@ private func parse(_ data: Data) throws -> [String: Any] {
     #expect(wifi["SSID_STR"] as? String == "AB" && wifi["Password"] as? String == "pw")
 }
 
-@Test func caProfileSeedDistinguishesLowBytes() {
+@Test func caProfileSeedDistinguishesLowBytes() throws {
     // 0x01,0x23 vs 0x12,0x03 는 패딩 없는 hex로는 같은 문자열 "123"이 된다.
-    #expect(MobileConfig.caProfile(certificateDER: [0x01, 0x23], commonName: "x") != MobileConfig.caProfile(certificateDER: [0x12, 0x03], commonName: "x"))
+    func uuids(_ der: [UInt8]) throws -> [String] {
+        let top = try parse(MobileConfig.caProfile(certificateDER: der, commonName: "x"))
+        let inner = try #require((top["PayloadContent"] as? [[String: Any]])?.first)
+        return [top["PayloadUUID"] as? String ?? "", inner["PayloadUUID"] as? String ?? ""]
+    }
+    let a = try uuids([0x01, 0x23]), b = try uuids([0x12, 0x03])
+    #expect(a[0] != b[0] && a[1] != b[1] && !a[0].isEmpty)
+}
+
+@Test func otherStringsAreSanitized() throws {
+    let wifi = MobileConfig.wifiProxyProfile(ssid: "s", security: .none, password: nil, proxyHost: "h\u{0001}\u{FFFF}", proxyPort: 1, organization: "o\u{0003}")
+    #expect(try parse(wifi)["PayloadOrganization"] as? String == "o")
+    _ = try parse(MobileConfig.caProfile(certificateDER: [1], commonName: "c\u{0004}"))
 }

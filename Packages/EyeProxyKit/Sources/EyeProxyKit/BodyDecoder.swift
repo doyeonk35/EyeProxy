@@ -7,16 +7,53 @@ public enum DecodedBody: Equatable, Sendable { case empty, json(pretty: String),
 public enum BodyDecoder {
     public static func decode(body: Data, headers: [HTTPHeader]) -> DecodedBody {
         func header(_ n: String) -> String? { headers.first { $0.name.caseInsensitiveCompare(n) == .orderedSame }?.value }
+        if body.isEmpty { return .empty }
         guard let data = decompressed(body: body, contentEncoding: header("Content-Encoding")) else { return .binary(body) }
         if data.isEmpty { return .empty }
         let type = (header("Content-Type") ?? "").split(separator: ";").first.map { $0.trimmingCharacters(in: .whitespaces).lowercased() } ?? ""
         if type.hasPrefix("image/") { return .image(data) }
         guard let s = String(data: data, encoding: .utf8) else { return .binary(data) }
-        if type == "application/json" || type.hasSuffix("+json"),
-           let obj = try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed),
-           let pretty = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .fragmentsAllowed, .withoutEscapingSlashes]),
-           let p = String(data: pretty, encoding: .utf8) { return .json(pretty: p) }
+        if type == "application/json" || type.hasSuffix("+json"), let p = reindentJSON(Array(data)) { return .json(pretty: p) }
         return type == "text/html" ? .html(s) : .text(s)
+    }
+
+    /// 키 순서·숫자 리터럴·이스케이프를 그대로 두고 들여쓰기만 다시 하는 토큰 기반 정렬. JSON이 아니면 nil.
+    private static func reindentJSON(_ b: [UInt8]) -> String? {
+        var out: [UInt8] = []
+        var closers: [UInt8] = []
+        var i = 0
+        func nl() { out.append(10); out.append(contentsOf: [UInt8](repeating: 32, count: closers.count * 2)) }
+        func nextNonSpace(_ from: Int) -> UInt8? { b[from...].first { ![32, 9, 10, 13].contains($0) } }
+        while i < b.count {
+            let c = b[i]
+            switch c {
+            case 32, 9, 10, 13: i += 1
+            case UInt8(ascii: "{"), UInt8(ascii: "["):
+                let close: UInt8 = c == UInt8(ascii: "{") ? UInt8(ascii: "}") : UInt8(ascii: "]")
+                out.append(c); i += 1
+                if nextNonSpace(i) == close {
+                    while b[i] != close { i += 1 }
+                    out.append(close); i += 1
+                } else { closers.append(close); nl() }
+            case UInt8(ascii: "}"), UInt8(ascii: "]"):
+                guard closers.popLast() == c else { return nil }
+                nl(); out.append(c); i += 1
+            case UInt8(ascii: ","): guard !closers.isEmpty else { return nil }; out.append(c); i += 1; nl()
+            case UInt8(ascii: ":"): guard !closers.isEmpty else { return nil }; out.append(contentsOf: Array(" : ".utf8)); i += 1
+            case UInt8(ascii: "\""):
+                var j = i + 1
+                while j < b.count, b[j] != UInt8(ascii: "\"") { j += b[j] == UInt8(ascii: "\\") ? 2 : 1 }
+                guard j < b.count else { return nil }
+                out.append(contentsOf: b[i...j]); i = j + 1
+            default:
+                var j = i
+                while j < b.count, !Array(" \t\n\r{}[]:,\"".utf8).contains(b[j]) { j += 1 }
+                let tok = String(decoding: b[i..<j], as: UTF8.self)
+                guard ["true", "false", "null"].contains(tok) || (Double(tok) != nil && tok.first != "+" && !tok.lowercased().hasPrefix("0x") && !tok.lowercased().contains("n")) else { return nil }
+                out.append(contentsOf: b[i..<j]); i = j
+            }
+        }
+        return closers.isEmpty && !out.isEmpty ? String(decoding: out, as: UTF8.self) : nil
     }
 
     /// nil이면 해제 실패 또는 알 수 없는 인코딩. "gzip, br"처럼 여러 개면 역순으로 푼다.
