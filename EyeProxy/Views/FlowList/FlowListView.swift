@@ -65,7 +65,8 @@ struct FlowListView: View {
 
     private static func duration(_ flow: Flow) -> String {
         guard let end = flow.completedAt else { return "" }
-        return "\(Int((end.timeIntervalSince(flow.startedAt) * 1000).rounded())) ms"
+        let ms = Int((end.timeIntervalSince(flow.startedAt) * 1000).rounded())
+        return String(localized: "\(ms) ms")
     }
 }
 

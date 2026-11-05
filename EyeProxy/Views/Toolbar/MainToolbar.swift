@@ -37,7 +37,11 @@ struct MainToolbar: ToolbarContent {
         case .stopped:
             Text("중지됨").foregroundStyle(.secondary)
         case .running(let port):
-            Text("실행 중 · 포트 \(String(port)) · \(model.lanAddresses.joined(separator: ", "))").foregroundStyle(.secondary)
+            let ips = model.lanAddresses.joined(separator: ", ")
+            Group {
+                if ips.isEmpty { Text("실행 중 · 포트 \(String(port))") } else { Text("실행 중 · 포트 \(String(port)) · \(ips)") }
+            }
+            .foregroundStyle(.secondary)
         case .failed(let message):
             Label(message, systemImage: "exclamationmark.triangle.fill").labelStyle(.titleAndIcon).foregroundStyle(.red)
         }

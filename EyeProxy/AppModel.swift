@@ -25,6 +25,8 @@ final class AppModel {
     let session = SessionStore()
     let devices: DeviceRegistry
     let certificateAuthority: CertificateAuthority
+    /// 새로 만든 CA를 저장하지 못했으면 그 이유. 매 실행 새 루트 CA가 되므로 Task 15 인증서 화면에서 표시한다.
+    let caSaveError: String?
     private(set) var serverState: ServerState = .stopped
     var filter = FlowFilter()
     var selectedFlowID: FlowID?
@@ -32,11 +34,12 @@ final class AppModel {
 
     @ObservationIgnored private var server: ProxyServer?
     @ObservationIgnored private var consumer: Task<Void, Never>?
+    @ObservationIgnored private var settingsUpdate: Task<Void, Never>?
 
     init() {
         try? FileManager.default.createDirectory(at: Self.supportDirectory, withIntermediateDirectories: true)
         devices = DeviceRegistry(storageURL: Self.supportDirectory.appending(path: "devices.json"))
-        certificateAuthority = Self.loadOrCreateCA()
+        (certificateAuthority, caSaveError) = Self.loadOrCreateCA()
         NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
             // 리슨 소켓은 프로세스 종료 시 커널이 닫는다. 종료를 NIO graceful shutdown에 묶지 않는다.
             MainActor.assumeIsolated { try? self?.devices.save() }
@@ -44,16 +47,20 @@ final class AppModel {
     }
 
     /// 손상(한쪽 파일만 있음·읽기 실패)이면 기존 파일을 덮어쓰지 않고 이번 실행만 임시 CA를 쓴다.
-    /// ponytail: 임시 CA 사용을 UI에 알리지 않음. 인증서 화면(Task 15)에서 표시.
-    private static func loadOrCreateCA() -> CertificateAuthority {
+    /// ponytail: 임시 CA 사용(손상)·저장 실패(caSaveError)를 아직 UI에 알리지 않음. 인증서 화면(Task 15)에서 표시.
+    private static func loadOrCreateCA() -> (CertificateAuthority, String?) {
         do {
-            if let ca = try CertificateAuthority.load(from: caDirectory) { return ca }
+            if let ca = try CertificateAuthority.load(from: caDirectory) { return (ca, nil) }
             let ca = try CertificateAuthority.generate()
-            try? ca.save(to: caDirectory)
-            return ca
+            do {
+                try ca.save(to: caDirectory)
+                return (ca, nil)
+            } catch {
+                return (ca, error.localizedDescription)
+            }
         } catch {
             guard let ca = try? CertificateAuthority.generate() else { fatalError("CA 생성 실패: \(error)") }
-            return ca
+            return (ca, nil)
         }
     }
 
@@ -96,8 +103,15 @@ final class AppModel {
         await running?.stop()
     }
 
+    /// 호출 순서대로 직렬화한다. 각 갱신은 실행 시점의 설정을 읽으므로 마지막 토글이 이긴다.
     func applySettingsToServer() async {
-        await server?.update(sslPolicy: settings.sslPolicy)
+        let previous = settingsUpdate
+        let update = Task {
+            await previous?.value
+            await server?.update(sslPolicy: settings.sslPolicy)
+        }
+        settingsUpdate = update
+        await update.value
     }
 
     private func handle(_ event: FlowEvent) {
@@ -111,12 +125,15 @@ final class AppModel {
 
     func enableSSLProxying(for host: String) async {
         if !settings.sslPatterns.contains(host) { settings.sslPatterns.append(host) }
+        settings.sslEnabled = true
         await applySettingsToServer()
     }
 
     func clear() {
         session.clear()
         selectedFlowID = nil
+        // 지우면 도메인 목록이 비어 선택된 호스트 행이 사라진다 → 보이지 않는 필터가 남지 않게.
+        if case .host = sidebarSelection { sidebarSelection = .allFlows }
     }
 
     // MARK: - 목록
