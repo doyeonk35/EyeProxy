@@ -11,6 +11,8 @@ xcodegen generate
 xcodebuild build -scheme EyeProxy -configuration Debug -destination 'platform=macOS' -allowProvisioningUpdates
 ```
 
+릴리스(unsigned 빌드 → Developer ID 재서명 → 공증 → zip → appcast): `./scripts/release.sh <version>` 후 commit·tag·push·`gh release create` (README 참고).
+
 ## 모듈 의존 방향
 
 `EyeProxy`(앱) → `EyeProxyKit` → `EyeProxyCore`. 역방향 import 금지. Core는 UI 무관(NIO/인증서/Flow 모델).

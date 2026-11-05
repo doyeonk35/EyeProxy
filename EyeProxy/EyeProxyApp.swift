@@ -1,10 +1,12 @@
 import AppKit
 import EyeProxyKit
+import Sparkle
 import SwiftUI
 
 @main struct EyeProxyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private var model: AppModel { appDelegate.model }
+    private let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     var body: some Scene {
         Window("EyeProxy", id: "main") {
@@ -22,6 +24,9 @@ import SwiftUI
                     .keyboardShortcut("r")
                 Divider()
                 OpenDevicesButton()
+            }
+            CommandGroup(after: .appInfo) {
+                Button("업데이트 확인…") { updaterController.checkForUpdates(nil) }
             }
             CommandGroup(after: .newItem) {
                 Button("세션 열기…") { Task { await model.openSession() } }
