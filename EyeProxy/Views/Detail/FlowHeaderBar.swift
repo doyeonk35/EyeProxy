@@ -40,6 +40,8 @@ struct FlowHeaderBar: View {
         let path = request.path
         let q = path.firstIndex(of: "?")
         var out = part("\(request.scheme)://", .secondary) + part(request.host, .primary, bold: true)
+        let isDefaultPort = (request.scheme == "http" && request.port == 80) || (request.scheme == "https" && request.port == 443)
+        if !isDefaultPort { out += part(":\(request.port)", .secondary) }
         out += part(q.map { String(path[..<$0]) } ?? path, .accentColor)
         if let q {
             out += part("?", .secondary)
