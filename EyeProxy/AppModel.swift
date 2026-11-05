@@ -46,6 +46,8 @@ final class AppModel {
     /// 백업이 없는데 실효 프록시(`scutil --proxy`)가 EyeProxy를 가리킨다 = VPN 서비스에 복사본이 남았다.
     /// 이때 토글은 켜진 것으로 보이고, 끄면 disable이 복사본을 정리한다.
     private(set) var effectiveProxyLeftover = false
+    /// 기본 서비스가 VPN(GlobalProtect 등)이다 → 켜고 끌 때 VPN State 키를 관리자 권한으로 쓴다.
+    private(set) var vpnPrimaryDetected = false
     /// 시스템 프록시·CA 설치·프로필 저장 실패. 키 윈도우에 alert로 표시한다.
     var systemError: String?
 
@@ -298,6 +300,7 @@ final class AppModel {
     func refreshEffectiveProxyWarning() async {
         let ours = await systemProxy.effectiveProxyIsOurs(ownPort: capturePort ?? runningPort ?? settings.port)
         effectiveProxyLeftover = ours && systemProxy.pendingRestore() == nil
+        vpnPrimaryDetected = await systemProxy.primaryIsVPN()
     }
 
     /// 종료 전에 시스템 프록시를 되돌려야 하는가(캡처 중·변경 중·백업 잔여).
@@ -331,6 +334,8 @@ final class AppModel {
         case SystemProxyError.noActiveService: String(localized: "활성 네트워크 서비스를 찾지 못했습니다")
         case SystemProxyError.vpnProxyLeftover(let service):
             String(localized: "VPN 서비스(\(service))에 EyeProxy 프록시가 남아 있습니다 — VPN을 재연결하세요")
+        case SystemProxyError.vpnMirrorFailed(let service):
+            String(localized: "VPN 서비스(\(service))에 EyeProxy 프록시를 적용하지 못했습니다")
         default: error.localizedDescription
         }
         if text.contains("-128") || text.localizedCaseInsensitiveContains("canceled") || text.localizedCaseInsensitiveContains("cancelled") {
