@@ -6,15 +6,33 @@ import SwiftUI
 struct BodyView: View {
     let data: Data
     let headers: [HTTPHeader]
+    @Environment(AppModel.self) private var model
 
-    /// 디코드 결과와 화면용 문자열(2MB 컷·hex 덤프)을 한 번만 만든다.
+    private enum Mode { case pretty, tree, raw }
+
+    /// 디코드 결과와 화면용 문자열(2MB 컷·hex 덤프·JSON 색)을 한 번만 만든다.
     private struct Loaded {
         let decoded: DecodedBody
-        let display: String
+        let display: NSAttributedString
         let truncated: Bool
+        let raw: NSAttributedString?  // JSON Raw 모드
+        let rawTruncated: Bool
         let image: NSImage?
     }
+
+    /// 메인 밖에서 만드는 부분 (NSAttributedString은 Sendable이 아니라 토큰까지만).
+    private struct Prepared: Sendable {
+        let decoded: DecodedBody
+        var display = ""
+        var truncated = false
+        var tokens: [JSONToken] = []
+        var raw: String?
+        var rawTruncated = false
+    }
+
     @State private var loaded: Loaded?
+    @State private var mode = Mode.pretty
+    @State private var tree: [JSONTreeNode]?
 
     private var encoding: String? {
         headers.first { $0.name.caseInsensitiveCompare("Content-Encoding") == .orderedSame }?.value
@@ -25,34 +43,73 @@ struct BodyView: View {
     }
 
     var body: some View {
+        @Bindable var settings = model.settings
         VStack(alignment: .leading, spacing: 0) {
-            Text(verbatim: summary).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.vertical, 4)
+            HStack {
+                if case .json? = loaded?.decoded {
+                    Picker("", selection: $mode) {
+                        Text("Pretty").tag(Mode.pretty)
+                        Text("Tree").tag(Mode.tree)
+                        Text("Raw").tag(Mode.raw)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+                Spacer()
+                Toggle("줄바꿈", isOn: $settings.wrapLongLines).toggleStyle(.checkbox)
+                Text(verbatim: summary).font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 4)
             Divider()
             if let loaded { content(loaded) } else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
         }
         // 디코드는 본문이 바뀔 때만 (세션 이벤트마다 다시 하지 않음), 메인 밖에서.
         .task(id: data.count) {
             let (b, h) = (data, headers)
-            let (d, display, truncated) = await Task.detached { Self.prepare(b, h) }.value
+            let p = await Task.detached { Self.prepare(b, h) }.value
             var image: NSImage?
-            if case .image(let img) = d { image = NSImage(data: img) }
-            loaded = Loaded(decoded: d, display: display, truncated: truncated, image: image)
+            if case .image(let img) = p.decoded { image = NSImage(data: img) }
+            tree = nil
+            loaded = Loaded(
+                decoded: p.decoded, display: Self.highlighted(p.display, p.tokens), truncated: p.truncated,
+                raw: p.raw.map { CodeTextView.base($0) }, rawTruncated: p.rawTruncated, image: image)
         }
     }
 
     private nonisolated static let textLimit = 2_000_000
     private nonisolated static let hexLimit = 64 * 1024
+    private nonisolated static let highlightLimit = 256_000
 
-    private nonisolated static func prepare(_ body: Data, _ headers: [HTTPHeader]) -> (DecodedBody, String, Bool) {
+    private nonisolated static func prepare(_ body: Data, _ headers: [HTTPHeader]) -> Prepared {
         let d = BodyDecoder.decode(body: body, headers: headers)
+        var p = Prepared(decoded: d)
         switch d {
-        case .empty: return (d, "", false)
-        case .json(let s, _), .text(let s), .html(let s):
-            let (t, cut) = capped(s)
-            return (d, t, cut)
+        case .empty: break
+        case .json(let s, let raw):
+            (p.display, p.truncated) = capped(s)
+            if p.display.utf8.count <= highlightLimit { p.tokens = JSONHighlighter.tokens(p.display) }
+            let (r, cut) = capped(raw)
+            (p.raw, p.rawTruncated) = (r, cut)
+        case .text(let s), .html(let s):
+            (p.display, p.truncated) = capped(s)
         case .image(let x), .binary(let x):
-            return (d, hex(x.prefix(hexLimit)) + (x.count > hexLimit ? "\n" + String(localized: "… (\(x.count - hexLimit) bytes 더)") : ""), false)
+            p.display = hex(x.prefix(hexLimit)) + (x.count > hexLimit ? "\n" + String(localized: "… (\(x.count - hexLimit) bytes 더)") : "")
         }
+        return p
+    }
+
+    private static let tokenColors: [JSONToken.Kind: NSColor] = [
+        .key: NSColor(named: "JSONKey") ?? .textColor,
+        .string: NSColor(named: "JSONString") ?? .textColor,
+        .number: NSColor(named: "JSONNumber") ?? .textColor,
+        .keyword: NSColor(named: "JSONKeyword") ?? .textColor,
+    ]
+
+    private static func highlighted(_ s: String, _ tokens: [JSONToken]) -> NSAttributedString {
+        let a = CodeTextView.base(s)
+        a.beginEditing()
+        for t in tokens { a.addAttribute(.foregroundColor, value: tokenColors[t.kind] ?? NSColor.textColor, range: t.range) }
+        a.endEditing()
+        return a
     }
 
     /// UTF-8 바이트 기준 2MB로 자르되 줄 경계에서 끊는다.
@@ -77,99 +134,55 @@ struct BodyView: View {
     @ViewBuilder private func content(_ l: Loaded) -> some View {
         switch l.decoded {
         case .empty: Text("(없음)").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .json(let pretty, _): JSONBody(pretty: pretty, display: l.display, truncated: l.truncated)
-        case .text: MonoText(text: l.display, truncated: l.truncated)
-        case .html: HTMLBody(html: l.display, truncated: l.truncated)
+        case .json(let pretty, _):
+            switch mode {
+            case .pretty: CodeBody(text: l.display, truncated: l.truncated)
+            case .raw: CodeBody(text: l.raw ?? l.display, truncated: l.rawTruncated)
+            case .tree:
+                if let tree { JSONTreeView(nodes: tree) } else {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .task { tree = await Task.detached { JSONTreeNode.parse(pretty: pretty) }.value }
+                }
+            }
+        case .text: CodeBody(text: l.display, truncated: l.truncated)
+        case .html: HTMLBody(source: l.display, truncated: l.truncated)
         case .image:
             if let img = l.image, let rep = img.representations.first {
                 VStack {
                     Image(nsImage: img).resizable().scaledToFit().frame(maxWidth: .infinity, maxHeight: .infinity)
                     Text("\(rep.pixelsWide) × \(rep.pixelsHigh) px").font(.caption).foregroundStyle(.secondary).padding(4)
                 }
-            } else { MonoText(text: l.display, truncated: false) }
-        case .binary: MonoText(text: l.display, truncated: false)
+            } else { CodeBody(text: l.display, truncated: false) }
+        case .binary: CodeBody(text: l.display, truncated: false)
         }
     }
 }
 
-/// 256KB 이하는 SwiftUI Text, 그 이상은 NSTextView(읽기 전용·선택 가능)로 그린다.
-struct MonoText: View {
-    let text: String
+/// `CodeTextView` + 2MB 컷 안내. 줄바꿈은 설정을 따른다.
+private struct CodeBody: View {
+    let text: NSAttributedString
     let truncated: Bool
-    private static let swiftUILimit = 256_000
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if text.utf8.count > Self.swiftUILimit {
-                LargeText(text: text)
-            } else {
-                ScrollView([.vertical, .horizontal]) {
-                    Text(text).font(.system(.body, design: .monospaced)).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(8)
-                }
-            }
+            CodeTextView(text: text, wrap: model.settings.wrapLongLines)
             if truncated { Text("… (2MB까지만 표시)").foregroundStyle(.secondary).padding(6) }
         }
     }
 }
 
-private struct LargeText: NSViewRepresentable {
-    let text: String
-
-    func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSTextView.scrollableTextView()
-        guard let tv = scroll.documentView as? NSTextView else { return scroll }
-        tv.isEditable = false
-        tv.isSelectable = true
-        tv.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        tv.textContainerInset = NSSize(width: 8, height: 8)
-        tv.string = text
-        return scroll
-    }
-
-    func updateNSView(_ nsView: NSScrollView, context: Context) {}
-}
-
-private struct JSONBody: View {
-    enum Mode { case pretty, tree }
-    let pretty: String
-    let display: String
-    let truncated: Bool
-    @State private var mode = Mode.pretty
-    @State private var tree: [JSONNode]?
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Picker("", selection: $mode) {
-                Text("Pretty").tag(Mode.pretty)
-                Text("Tree").tag(Mode.tree)
-            }
-            .pickerStyle(.segmented).labelsHidden().fixedSize().padding(6)
-            switch mode {
-            case .pretty: MonoText(text: display, truncated: truncated)
-            case .tree:
-                if let tree { JSONTreeView(nodes: tree) } else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
-            }
-        }
-        .task(id: mode) {
-            guard mode == .tree, tree == nil else { return }
-            let p = pretty
-            tree = await Task.detached { JSONNode.parse(p) }.value
-        }
-    }
-}
-
 private struct HTMLBody: View {
-    let html: String
+    let source: NSAttributedString
     let truncated: Bool
-    @State private var source = false
+    @State private var showSource = false
     @State private var blocked = false
 
     var body: some View {
         VStack(spacing: 0) {
-            Toggle("소스", isOn: $source).toggleStyle(.checkbox).frame(maxWidth: .infinity, alignment: .leading).padding(6)
+            Toggle("소스", isOn: $showSource).toggleStyle(.checkbox).frame(maxWidth: .infinity, alignment: .leading).padding(6)
             if blocked { Text("미리보기를 안전하게 차단할 수 없어 소스만 표시합니다").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 6) }
-            if source || blocked { MonoText(text: html, truncated: truncated) } else { HTMLPreview(html: html) { blocked = true } }
+            if showSource || blocked { CodeBody(text: source, truncated: truncated) } else { HTMLPreview(html: source.string) { blocked = true } }
         }
     }
 }
