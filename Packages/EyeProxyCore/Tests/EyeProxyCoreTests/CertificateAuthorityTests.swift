@@ -23,6 +23,7 @@ import Crypto
 }
 @Test func saveAndLoadRoundTrip() throws {
     let dir = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: dir) }
     let ca = try CertificateAuthority.generate(); try ca.save(to: dir)
     let loaded = try #require(try CertificateAuthority.load(from: dir))
     #expect(loaded.certificateDER == ca.certificateDER)
@@ -34,4 +35,38 @@ import Crypto
     var verifier = Verifier(rootCertificates: CertificateStore([try Certificate(derEncoded: ca.certificateDER)])) { RFC5280Policy() }
     let result = await verifier.validate(leaf: leaf, intermediates: CertificateStore())
     guard case .validCertificate = result else { Issue.record("\(result)"); return }
+}
+
+private func tempDir() -> URL { FileManager.default.temporaryDirectory.appending(path: UUID().uuidString) }
+
+@Test func ipLiteralsGetIPAddressSAN() throws {
+    let ca = try CertificateAuthority.generate()
+    for (host, bytes) in [("192.168.0.7", [192, 168, 0, 7] as [UInt8]), ("::1", [UInt8](repeating: 0, count: 15) + [1])] {
+        let cert = try Certificate(derEncoded: ca.leaf(for: host).certificateDER)
+        let sans = try #require(try cert.extensions.subjectAlternativeNames)
+        #expect(sans.contains(.ipAddress(ASN1OctetString(contentBytes: bytes[...]))))
+        #expect(!sans.contains(.dnsName(host)))
+    }
+    #expect(try ca.leaf(for: "[::1]").certificateDER == ca.leaf(for: "::1").certificateDER)
+}
+@Test func keyFileIs0600() throws {
+    let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+    try CertificateAuthority.generate().save(to: dir)
+    let attrs = try FileManager.default.attributesOfItem(atPath: dir.appending(path: "ca-key.pem").path)
+    #expect((attrs[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+}
+@Test func loadNilWhenEmptyAndThrowsWhenPartial() throws {
+    let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    #expect(try CertificateAuthority.load(from: dir) == nil)
+    try CertificateAuthority.generate().certificatePEM.write(to: dir.appending(path: "ca.pem"), atomically: true, encoding: .utf8)
+    #expect(throws: (any Error).self) { try CertificateAuthority.load(from: dir) }
+}
+@Test func leafValidityIs397DaysAndHostIsNormalized() throws {
+    let ca = try CertificateAuthority.generate()
+    let a = try ca.leaf(for: "API.Tving.com.")
+    let cert = try Certificate(derEncoded: a.certificateDER)
+    let days = cert.notValidAfter.timeIntervalSince(cert.notValidBefore) / 86400
+    #expect(abs(days - (397 + 1.0 / 24)) < 0.01)
+    #expect(try a.certificateDER == ca.leaf(for: "api.tving.com").certificateDER)
 }

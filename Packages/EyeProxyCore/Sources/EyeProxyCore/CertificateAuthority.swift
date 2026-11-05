@@ -14,12 +14,14 @@ public final class CertificateAuthority: Sendable {
     private let certificate: Certificate
     private let cache = Mutex<[String: LeafCertificate]>([:])
     public let certificateDER: [UInt8]
+    public let certificatePEM: String
 
     private init(key: P256.Signing.PrivateKey, certificate: Certificate) throws {
         self.key = key
         self.certificate = certificate
         var s = DER.Serializer(); try s.serialize(certificate)
         certificateDER = s.serializedBytes
+        certificatePEM = try certificate.serializeAsPEM().pemString
     }
 
     public static func generate(commonName: String = "EyeProxy Root CA", validYears: Int = 10) throws -> CertificateAuthority {
@@ -40,22 +42,29 @@ public final class CertificateAuthority: Sendable {
     }
 
     public static func load(from directory: URL) throws -> CertificateAuthority? {
-        guard let certPEM = try? String(contentsOf: directory.appending(path: "ca.pem"), encoding: .utf8),
-              let keyPEM = try? String(contentsOf: directory.appending(path: "ca-key.pem"), encoding: .utf8)
-        else { return nil }
-        return try CertificateAuthority(key: P256.Signing.PrivateKey(pemRepresentation: keyPEM),
-                                        certificate: Certificate(pemEncoded: certPEM))
+        let certURL = directory.appending(path: "ca.pem"), keyURL = directory.appending(path: "ca-key.pem")
+        let fm = FileManager.default
+        switch (fm.fileExists(atPath: certURL.path), fm.fileExists(atPath: keyURL.path)) {
+        case (false, false): return nil
+        case (true, true): break
+        default: throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: directory.path])  // 한쪽만 있으면 손상 상태
+        }
+        return try CertificateAuthority(
+            key: P256.Signing.PrivateKey(pemRepresentation: String(contentsOf: keyURL, encoding: .utf8)),
+            certificate: Certificate(pemEncoded: String(contentsOf: certURL, encoding: .utf8)))
     }
 
     public func save(to directory: URL) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try certificatePEM.write(to: directory.appending(path: "ca.pem"), atomically: true, encoding: .utf8)
+        let fm = FileManager.default
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        // 키를 먼저, 처음부터 0600으로 생성
         let keyURL = directory.appending(path: "ca-key.pem")
-        try key.pemRepresentation.write(to: keyURL, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: keyURL.path)
+        guard fm.createFile(atPath: keyURL.path, contents: Data(key.pemRepresentation.utf8), attributes: [.posixPermissions: 0o600]) else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: keyURL.path])
+        }
+        try certificatePEM.write(to: directory.appending(path: "ca.pem"), atomically: true, encoding: .utf8)
     }
 
-    public var certificatePEM: String { (try? certificate.serializeAsPEM().pemString) ?? "" }
     public var commonName: String {
         for rdn in certificate.subject { for a in rdn where a.type == .RDNAttributeType.commonName {
             if let s = String(a.value) { return s }
@@ -63,7 +72,10 @@ public final class CertificateAuthority: Sendable {
         return ""
     }
 
-    public func leaf(for host: String) throws -> LeafCertificate {
+    public func leaf(for rawHost: String) throws -> LeafCertificate {
+        var host = rawHost.lowercased()
+        if host.hasSuffix(".") { host.removeLast() }
+        if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
         if let hit = cache.withLock({ $0[host] }) { return hit }
         let leafKey = P256.Signing.PrivateKey()
         let now = Date()
