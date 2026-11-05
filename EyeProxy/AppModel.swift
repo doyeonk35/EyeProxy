@@ -3,6 +3,7 @@ import EyeProxyCore
 import EyeProxyKit
 import Foundation
 import Observation
+import UniformTypeIdentifiers
 
 enum ServerState: Equatable {
     case stopped
@@ -32,6 +33,17 @@ final class AppModel {
     var selectedFlowID: FlowID?
     var sidebarSelection: SidebarItem? = .allFlows
 
+    // 온보딩(기기 윈도우)
+    @ObservationIgnored let systemProxy = SystemProxy(backupURL: supportDirectory.appending(path: "system-proxy-backup.json"))
+    private(set) var macCaptureEnabled = false
+    private(set) var macCaptureBusy = false
+    private(set) var macCAInstalled = false
+    private(set) var bootedSimulators: [SimulatorDevice] = []
+    /// 시작 시 남아 있던 시스템 프록시 백업(비정상 종료). nil로 만들면 alert가 닫힌다.
+    var pendingProxyRestore: SystemProxyBackup?
+    /// 시스템 프록시·CA 설치·프로필 저장 실패. 키 윈도우에 alert로 표시한다.
+    var systemError: String?
+
     @ObservationIgnored private var server: ProxyServer?
     @ObservationIgnored private var consumer: Task<Void, Never>?
     @ObservationIgnored private var settingsUpdate: Task<Void, Never>?
@@ -40,14 +52,12 @@ final class AppModel {
         try? FileManager.default.createDirectory(at: Self.supportDirectory, withIntermediateDirectories: true)
         devices = DeviceRegistry(storageURL: Self.supportDirectory.appending(path: "devices.json"))
         (certificateAuthority, caSaveError) = Self.loadOrCreateCA()
-        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
-            // 리슨 소켓은 프로세스 종료 시 커널이 닫는다. 종료를 NIO graceful shutdown에 묶지 않는다.
-            MainActor.assumeIsolated { try? self?.devices.save() }
-        }
+        // 이 실행은 아직 캡처를 켜지 않았으므로 백업이 있으면 이전 실행이 복원하지 못한 것이다.
+        pendingProxyRestore = systemProxy.pendingRestore()
     }
 
     /// 손상(한쪽 파일만 있음·읽기 실패)이면 기존 파일을 덮어쓰지 않고 이번 실행만 임시 CA를 쓴다.
-    /// ponytail: 임시 CA 사용(손상)·저장 실패(caSaveError)를 아직 UI에 알리지 않음. 인증서 화면(Task 15)에서 표시.
+    /// 저장 실패(caSaveError)는 기기 윈도우에 표시한다. ponytail: 손상으로 임시 CA를 쓰는 경우는 아직 UI에 알리지 않음.
     private static func loadOrCreateCA() -> (CertificateAuthority, String?) {
         do {
             if let ca = try CertificateAuthority.load(from: caDirectory) { return (ca, nil) }
@@ -152,5 +162,74 @@ final class AppModel {
         session.flows.reduce(into: [String: Int]()) { $0[$1.request.host, default: 0] += 1 }
             .map { (host: $0.key, count: $0.value) }
             .sorted { $0.host < $1.host }
+    }
+
+    // MARK: - 온보딩
+
+    func setMacCapture(_ on: Bool) async {
+        guard !macCaptureBusy, on != macCaptureEnabled else { return }
+        macCaptureBusy = true
+        defer { macCaptureBusy = false }
+        do {
+            if on {
+                try await systemProxy.enable(host: "127.0.0.1", port: settings.port, bypass: settings.bypassHosts)
+            } else {
+                try await systemProxy.disable()
+            }
+            macCaptureEnabled = on
+        } catch {
+            systemError = on ? String(localized: "시스템 프록시를 켜지 못했습니다: \(String(describing: error))")
+                             : String(localized: "시스템 프록시를 되돌리지 못했습니다: \(String(describing: error))")
+        }
+    }
+
+    func restorePendingProxy() async {
+        pendingProxyRestore = nil
+        do { try await systemProxy.disable() } catch {
+            systemError = String(localized: "시스템 프록시를 되돌리지 못했습니다: \(String(describing: error))")
+        }
+    }
+
+    /// 실행 중인 CA의 PEM. 디스크 CA와 다를 수 있으므로(손상 시 임시 CA) 메모리 CA를 임시 파일로 쓴다.
+    private func caPEMFile() throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appending(path: "eyeproxy-ca.pem")
+        try Data(certificateAuthority.certificatePEM.utf8).write(to: url, options: .atomic)
+        return url
+    }
+
+    func refreshMacCAInstalled() async {
+        guard let pem = try? caPEMFile() else { macCAInstalled = false; return }
+        macCAInstalled = await MacKeychain.isInstalled(pemURL: pem)
+    }
+
+    func installCAOnMac() async throws {
+        try await MacKeychain.installTrustedRoot(pemURL: caPEMFile())
+        await refreshMacCAInstalled()
+    }
+
+    /// 실패(Xcode 없음 등)는 빈 목록으로 보인다.
+    func refreshSimulators() async {
+        bootedSimulators = ((try? await Simulators.listBooted()) ?? []).sorted { ($0.runtime, $0.name) < ($1.runtime, $1.name) }
+    }
+
+    func installCA(toSimulator udid: String) async throws {
+        try await Simulators.installRootCert(udid: udid, pemURL: caPEMFile())
+    }
+
+    /// 평문 비밀번호 경고는 호출 전에 뷰가 띄운다. 비밀번호는 파일에만 들어가고 앱은 보관하지 않는다.
+    func saveWiFiProfile(ssid: String, security: WiFiSecurity, password: String?, proxyHost: String) async {
+        let panel = NSSavePanel()
+        let safeName = ssid.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+        panel.nameFieldStringValue = "EyeProxy-\(safeName).mobileconfig"
+        panel.allowedContentTypes = [.init(filenameExtension: "mobileconfig") ?? .xml]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let data = MobileConfig.wifiProxyProfile(ssid: ssid, security: security, password: security == .none ? nil : password,
+                                                 proxyHost: proxyHost, proxyPort: settings.port)
+        do {
+            try data.write(to: url, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        } catch {
+            systemError = String(localized: "프로필을 저장하지 못했습니다: \(error.localizedDescription)")
+        }
     }
 }

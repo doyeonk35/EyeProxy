@@ -1,7 +1,9 @@
+import AppKit
 import SwiftUI
 
 @main struct EyeProxyApp: App {
-    @State private var model = AppModel()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    private var model: AppModel { appDelegate.model }
 
     var body: some Scene {
         Window("EyeProxy", id: "main") {
@@ -9,6 +11,8 @@ import SwiftUI
                 .environment(model)
                 .frame(minWidth: 1100, minHeight: 700)
                 .task { await model.startServer() }
+                .pendingProxyRestoreAlert(model)
+                .systemErrorAlert(model)
         }
         .commands {
             // 툴바 버튼의 keyboardShortcut은 동작하지 않아 메뉴 막대에 둔다.
@@ -17,7 +21,72 @@ import SwiftUI
                     .keyboardShortcut("r")
                 Button("목록 지우기") { model.clear() }
                     .keyboardShortcut("k")
+                Divider()
+                OpenDevicesButton()
             }
+        }
+        Window("기기", id: "devices") {
+            DevicesView()
+                .environment(model)
+                .frame(minWidth: 640, minHeight: 600)
+                .systemErrorAlert(model)
+        }
+    }
+}
+
+private struct OpenDevicesButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("기기…") { openWindow(id: "devices") }
+            .keyboardShortcut("d")
+    }
+}
+
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
+    let model = AppModel()
+
+    /// 캡처가 켜져 있으면 시스템 프록시를 되돌린 뒤 종료한다(실패해도 기록 후 종료 — 다음 실행에서 복원 제안).
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard model.macCaptureEnabled else { return .terminateNow }
+        Task {
+            await model.setMacCapture(false)
+            await model.stopServer()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // 리슨 소켓은 프로세스 종료 시 커널이 닫는다. 종료를 NIO graceful shutdown에 묶지 않는다.
+        try? model.devices.save()
+    }
+}
+
+extension View {
+    /// 기기·메인 윈도우가 함께 떠 있어도 키 윈도우 한 곳에만 띄운다.
+    func systemErrorAlert(_ model: AppModel) -> some View { modifier(SystemErrorAlert(model: model)) }
+
+    func pendingProxyRestoreAlert(_ model: AppModel) -> some View {
+        alert("이전 실행이 비정상 종료되어 시스템 프록시가 남아 있습니다. 복원할까요?",
+              isPresented: Binding(get: { model.pendingProxyRestore != nil }, set: { if !$0 { model.pendingProxyRestore = nil } })) {
+            Button("복원") { Task { await model.restorePendingProxy() } }
+            Button("유지", role: .cancel) { model.pendingProxyRestore = nil }
+        } message: {
+            if let b = model.pendingProxyRestore { Text("네트워크 서비스: \(b.service)") }
+        }
+    }
+}
+
+private struct SystemErrorAlert: ViewModifier {
+    let model: AppModel
+    @Environment(\.appearsActive) private var appearsActive
+
+    func body(content: Content) -> some View {
+        content.alert("오류", isPresented: Binding(get: { appearsActive && model.systemError != nil },
+                                                 set: { if !$0 { model.systemError = nil } })) {
+            Button("확인", role: .cancel) { model.systemError = nil }
+        } message: {
+            Text(model.systemError ?? "")
         }
     }
 }
