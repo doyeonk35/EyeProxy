@@ -84,3 +84,76 @@ An asterisk (*) denotes that a network service is disabled.
     let cntlm = SystemProxyCommands.originalProxy((enabled: true, host: "127.0.0.1", port: 3128), ownPort: 9090)
     #expect(cntlm.enabled && cntlm.host == "127.0.0.1" && cntlm.port == 3128)  // 다른 포트의 로컬 프록시는 사용자의 것
 }
+
+// MARK: - VPN(GlobalProtect) 서비스가 복사한 프록시
+
+private let vpnProxiesOurs = """
+<dictionary> {
+  ExceptionsList : <array> {
+    0 : dns.google
+    1 : one.one.one.one
+  }
+  FTPPassive : 1
+  HTTPEnable : 1
+  HTTPPort : 9090
+  HTTPProxy : 127.0.0.1
+  HTTPSEnable : 1
+  HTTPSPort : 9090
+  HTTPSProxy : 127.0.0.1
+  ProxyAutoConfigEnable : 0
+  SOCKSEnable : 0
+}
+"""
+@Test func parsesScutilProxy() {
+    let p = SystemProxyCommands.parseScutilProxy(vpnProxiesOurs)
+    #expect(p.httpEnabled && p.httpHost == "127.0.0.1" && p.httpPort == 9090)
+    #expect(p.httpsEnabled && p.httpsHost == "127.0.0.1" && p.httpsPort == 9090)
+    let off = SystemProxyCommands.parseScutilProxy("<dictionary> {\n  FTPPassive : 1\n  HTTPEnable : 0\n  HTTPSEnable : 0\n}\n")
+    #expect(off == SystemProxyCommands.EffectiveProxy())
+}
+@Test func parsesPrimaryService() {
+    #expect(SystemProxyCommands.parsePrimaryService("<dictionary> {\n  PrimaryInterface : utun6\n  PrimaryService : gpd.pan\n  Router : 172.29.0.162\n}\n") == "gpd.pan")
+    #expect(SystemProxyCommands.parsePrimaryService("  No such key\n") == nil)
+}
+@Test func parsesProxyDictionaryKeepingOtherScalars() {
+    let d = SystemProxyCommands.parseScutilProxyDictionary(vpnProxiesOurs)
+    #expect(d.exceptions == ["dns.google", "one.one.one.one"])
+    #expect(d.ftpPassive)
+    #expect(d.other.map(\.key) == ["ProxyAutoConfigEnable", "SOCKSEnable"] && d.other.map(\.value) == ["0", "0"])
+}
+@Test func disableScriptTurnsOffHTTPAndKeepsRest() {
+    let d = SystemProxyCommands.parseScutilProxyDictionary(vpnProxiesOurs)
+    let s = SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: d.exceptions, ftpPassive: d.ftpPassive,
+                                                         other: d.other.map { ($0.key, $0.value) })
+    #expect(s == """
+    d.init
+    d.add FTPPassive # 1
+    d.add HTTPEnable # 0
+    d.add HTTPSEnable # 0
+    d.add ExceptionsList * dns.google one.one.one.one
+    d.add ProxyAutoConfigEnable # 0
+    d.add SOCKSEnable # 0
+    set State:/Network/Service/gpd.pan/Proxies
+    quit
+    """)
+    let bare = SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: [], ftpPassive: false, other: [])
+    #expect(bare?.contains("ExceptionsList") == false && bare?.contains("d.add FTPPassive # 0") == true)
+    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: ["*.local", "169.254/16"], ftpPassive: true, other: []) != nil)
+}
+@Test func disableScriptRejectsUntrustedText() {
+    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan\nremove State:/x", exceptions: [], ftpPassive: true, other: []) == nil)
+    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "a b", exceptions: [], ftpPassive: true, other: []) == nil)
+    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: ["a b"], ftpPassive: true, other: []) == nil)
+    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: ["x'; rm"], ftpPassive: true, other: []) == nil)
+    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: [], ftpPassive: true, other: [("K\nquit", "1")]) == nil)
+    #expect(SystemProxyCommands.scutilDisableProxyScript(serviceID: "gpd.pan", exceptions: [], ftpPassive: true, other: [("K", "a b")]) == nil)
+}
+@Test func isOursMatchesOnlyOwnPort() {
+    var p = SystemProxyCommands.EffectiveProxy()
+    #expect(!SystemProxyCommands.isOurs(p, ownPort: 9090))
+    p.httpsEnabled = true; p.httpsHost = "127.0.0.1"; p.httpsPort = 9090
+    #expect(SystemProxyCommands.isOurs(p, ownPort: 9090))
+    #expect(!SystemProxyCommands.isOurs(p, ownPort: 3128))  // Cntlm 등 다른 로컬 프록시
+    p.httpsEnabled = false
+    #expect(!SystemProxyCommands.isOurs(p, ownPort: 9090))  // 꺼져 있으면 주소가 남아도 우리 것이 아니다
+}
