@@ -35,7 +35,9 @@ networksetup -setsecurewebproxystate "Wi-Fi" off
 
 ### VPN(GlobalProtect) 사용 중
 
-GlobalProtect처럼 VPN이 기본 서비스가 되면 VPN이 Wi-Fi의 프록시 설정을 자기 서비스로 **복사**해 가고, Wi-Fi를 되돌려도 복사본을 지우지 않는다(Proxyman도 같은 문제). 그래서 EyeProxy는 캡처를 끌 때 실효 프록시(`scutil --proxy`)가 아직 127.0.0.1:<포트>이면 VPN 서비스의 복사본에서 HTTP·HTTPS만 끄도록 정리한다(관리자 인증 1회, 나머지 VPN 설정은 유지). 정리에 실패하면 기기 창(⌘D) "이 Mac"에 주황 경고가 뜬다 — "이 Mac 캡처"를 끄면(경고가 있으면 토글이 켜진 것으로 보인다) 다시 정리를 시도하고, 그래도 안 되면 **VPN을 재연결**한다 — VPN이 프록시를 새로 받는다. 옮길 수 없는 VPN 설정(중첩 항목)이 있으면 덮어쓰지 않고 실패 처리하므로 이때도 VPN 재연결로 복구한다.
+GlobalProtect처럼 VPN이 기본 서비스가 되면 실효 프록시(`scutil --proxy`)는 Wi-Fi가 아니라 VPN 서비스의 State 키(`State:/Network/Service/gpd.pan/Proxies`)를 따른다. VPN은 연결할 때만 Wi-Fi 프록시를 복사해 가고 이후 Wi-Fi 변경은 따라오지 않는다(켜도 적용 안 됨, 꺼도 복사본이 남음 — Proxyman도 같은 문제). 그래서 EyeProxy는 VPN 상태에서 **켤 때** VPN State 키의 원본을 백업에 저장한 뒤 EyeProxy 프록시를 직접 쓰고, **끌 때** 그 원본을 그대로 되돌린다(켤 때·끌 때 각각 관리자 인증 1회, 나머지 VPN 설정은 유지). 기기 창(⌘D) "이 Mac"에 "VPN 상태에서는 켜고 끌 때 관리자 인증이 필요합니다"가 보이면 이 경우다. 켤 때 인증을 취소하면 Wi-Fi도 원래대로 돌아간다.
+
+원본이 없는 복사본(캡처 중 VPN 연결, 이전 버전 백업)은 끌 때 HTTP·HTTPS 중 EyeProxy 쪽만 끈다. 되돌리기에 실패하면 "이 Mac"에 주황 경고가 뜬다 — "이 Mac 캡처"를 끄면(경고가 있으면 토글이 켜진 것으로 보인다) 다시 시도하고, 그래도 안 되면 **VPN을 재연결**한다 — VPN이 프록시를 새로 받는다. 옮길 수 없는 VPN 설정(중첩 항목)이 있으면 덮어쓰지 않고 실패 처리하므로(켜기도 "적용하지 못했습니다"로 실패) 이때도 VPN 재연결로 복구한다.
 
 앱 없이 긴급 복구할 때는 서비스 ID(`scutil <<< "show State:/Network/Global/IPv4"`의 `PrimaryService`, GlobalProtect는 `gpd.pan`)를 넣어 실행한다. `ExceptionsList`는 `scutil <<< "show State:/Network/Service/gpd.pan/Proxies"`에 보이는 목록을 그대로 옮긴다.
 

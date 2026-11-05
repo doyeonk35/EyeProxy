@@ -71,6 +71,7 @@ gh api -X POST repos/doyeonk35/EyeProxy/pages -f build_type=legacy -f 'source[br
 - Ruling: 컨트롤러가 .gitignore에 build/ 한 줄을 직접 커밋(48ba227) — 리뷰 마이너, 한 줄, 코드 아님. 규칙 위반 최소 사례로 기록.
 - Ruling: 공증된 0.1.0 zip(375a3a0)은 최종 수정 웨이브 이전 빌드 → Task 18 통과 후 `release.sh 0.1.1`로 재릴리스해야 배포본에 루프백 차단·CA 식별자 수정이 포함됨. — 비용: 재공증 1회.
 - Ruling: VPN(GlobalProtect)이 Wi-Fi 프록시를 `State:/Network/Service/<id>/Proxies`로 복사하고 되돌려도 지우지 않아 종료 후 인터넷이 끊김(현장 확인) → disable 끝에서 실효 프록시가 우리 것이고 기본 서비스가 물리 서비스(Setup 키 없음)가 아니면 그 State 키를 관리자 권한 `scutil`로 HTTP·HTTPS 끔으로 다시 씀(나머지 항목 보존, 입력 검증). 실패 시 오류·주황 경고 → VPN 재연결로 복구. — 비용: VPN 사용자는 끌 때 관리자 인증 1회 추가, VPN 재연결 시 VPN이 다시 덮어씀(정상).
+- Ruling: VPN은 연결 시점에만 Wi-Fi 프록시를 복사하고 이후 변경을 따라오지 않아 VPN 상태에서 켜도 캡처가 안 됨(현장 확인: 루트로 State 키를 쓰면 즉시 적용·유지, GlobalProtect가 되돌리지 않음) → enable이 실효 프록시가 우리 것이 아니고 기본 서비스에 Setup 키가 없으면 State 키 원본을 백업(`vpnService`·`vpnOriginal`, 구버전 백업 호환)에 스냅숏하고 우리 프록시를 직접 씀, disable·고아/다른 서비스 정리가 스냅숏을 정확히 복원(없던 키는 remove). 스냅숏 없는 복사본은 기존 clearVPNCopyIfNeeded가 대비책. — 비용: VPN 사용자는 켤 때·끌 때 관리자 인증 각 1회.
 - Ruling: 워크스페이스 삭제 전 판정 목록·P2 이월 마이너·Task 18 체크리스트를 docs/superpowers/plans/2026-11-05-eyeproxy-p1-handover.md 로 레포에 보존.
 
 ## 3. P2 이월 백로그 (태스크 리뷰에서 나온 마이너, 미수정)
