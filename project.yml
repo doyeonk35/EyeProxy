@@ -1,0 +1,55 @@
+name: EyeProxy
+options:
+  bundleIdPrefix: com.tv
+  deploymentTarget:
+    macOS: "15.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+  defaultConfig: Debug
+  developmentLanguage: en
+  knownRegions: [en, ko, Base]
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+  configs:
+    Debug:
+      CODE_SIGN_STYLE: Automatic
+      DEVELOPMENT_TEAM: F64BRNFSBB
+    Release:
+      # 빌드는 unsigned — 배포 서명은 별도 스크립트에서 Developer ID로 재서명
+      CODE_SIGN_IDENTITY: "-"
+      CODE_SIGN_STYLE: Manual
+      CODE_SIGNING_REQUIRED: "NO"
+      CODE_SIGNING_ALLOWED: "NO"
+packages:
+  EyeProxyKit:
+    path: Packages/EyeProxyKit
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.7.0"
+targets:
+  EyeProxy:
+    type: application
+    platform: macOS
+    sources:
+      - EyeProxy
+    dependencies:
+      - package: EyeProxyKit
+      - package: Sparkle
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: EyeProxy/EyeProxy.entitlements
+        INFOPLIST_FILE: EyeProxy/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.tv.eyeproxy
+        PRODUCT_NAME: EyeProxy
+        PRODUCT_MODULE_NAME: EyeProxy
+        GENERATE_INFOPLIST_FILE: NO
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.tv.eyeproxy.debug
+          PRODUCT_NAME: EyeProxy-Debug
+          CODE_SIGN_STYLE: Automatic
+          DEVELOPMENT_TEAM: F64BRNFSBB
