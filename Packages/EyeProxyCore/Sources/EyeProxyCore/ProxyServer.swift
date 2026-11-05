@@ -36,7 +36,7 @@ public actor ProxyServer {
     private var running: (group: MultiThreadedEventLoopGroup, channel: Channel)?
     /// bind 대기 중인 start. 재진입한 start/stop은 이것을 기다린다.
     private var starting: Task<Int, Error>?
-    /// MITM 리프 컨텍스트. 키는 `CertificateAuthority.normalizedHost`(리프 캐시와 같은 정규화).
+    /// MITM 리프 컨텍스트. 키는 `CertificateAuthority.normalizedHost`(`leaf(for:)`와 같은 정규화).
     /// ponytail: 무제한 캐시. 호스트 수천 개가 문제되면 LRU.
     private var leafContexts: [String: NIOSSLContext] = [:]
 
@@ -124,10 +124,13 @@ public actor ProxyServer {
             return response
         case .continue(let outgoing):
             do {
-                let raw = try await upstream.send(outgoing, tls: outgoing.scheme == "https")
+                let raw = try await upstream.send(outgoing, tls: outgoing.scheme == "https", clientAddress: clientAddress)
                 let response = await chain.runResponse(raw, for: outgoing, context: context)
                 eventSink.yield(.responseReceived(id: id, response: response, completedAt: Date()))
                 return response
+            } catch let error as LoopbackBlockedError {
+                eventSink.yield(.failed(id: id, error: error.description, completedAt: Date()))
+                return FlowResponse(status: 403, reason: "Forbidden", headers: [], body: Data())
             } catch {
                 let message = Task.isCancelled ? "client disconnected"
                     : Self.upstreamTLSLabel(error).map { "\($0): \(error)" } ?? String(describing: error)

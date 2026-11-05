@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 import X509
 import SwiftASN1
 import Crypto
@@ -12,7 +11,6 @@ public struct LeafCertificate: Sendable {
 public final class CertificateAuthority: Sendable {
     private let key: P256.Signing.PrivateKey
     private let certificate: Certificate
-    private let cache = Mutex<[String: LeafCertificate]>([:])
     public let certificateDER: [UInt8]
     public let certificatePEM: String
 
@@ -80,9 +78,9 @@ public final class CertificateAuthority: Sendable {
         return host
     }
 
+    /// 호출마다 새로 발급한다(캐시는 `ProxyServer.leafContexts`가 호스트당 하나).
     public func leaf(for rawHost: String) throws -> LeafCertificate {
         let host = Self.normalizedHost(rawHost)
-        if let hit = cache.withLock({ $0[host] }) { return hit }
         let leafKey = P256.Signing.PrivateKey()
         let now = Date()
         let cert = try Certificate(
@@ -97,13 +95,7 @@ public final class CertificateAuthority: Sendable {
             },
             issuerPrivateKey: .init(key))
         var s = DER.Serializer(); try s.serialize(cert)
-        let leaf = LeafCertificate(certificateDER: s.serializedBytes, privateKeyDER: Array(leafKey.derRepresentation))
-        // 동시 호출 경쟁 시 먼저 저장된 값을 돌려줘 동일 host는 항상 같은 값
-        return cache.withLock { c in
-            if let existing = c[host] { return existing }
-            c[host] = leaf
-            return leaf
-        }
+        return LeafCertificate(certificateDER: s.serializedBytes, privateKeyDER: Array(leafKey.derRepresentation))
     }
 
     private static func generalName(for host: String) -> GeneralName {

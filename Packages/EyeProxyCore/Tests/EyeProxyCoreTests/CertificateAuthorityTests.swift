@@ -19,7 +19,6 @@ import Crypto
     #expect(cert.issuer == caCert.subject)
     #expect(try cert.extensions.subjectAlternativeNames?.contains(.dnsName("api.tving.com")) == true)
     #expect(try cert.extensions.extendedKeyUsage?.contains(.serverAuth) == true)
-    #expect(try leaf.certificateDER == ca.leaf(for: "api.tving.com").certificateDER)  // 캐시
 }
 @Test func saveAndLoadRoundTrip() throws {
     let dir = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
@@ -47,7 +46,8 @@ private func tempDir() -> URL { FileManager.default.temporaryDirectory.appending
         #expect(sans.contains(.ipAddress(ASN1OctetString(contentBytes: bytes[...]))))
         #expect(!sans.contains(.dnsName(host)))
     }
-    #expect(try ca.leaf(for: "[::1]").certificateDER == ca.leaf(for: "::1").certificateDER)
+    let bracketed = try Certificate(derEncoded: ca.leaf(for: "[::1]").certificateDER)
+    #expect(try bracketed.extensions.subjectAlternativeNames?.contains(.ipAddress(ASN1OctetString(contentBytes: ([UInt8](repeating: 0, count: 15) + [1])[...]))) == true)
 }
 @Test func keyFileIs0600() throws {
     let dir = tempDir(); defer { try? FileManager.default.removeItem(at: dir) }
@@ -68,5 +68,6 @@ private func tempDir() -> URL { FileManager.default.temporaryDirectory.appending
     let cert = try Certificate(derEncoded: a.certificateDER)
     let days = cert.notValidAfter.timeIntervalSince(cert.notValidBefore) / 86400
     #expect(abs(days - (397 + 1.0 / 24)) < 0.01)
-    #expect(try a.certificateDER == ca.leaf(for: "api.tving.com").certificateDER)
+    #expect(try cert.extensions.subjectAlternativeNames == SubjectAlternativeNames([.dnsName("api.tving.com")]))
+    #expect(cert.issuer == (try Certificate(derEncoded: ca.certificateDER)).subject)
 }

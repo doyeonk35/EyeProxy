@@ -114,9 +114,30 @@ struct ProxyServerHTTPTests {
         let originPort = try await origin.start()
         defer { await origin.stop() }
         let client = UpstreamClient(group: MultiThreadedEventLoopGroup.singleton, timeout: .milliseconds(200))
-        await #expect(throws: (any Error).self) { try await client.send(.get("http://127.0.0.1:\(originPort)/"), tls: false) }
+        await #expect(throws: (any Error).self) { try await client.send(.get("http://127.0.0.1:\(originPort)/"), tls: false, clientAddress: "127.0.0.1") }
         var closes = origin.closed.makeAsyncIterator()
         #expect(await closes.next() != nil)
+    }
+
+    @Test func lanClientCannotReachLoopbackUpstream() async throws {
+        let origin = TestOrigin { _ in FlowResponse(status: 200, reason: "OK", headers: [], body: Data()) }
+        let originPort = try await origin.start()
+        defer { await origin.stop() }
+        let client = UpstreamClient(group: MultiThreadedEventLoopGroup.singleton)
+        await #expect(throws: LoopbackBlockedError.self) {
+            try await client.send(.get("http://127.0.0.1:\(originPort)/"), tls: false, clientAddress: "192.168.0.5")
+        }
+        #expect(try await client.send(.get("http://127.0.0.1:\(originPort)/"), tls: false, clientAddress: "127.0.0.1").status == 200)
+    }
+
+    @Test func shouldBlockUpstreamOnlyForLANToLoopback() {
+        #expect(shouldBlockUpstream(clientAddress: "192.168.0.5", peerAddress: "127.0.0.1"))
+        #expect(shouldBlockUpstream(clientAddress: "192.168.0.5", peerAddress: "127.1.2.3"))
+        #expect(shouldBlockUpstream(clientAddress: "192.168.0.5", peerAddress: "::1"))
+        #expect(shouldBlockUpstream(clientAddress: nil, peerAddress: "127.0.0.1"))
+        #expect(!shouldBlockUpstream(clientAddress: "127.0.0.1", peerAddress: "127.0.0.1"))
+        #expect(!shouldBlockUpstream(clientAddress: "::1", peerAddress: "127.0.0.1"))
+        #expect(!shouldBlockUpstream(clientAddress: "192.168.0.5", peerAddress: "192.168.0.10"))
     }
 
     @Test func clientDisconnectCancelsUpstreamExchange() async throws {

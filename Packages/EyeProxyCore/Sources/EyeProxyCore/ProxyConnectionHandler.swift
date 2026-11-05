@@ -192,6 +192,12 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
             case .success(let channel):
                 peer = channel
             }
+            if shouldBlockUpstream(clientAddress: context.channel.remoteAddress?.ipAddress, peerAddress: peer.remoteAddress?.ipAddress) {
+                peer.close(promise: nil)
+                server.emit(.failed(id: id, error: LoopbackBlockedError().description, completedAt: Date()))
+                self.write(FlowResponse(status: 403, reason: "Forbidden", headers: [], body: Data()), to: head, keepAlive: false, context: context)
+                return
+            }
             guard context.channel.isActive else {
                 peer.close(promise: nil)
                 server.emit(.failed(id: id, error: "client disconnected", completedAt: Date()))

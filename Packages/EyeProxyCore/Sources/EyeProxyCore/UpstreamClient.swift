@@ -8,6 +8,21 @@ struct UpstreamClientError: Error, CustomStringConvertible {
     let description: String
 }
 
+/// LAN 클라이언트가 프록시를 통해 Mac의 루프백 서비스에 닿으려 할 때.
+struct LoopbackBlockedError: Error, CustomStringConvertible {
+    var description: String { "LAN 클라이언트의 루프백 접근 차단" }
+}
+
+/// 루프백이 아닌 클라이언트가 루프백 주소(127.0.0.0/8, ::1)에 연결된 업스트림을 쓰려 하면 차단.
+/// 연결된 peer 주소로 판단하므로 127.0.0.1로 풀리는 DNS 이름도 막힌다. 주소를 모르면 루프백이 아닌 것으로 본다.
+func shouldBlockUpstream(clientAddress: String?, peerAddress: String?) -> Bool {
+    func isLoopback(_ ip: String?) -> Bool {
+        guard let ip = ip?.lowercased() else { return false }
+        return ip.hasPrefix("127.") || ip == "::1" || ip.hasPrefix("::ffff:127.")
+    }
+    return !isLoopback(clientAddress) && isLoopback(peerAddress)
+}
+
 /// 1요청-1연결(`Connection: close`). 응답 본문은 전부 메모리에 버퍼링한다.
 /// ponytail: 연결 재사용·스트리밍 없음. 수백 MB 응답이나 처리량이 문제되면 P2에서 풀링/스트리밍.
 final class UpstreamClient: Sendable {
@@ -29,7 +44,8 @@ final class UpstreamClient: Sendable {
     }
 
     /// 업스트림에서 `timeout` 동안 아무것도 오지 않거나(유휴) 호출 Task가 취소되면 업스트림 연결을 닫고 throw 한다.
-    func send(_ request: FlowRequest, tls: Bool) async throws -> FlowResponse {
+    /// 루프백 peer는 `clientAddress`도 루프백일 때만 허용한다(`LoopbackBlockedError`).
+    func send(_ request: FlowRequest, tls: Bool, clientAddress: String) async throws -> FlowResponse {
         let sslContext = tls ? try tlsContext.get() : nil
         let loop = group.next()
         let promise = loop.makePromise(of: FlowResponse.self)
@@ -54,6 +70,11 @@ final class UpstreamClient: Sendable {
         } catch {
             promise.fail(error)
             throw error
+        }
+        if shouldBlockUpstream(clientAddress: clientAddress, peerAddress: channel.remoteAddress?.ipAddress) {
+            promise.fail(LoopbackBlockedError())
+            channel.close(promise: nil)
+            throw LoopbackBlockedError()
         }
         let isDefaultPort = (request.scheme == "http" && request.port == 80) || (request.scheme == "https" && request.port == 443)
         let hostName = host.contains(":") ? "[\(host)]" : host
