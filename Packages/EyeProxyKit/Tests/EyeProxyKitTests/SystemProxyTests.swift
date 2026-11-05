@@ -19,3 +19,37 @@ import Testing
     try JSONEncoder().encode(b).write(to: url)
     #expect(SystemProxy(backupURL: url).pendingRestore() == b)
 }
+
+private let serviceOrderSample = """
+An asterisk (*) denotes that a network service is disabled.
+(1) Wi-Fi
+(Hardware Port: Wi-Fi, Device: en1)
+
+(*) Thunderbolt Bridge
+(Hardware Port: Thunderbolt Bridge, Device: bridge0)
+
+(3) USB 10/100/1000 LAN
+(Hardware Port: USB 10/100/1000 LAN, Device: en10)
+
+"""
+@Test func parsesServiceOrderWithDisabledEntry() {
+    let s = SystemProxyCommands.parseServiceOrder(serviceOrderSample)
+    #expect(s.map(\.name) == ["Wi-Fi", "Thunderbolt Bridge", "USB 10/100/1000 LAN"])
+    #expect(s.map(\.device) == ["en1", "bridge0", "en10"])
+    #expect(s.map(\.enabled) == [true, false, true])
+}
+@Test func restoreKeepsHostWhenOriginallyOff() {
+    let b = SystemProxyBackup(service: "Wi-Fi", httpEnabled: false, httpHost: "1.2.3.4", httpPort: 80, httpsEnabled: false, httpsHost: "", httpsPort: 0, bypass: [])
+    let c = SystemProxyCommands.restore(b)
+    #expect(c.contains(["-setwebproxy", "Wi-Fi", "1.2.3.4", "80"]) && c.contains(["-setwebproxystate", "Wi-Fi", "off"]))
+    #expect(!c.contains { $0.first == "-setsecurewebproxy" })
+}
+@Test func existingBackupIsNeverOverwritten() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).json")
+    let a = SystemProxyBackup(service: "Wi-Fi", httpEnabled: true, httpHost: "orig", httpPort: 1, httpsEnabled: false, httpsHost: "", httpsPort: 0, bypass: [])
+    let b = SystemProxyBackup(service: "Wi-Fi", httpEnabled: true, httpHost: "127.0.0.1", httpPort: 9090, httpsEnabled: true, httpsHost: "127.0.0.1", httpsPort: 9090, bypass: [])
+    let p = SystemProxy(backupURL: url)
+    #expect(try p.saveBackupIfAbsent(a)); let before = try Data(contentsOf: url)
+    #expect(try !p.saveBackupIfAbsent(b)); #expect(try Data(contentsOf: url) == before)
+    #expect(p.pendingRestore() == a)
+}

@@ -30,12 +30,31 @@ public enum SystemProxyCommands {
 
     public static func restore(_ b: SystemProxyBackup) -> [[String]] {
         var c: [[String]] = []
-        if b.httpEnabled { c += [["-setwebproxy", b.service, b.httpHost, "\(b.httpPort)"], ["-setwebproxystate", b.service, "on"]] }
-        else { c.append(["-setwebproxystate", b.service, "off"]) }
-        if b.httpsEnabled { c += [["-setsecurewebproxy", b.service, b.httpsHost, "\(b.httpsPort)"], ["-setsecurewebproxystate", b.service, "on"]] }
-        else { c.append(["-setsecurewebproxystate", b.service, "off"]) }
+        // 꺼져 있던 경우에도 host/port를 되돌려 EyeProxy 주소가 설정 화면에 남지 않게 한다.
+        if !b.httpHost.isEmpty { c.append(["-setwebproxy", b.service, b.httpHost, "\(b.httpPort)"]) }
+        c.append(["-setwebproxystate", b.service, b.httpEnabled ? "on" : "off"])
+        if !b.httpsHost.isEmpty { c.append(["-setsecurewebproxy", b.service, b.httpsHost, "\(b.httpsPort)"]) }
+        c.append(["-setsecurewebproxystate", b.service, b.httpsEnabled ? "on" : "off"])
         c.append(bypassCmd(b.service, b.bypass))
         return c
+    }
+
+    /// `-listnetworkserviceorder` 출력 → 서비스 목록. `(*) Name` 헤더는 비활성.
+    public static func parseServiceOrder(_ output: String) -> [(name: String, device: String, enabled: Bool)] {
+        var result: [(name: String, device: String, enabled: Bool)] = []
+        var cur: (name: String, enabled: Bool)?
+        for raw in output.split(whereSeparator: \.isNewline) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("("), let r = line.range(of: ") "), !line.hasPrefix("(Hardware") {
+                let tag = line[line.index(after: line.startIndex)..<r.lowerBound]
+                cur = (String(line[r.upperBound...]), tag != "*")
+            } else if line.hasPrefix("(Hardware Port:"), let c = cur, let r = line.range(of: "Device: ") {
+                let dev = line[r.upperBound...].prefix { $0 != ")" }
+                result.append((c.name, dev.trimmingCharacters(in: .whitespaces), c.enabled))
+                cur = nil
+            }
+        }
+        return result
     }
 
     public static func parseGetWebProxy(_ output: String) -> (enabled: Bool, host: String, port: Int) {
@@ -62,33 +81,45 @@ public final class SystemProxy: Sendable {
 
     public func activeService() async throws -> String {
         let route = try await Shell.run("/sbin/route", ["-n", "get", "default"]).stdout
-        guard let iface = route.split(whereSeparator: \.isNewline)
-            .map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { $0.hasPrefix("interface:") })
-            .map({ $0.dropFirst("interface:".count).trimmingCharacters(in: .whitespaces) })
-        else { throw SystemProxyError.noActiveService }
-        let order = try await Shell.run(Self.networksetup, ["-listnetworkserviceorder"]).stdout
-        var name: String?
-        for raw in order.split(whereSeparator: \.isNewline) {
-            let line = raw.trimmingCharacters(in: .whitespaces)
-            if line.hasPrefix("("), let r = line.range(of: ") "), line[line.index(after: line.startIndex)...].first?.isNumber == true {
-                name = String(line[r.upperBound...])
-            } else if line.contains("Device: \(iface)"), let name { return name }
+        let iface = route.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { $0.hasPrefix("interface:") }.map { $0.dropFirst("interface:".count).trimmingCharacters(in: .whitespaces) } ?? ""
+        let order = SystemProxyCommands.parseServiceOrder(try await Shell.run(Self.networksetup, ["-listnetworkserviceorder"]).stdout)
+        let tunnel = ["utun", "ipsec", "ppp"].contains { iface.hasPrefix($0) }
+        if !tunnel, let m = order.first(where: { $0.enabled && $0.device == iface }) { return m.name }
+        // VPN 등으로 기본 인터페이스가 서비스와 맞지 않으면 IPv4 주소를 가진 첫 활성 서비스.
+        for s in order where s.enabled && !s.device.isEmpty {
+            if !(try await Shell.run("/usr/sbin/ipconfig", ["getifaddr", s.device]).stdout
+                .trimmingCharacters(in: .whitespacesAndNewlines)).isEmpty { return s.name }
         }
         throw SystemProxyError.noActiveService
     }
 
     public func enable(host: String, port: Int, bypass: [String]) async throws {
         let svc = try await activeService()
-        let http = SystemProxyCommands.parseGetWebProxy(try await Shell.run(Self.networksetup, ["-getwebproxy", svc]).stdout)
-        let https = SystemProxyCommands.parseGetWebProxy(try await Shell.run(Self.networksetup, ["-getsecurewebproxy", svc]).stdout)
-        let by = try await Shell.run(Self.networksetup, ["-getproxybypassdomains", svc]).stdout
-            .split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty && !$0.hasPrefix("There aren't any") }
-        let backup = SystemProxyBackup(service: svc, httpEnabled: http.enabled, httpHost: http.host, httpPort: http.port,
-                                       httpsEnabled: https.enabled, httpsHost: https.host, httpsPort: https.port, bypass: by)
-        try FileManager.default.createDirectory(at: backupURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONEncoder().encode(backup).write(to: backupURL, options: .atomic)
+        if pendingRestore() == nil {  // 기존 백업(원본 설정)은 절대 덮어쓰지 않는다.
+            func read(_ a: String) async throws -> String {
+                let r = try await Shell.run(Self.networksetup, [a, svc])
+                guard r.status == 0 else { throw SystemProxyError.commandFailed(a) }
+                return r.stdout
+            }
+            let http = SystemProxyCommands.parseGetWebProxy(try await read("-getwebproxy"))
+            let https = SystemProxyCommands.parseGetWebProxy(try await read("-getsecurewebproxy"))
+            let by = try await read("-getproxybypassdomains")
+                .split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty && !$0.hasPrefix("There aren't any") }
+            try saveBackupIfAbsent(SystemProxyBackup(service: svc, httpEnabled: http.enabled, httpHost: http.host, httpPort: http.port,
+                                                     httpsEnabled: https.enabled, httpsHost: https.host, httpsPort: https.port, bypass: by))
+        }
         try await apply(SystemProxyCommands.enable(service: svc, host: host, port: port, bypass: bypass))
+    }
+
+    /// 백업이 이미 있으면 그대로 두고 false.
+    @discardableResult
+    func saveBackupIfAbsent(_ b: SystemProxyBackup) throws -> Bool {
+        guard pendingRestore() == nil else { return false }
+        try FileManager.default.createDirectory(at: backupURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(b).write(to: backupURL, options: .atomic)
+        return true
     }
 
     public func disable() async throws {

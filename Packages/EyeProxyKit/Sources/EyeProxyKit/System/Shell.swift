@@ -9,12 +9,20 @@ enum Shell {
             let p = Process()
             p.executableURL = URL(fileURLWithPath: command)
             p.arguments = args
-            let out = Pipe(), err = Pipe()
+            // 파이프 버퍼(64KB) 교착을 피하려고 임시 파일로 출력을 받는다.
+            let dir = FileManager.default.temporaryDirectory
+            let outURL = dir.appending(path: "eyeproxy-\(UUID()).out"), errURL = dir.appending(path: "eyeproxy-\(UUID()).err")
+            FileManager.default.createFile(atPath: outURL.path, contents: nil)
+            FileManager.default.createFile(atPath: errURL.path, contents: nil)
+            guard let out = try? FileHandle(forWritingTo: outURL), let err = try? FileHandle(forWritingTo: errURL) else {
+                cont.resume(throwing: ShellError.privilegedFailed("temp file")); return
+            }
             p.standardOutput = out; p.standardError = err
-            // ponytail: 파이프를 종료 후 읽음 — 64KB 초과 출력 시 교착 가능. 이 CLI들은 출력이 작다.
             p.terminationHandler = { proc in
-                let o = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-                let e = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                try? out.close(); try? err.close()
+                let o = String(decoding: (try? Data(contentsOf: outURL)) ?? Data(), as: UTF8.self)
+                let e = String(decoding: (try? Data(contentsOf: errURL)) ?? Data(), as: UTF8.self)
+                try? FileManager.default.removeItem(at: outURL); try? FileManager.default.removeItem(at: errURL)
                 cont.resume(returning: (proc.terminationStatus, o, e))
             }
             do { try p.run() } catch { cont.resume(throwing: error) }
