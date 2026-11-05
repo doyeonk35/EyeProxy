@@ -269,6 +269,13 @@ public enum SystemProxyCommands {
         !primaryHasSetup && !isOurs(effective, ownPort: ownPort)
     }
 
+    /// `show <key>` 출력 → 키가 있다(true)·없다(false, "No such key")·모름(nil, 읽기 실패 등).
+    /// 모를 때 "없음"으로 기록하면 복원이 VPN의 실제 키를 remove하므로 따로 구분한다.
+    public static func keyExists(_ output: String) -> Bool? {
+        if output.contains("<dictionary>") { return true }
+        return output.contains("No such key") ? false : nil
+    }
+
     /// EyeProxy 자신의 주소(127.0.0.1:ownPort)를 HTTP나 HTTPS로 쓰고 있는가.
     public static func isOurs(_ p: EffectiveProxy, ownPort: Int) -> Bool {
         (p.httpEnabled && p.httpHost == ownHost && p.httpPort == ownPort)
@@ -373,13 +380,15 @@ public final class SystemProxy: Sendable {
         let (id, hasSetup) = primary
         // configd가 실효 프록시를 다시 계산할 시간을 준다. VPN이 변경을 따라왔다면 여기서 우리 것이 된다.
         if await waitEffective(ours: true, ownPort: port) { return }
-        guard let out = try? await Shell.run(Self.scutil, ["--proxy"]), out.status == 0,
-              SystemProxyCommands.needsVPNMirror(effective: SystemProxyCommands.parseScutilProxy(out.stdout), ownPort: port, primaryHasSetup: hasSetup)
+        guard let out = try? await Shell.run(Self.scutil, ["--proxy"]), out.status == 0 else { throw SystemProxyError.vpnMirrorFailed(service: id) }
+        guard SystemProxyCommands.needsVPNMirror(effective: SystemProxyCommands.parseScutilProxy(out.stdout), ownPort: port, primaryHasSetup: hasSetup)
         else { return }
-        guard SystemProxyCommands.isSafeServiceID(id), var b = pendingRestore() else { throw SystemProxyError.vpnMirrorFailed(service: id) }
-        let current = try await scutilShow("State:/Network/Service/\(id)/Proxies")
+        guard SystemProxyCommands.isSafeServiceID(id), var b = pendingRestore(),
+              let current = try? await scutilShow("State:/Network/Service/\(id)/Proxies"),
+              let existed = SystemProxyCommands.keyExists(current)
+        else { throw SystemProxyError.vpnMirrorFailed(service: id) }
         let dict = SystemProxyCommands.parseScutilProxyDictionary(current)
-        let snapshot = VPNProxySnapshot(dict, existed: current.contains("<dictionary>"), ownPort: port)
+        let snapshot = VPNProxySnapshot(dict, existed: existed, ownPort: port)
         // 되돌릴 수 없는 원본(중첩 항목·검증 안 되는 값)이면 쓰지 않는다.
         guard let script = SystemProxyCommands.scutilWriteProxyScript(serviceID: id, base: dict, http: (SystemProxyCommands.ownHost, port),
                                                                       https: (SystemProxyCommands.ownHost, port)),
@@ -398,13 +407,25 @@ public final class SystemProxy: Sendable {
             throw error
         }
         if await waitEffective(ours: true, ownPort: port) { return }
-        try? await restoreVPNOriginal(pendingRestore(), ownPort: port)
+        // 되돌리기: 이번에 남긴 이 서비스의 스냅숏만 복원한다. 기존 스냅숏(다른 서비스일 수 있음)은 건드리지 않고
+        // 방금 읽은 사전 기준으로 우리 쪽만 끈다.
+        if snapshotted {
+            try? await restoreVPNOriginal(pendingRestore(), ownPort: port)
+        } else if let undo = SystemProxyCommands.scutilDisableProxyScript(serviceID: id, dict, ownPort: port) {
+            try? await runScutilPrivileged(undo)
+        }
         throw SystemProxyError.vpnMirrorFailed(service: id)
     }
 
     /// 백업에 VPN 스냅숏이 있으면 그 State 키를 정확히 되돌리고(원래 없었으면 remove) 백업에서 스냅숏을 지운다.
     private func restoreVPNOriginal(_ b: SystemProxyBackup?, ownPort: Int) async throws {
         guard var b, let id = b.vpnService, let s = b.vpnOriginal else { return }
+        // 백업 JSON의 ID는 신뢰하지 않는다 — scutil에 넣기 전에 검증한다.
+        guard SystemProxyCommands.isSafeServiceID(id) else { throw SystemProxyError.vpnProxyLeftover(service: id) }
+        // VPN이 끊겼거나 다른 서비스가 기본이 됐으면 되돌릴 대상이 없다(죽은 키를 만들지 않고, 인증도 묻지 않는다).
+        // `State:/Network/Service/<id>` 자체는 없고 하위 키만 있으므로 IPv4로 서비스 존재를 본다.
+        guard try await primaryService()?.id == id,
+              SystemProxyCommands.keyExists(try await scutilShow("State:/Network/Service/\(id)/IPv4")) == true else { return }
         guard let script = SystemProxyCommands.scutilRestoreScript(serviceID: id, s) else { throw SystemProxyError.vpnProxyLeftover(service: id) }
         try await runScutilPrivileged(script)
         b.vpnService = nil; b.vpnOriginal = nil
@@ -450,7 +471,9 @@ public final class SystemProxy: Sendable {
     private static let scutil = "/usr/sbin/scutil"
 
     private func scutilShow(_ key: String) async throws -> String {
-        try await Shell.run(Self.scutil, [], stdin: "show \(key)\nquit\n").stdout
+        let r = try await Shell.run(Self.scutil, [], stdin: "show \(key)\nquit\n")
+        guard r.status == 0 else { throw SystemProxyError.commandFailed("scutil show \(key)") }
+        return r.stdout
     }
 
     /// 실효 프록시(`scutil --proxy`)가 EyeProxy를 가리키는가. 물리 서비스를 되돌린 뒤에도 VPN 복사본이 남았는지 보는 데 쓴다.

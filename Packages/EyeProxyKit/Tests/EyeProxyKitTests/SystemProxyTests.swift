@@ -310,3 +310,8 @@ private func dict(exceptions: [String] = [], other: [(key: String, value: String
     var other = withSnap; other.vpnOriginal = VPNProxySnapshot(dict(), existed: false, ownPort: 9090)
     #expect(try !p.saveBackupIfAbsent(other)); #expect(p.pendingRestore() == withSnap)
 }
+@Test func keyExistsDistinguishesMissingFromUnreadable() {
+    #expect(SystemProxyCommands.keyExists(vpnProxiesOurs) == true)
+    #expect(SystemProxyCommands.keyExists("  No such key\n") == false)
+    #expect(SystemProxyCommands.keyExists("") == nil)  // 읽기 실패: "없음"으로 기록하면 복원이 실제 키를 지운다
+}
