@@ -17,43 +17,92 @@ public enum BodyDecoder {
         return type == "text/html" ? .html(s) : .text(s)
     }
 
-    /// 키 순서·숫자 리터럴·이스케이프를 그대로 두고 들여쓰기만 다시 하는 토큰 기반 정렬. JSON이 아니면 nil.
+    private static let jsonSpace: Set<UInt8> = [32, 9, 10, 13]
+    private static let jsonDelimiters: Set<UInt8> = [32, 9, 10, 13, 0x7b, 0x7d, 0x5b, 0x5d, 0x3a, 0x2c, 0x22]
+    private static let maxJSONDepth = 512
+
+    private enum JSONState { case value, valueOrClose, key, keyOrClose, colon, afterValue, done }
+
+    /// 키 순서·숫자 리터럴·이스케이프를 그대로 두고 들여쓰기만 다시 하는 토큰 기반 정렬.
+    /// 문법(상태 기계)을 검증하며, JSON이 아니거나 깊이(512)·출력 크기(입력×4+1MB) 상한을 넘으면 nil.
     private static func reindentJSON(_ b: [UInt8]) -> String? {
         var out: [UInt8] = []
-        var closers: [UInt8] = []
+        let maxOut = b.count * 4 + 1_000_000
+        var stack: [UInt8] = []          // 열린 괄호 종류: "{" 또는 "["
+        var state = JSONState.value
+        var justOpened = false
         var i = 0
-        func nl() { out.append(10); out.append(contentsOf: [UInt8](repeating: 32, count: closers.count * 2)) }
-        func nextNonSpace(_ from: Int) -> UInt8? { b[from...].first { ![32, 9, 10, 13].contains($0) } }
+        func nl() { out.append(10); out.append(contentsOf: [UInt8](repeating: 32, count: stack.count * 2)) }
+        func flush() { if justOpened { justOpened = false; nl() } }
+        func ended() { state = stack.isEmpty ? .done : .afterValue }
+
         while i < b.count {
             let c = b[i]
+            if jsonSpace.contains(c) { i += 1; continue }
+            if out.count > maxOut { return nil }
+            let wantsValue = state == .value || state == .valueOrClose
             switch c {
-            case 32, 9, 10, 13: i += 1
-            case UInt8(ascii: "{"), UInt8(ascii: "["):
-                let close: UInt8 = c == UInt8(ascii: "{") ? UInt8(ascii: "}") : UInt8(ascii: "]")
-                out.append(c); i += 1
-                if nextNonSpace(i) == close {
-                    while b[i] != close { i += 1 }
-                    out.append(close); i += 1
-                } else { closers.append(close); nl() }
-            case UInt8(ascii: "}"), UInt8(ascii: "]"):
-                guard closers.popLast() == c else { return nil }
-                nl(); out.append(c); i += 1
-            case UInt8(ascii: ","): guard !closers.isEmpty else { return nil }; out.append(c); i += 1; nl()
-            case UInt8(ascii: ":"): guard !closers.isEmpty else { return nil }; out.append(contentsOf: Array(" : ".utf8)); i += 1
-            case UInt8(ascii: "\""):
+            case 0x7b, 0x5b:  // { [
+                guard wantsValue, stack.count < maxJSONDepth else { return nil }
+                flush(); out.append(c); stack.append(c); justOpened = true
+                state = c == 0x7b ? .keyOrClose : .valueOrClose; i += 1
+            case 0x7d, 0x5d:  // } ]
+                let open: UInt8 = c == 0x7d ? 0x7b : 0x5b
+                guard stack.last == open, state == .afterValue || state == (open == 0x7b ? .keyOrClose : .valueOrClose) else { return nil }
+                stack.removeLast()
+                if justOpened { justOpened = false } else { nl() }
+                out.append(c); ended(); i += 1
+            case 0x2c:  // ,
+                guard state == .afterValue, let top = stack.last else { return nil }
+                out.append(c); nl(); state = top == 0x7b ? .key : .value; i += 1
+            case 0x3a:  // :
+                guard state == .colon else { return nil }
+                out.append(contentsOf: Array(" : ".utf8)); state = .value; i += 1
+            case 0x22:  // "
+                guard wantsValue || state == .key || state == .keyOrClose else { return nil }
                 var j = i + 1
-                while j < b.count, b[j] != UInt8(ascii: "\"") { j += b[j] == UInt8(ascii: "\\") ? 2 : 1 }
-                guard j < b.count else { return nil }
-                out.append(contentsOf: b[i...j]); i = j + 1
+                while true {
+                    guard j < b.count, b[j] >= 0x20 else { return nil }
+                    if b[j] == 0x22 { break }
+                    if b[j] == 0x5c {
+                        guard j + 1 < b.count else { return nil }
+                        switch b[j + 1] {
+                        case 0x22, 0x5c, 0x2f, 0x62, 0x66, 0x6e, 0x72, 0x74: j += 2
+                        case 0x75:
+                            guard j + 5 < b.count, b[(j + 2)...(j + 5)].allSatisfy({ ($0 >= 0x30 && $0 <= 0x39) || ($0 | 0x20 >= 0x61 && $0 | 0x20 <= 0x66) }) else { return nil }
+                            j += 6
+                        default: return nil
+                        }
+                    } else { j += 1 }
+                }
+                flush(); out.append(contentsOf: b[i...j]); i = j + 1
+                if wantsValue { ended() } else { state = .colon }
             default:
+                guard wantsValue else { return nil }
                 var j = i
-                while j < b.count, !Array(" \t\n\r{}[]:,\"".utf8).contains(b[j]) { j += 1 }
-                let tok = String(decoding: b[i..<j], as: UTF8.self)
-                guard ["true", "false", "null"].contains(tok) || (Double(tok) != nil && tok.first != "+" && !tok.lowercased().hasPrefix("0x") && !tok.lowercased().contains("n")) else { return nil }
-                out.append(contentsOf: b[i..<j]); i = j
+                while j < b.count, !jsonDelimiters.contains(b[j]) { j += 1 }
+                guard isJSONLiteral(b[i..<j]) else { return nil }
+                flush(); out.append(contentsOf: b[i..<j]); ended(); i = j
             }
         }
-        return closers.isEmpty && !out.isEmpty ? String(decoding: out, as: UTF8.self) : nil
+        return state == .done && stack.isEmpty ? String(decoding: out, as: UTF8.self) : nil
+    }
+
+    /// true/false/null 또는 -?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?
+    private static func isJSONLiteral(_ t: ArraySlice<UInt8>) -> Bool {
+        if [Array("true".utf8), Array("false".utf8), Array("null".utf8)].contains(Array(t)) { return true }
+        var i = t.startIndex
+        func digits() -> Bool { let s = i; while i < t.endIndex, t[i] >= 0x30, t[i] <= 0x39 { i += 1 }; return i > s }
+        if i < t.endIndex, t[i] == 0x2d { i += 1 }
+        guard i < t.endIndex else { return false }
+        if t[i] == 0x30 { i += 1 } else if !digits() { return false }
+        if i < t.endIndex, t[i] == 0x2e { i += 1; if !digits() { return false } }
+        if i < t.endIndex, t[i] | 0x20 == 0x65 {
+            i += 1
+            if i < t.endIndex, t[i] == 0x2b || t[i] == 0x2d { i += 1 }
+            if !digits() { return false }
+        }
+        return i == t.endIndex
     }
 
     /// nil이면 해제 실패 또는 알 수 없는 인코딩. "gzip, br"처럼 여러 개면 역순으로 푼다.

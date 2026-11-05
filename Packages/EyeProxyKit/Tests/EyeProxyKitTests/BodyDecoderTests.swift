@@ -77,3 +77,23 @@ private func json(_ s: String) -> DecodedBody { BodyDecoder.decode(body: Data(s.
         #expect(BodyDecoder.decode(body: c, headers: [h("Content-Encoding", "gzip")]) == .binary(c))
     }
 }
+
+@Test func structurallyInvalidJSONIsText() {
+    let bad = ["[1 2]", #"{"a":1 "b":2}"#, "true false", "{} {}", "1 2", "{:}", "{,}", "[1,]", #"{"a":,}"#, "{1:2}", #"{"a" "b"}"#,
+               "01", "1.", "-", "+1", "1e", "nan", #"["\x"]"#, #"["\u12G4"]"#, "[\"a\nb\"]", "[,1]", #"{"a":1,}"#, "]", "[}"]
+    for s in bad { #expect(json(s) == .text(s), "\(s)") }
+}
+
+@Test func validJSONStillFormats() {
+    #expect(json("[]") == .json(pretty: "[]"))
+    #expect(json(" [ 1 , -2.5e+3 , true , null , \"x\" ] ") == .json(pretty: "[\n  1,\n  -2.5e+3,\n  true,\n  null,\n  \"x\"\n]"))
+    #expect(json(#"{"a":{"b":[0,{}]}}"#) == .json(pretty: "{\n  \"a\" : {\n    \"b\" : [\n      0,\n      {}\n    ]\n  }\n}"))
+    #expect(json("\"s\"") == .json(pretty: "\"s\""))
+}
+
+@Test(.timeLimit(.minutes(1))) func deeplyNestedJSONFallsBackToText() {
+    let s = String(repeating: "[", count: 100_000)
+    #expect(json(s) == .text(s))
+    let ok = String(repeating: "[", count: 512) + String(repeating: "]", count: 512)
+    if case .json = json(ok) {} else { Issue.record("depth 512 should format") }
+}
