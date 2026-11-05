@@ -25,14 +25,19 @@ struct FlowDetailView: View {
 
     private func request(_ flow: Flow) -> some View {
         MessagePane(title: "요청", summary: "\(flow.request.method) \(flow.request.url)",
-                    headers: flow.request.headers, content: flow.request.body)
+                    headers: flow.request.headers, content: flow.request.body,
+                    query: Self.query(flow.request.path), flowID: flow.id)
+    }
+
+    private static func query(_ path: String) -> [HTTPHeader] {
+        (URLComponents(string: "http://x" + path)?.queryItems ?? []).map { HTTPHeader(name: $0.name, value: $0.value ?? "") }
     }
 
     @ViewBuilder
     private func response(_ flow: Flow) -> some View {
         if let response = flow.response {
             MessagePane(title: "응답", summary: "\(response.status) \(response.reason)",
-                        headers: response.headers, content: response.body)
+                        headers: response.headers, content: response.body, query: nil, flowID: flow.id)
         } else if let error = flow.error {
             ContentUnavailableView("실패", systemImage: "exclamationmark.triangle", description: Text(error))
         } else {
@@ -42,13 +47,17 @@ struct FlowDetailView: View {
 }
 
 private struct MessagePane: View {
-    enum Tab: Hashable { case headers, body }
+    enum Tab: Hashable { case headers, query, body }
 
     let title: LocalizedStringKey
     let summary: String
     let headers: [HTTPHeader]
     let content: Data
+    let query: [HTTPHeader]?
+    let flowID: FlowID
     @State private var tab = Tab.headers
+
+    private var none: some View { Text("(없음)").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -58,6 +67,7 @@ private struct MessagePane: View {
                 Spacer()
                 Picker("", selection: $tab) {
                     Text("헤더").tag(Tab.headers)
+                    if query != nil { Text("쿼리").tag(Tab.query) }
                     Text("본문").tag(Tab.body)
                 }
                 .pickerStyle(.segmented)
@@ -68,34 +78,10 @@ private struct MessagePane: View {
             Divider()
             switch tab {
             case .headers: HeadersView(headers: headers)
-            case .body: rawBody
+            case .query:
+                if let query, !query.isEmpty { HeadersView(headers: query) } else { none }
+            case .body: BodyView(data: content, headers: headers).id(flowID)
             }
-        }
-    }
-
-    /// P1 Raw 본문. Task 14의 BodyView가 대체한다.
-    @ViewBuilder private var rawBody: some View {
-        if let text = Self.rawText(content, headers: headers) {
-            ScrollView {
-                // ponytail: 거대한 Text는 느리다 → 앞 100k자만. Task 14 BodyView에서 해소.
-                Text(text.count > Self.limit ? String(text.prefix(Self.limit)) + "\n…" : text)
-                    .font(.system(.body, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-            }
-        } else {
-            ContentUnavailableView("본문 없음", systemImage: "doc")
-        }
-    }
-
-    private static let limit = 100_000
-
-    static func rawText(_ data: Data, headers: [HTTPHeader]) -> String? {
-        switch BodyDecoder.decode(body: data, headers: headers) {
-        case .empty: return nil
-        case .json(let s), .text(let s), .html(let s): return s
-        case .image(let d), .binary(let d): return String(localized: "(바이너리 \(d.count)바이트)")
         }
     }
 }
