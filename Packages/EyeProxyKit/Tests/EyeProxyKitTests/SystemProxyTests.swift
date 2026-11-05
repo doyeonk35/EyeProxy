@@ -230,3 +230,83 @@ private func dict(exceptions: [String] = [], other: [(key: String, value: String
     p.httpsEnabled = false
     #expect(!SystemProxyCommands.isOurs(p, ownPort: 9090))  // 꺼져 있으면 주소가 남아도 우리 것이 아니다
 }
+
+// MARK: - VPN 기본 서비스에 직접 쓰기(미러)와 스냅숏 복원
+
+@Test func needsVPNMirrorOnlyWhenVPNPrimaryAndNotOurs() {
+    let ours = SystemProxyCommands.parseScutilProxy(vpnProxiesOurs), off = SystemProxyCommands.EffectiveProxy()
+    #expect(SystemProxyCommands.needsVPNMirror(effective: off, ownPort: 9090, primaryHasSetup: false))
+    #expect(!SystemProxyCommands.needsVPNMirror(effective: ours, ownPort: 9090, primaryHasSetup: false))  // VPN이 이미 따라옴
+    #expect(!SystemProxyCommands.needsVPNMirror(effective: off, ownPort: 9090, primaryHasSetup: true))   // 물리 서비스
+    #expect(SystemProxyCommands.needsVPNMirror(effective: ours, ownPort: 3128, primaryHasSetup: false))  // 다른 포트는 우리 것 아님
+}
+@Test func writeScriptSetsOursAndKeepsRest() {
+    var d = SystemProxyCommands.parseScutilProxyDictionary(vpnProxiesOurs); d.proxy = .init()
+    #expect(SystemProxyCommands.scutilWriteProxyScript(serviceID: "gpd.pan", base: d, http: ("127.0.0.1", 9090), https: ("127.0.0.1", 9090)) == """
+    d.init
+    d.add FTPPassive # 1
+    d.add HTTPEnable # 1
+    d.add HTTPProxy 127.0.0.1
+    d.add HTTPPort # 9090
+    d.add HTTPSEnable # 1
+    d.add HTTPSProxy 127.0.0.1
+    d.add HTTPSPort # 9090
+    d.add ExceptionsList * dns.google one.one.one.one
+    d.add ProxyAutoConfigEnable # 0
+    d.add SOCKSEnable # 0
+    set State:/Network/Service/gpd.pan/Proxies
+    quit
+    """)
+    var nested = d; nested.droppedContainer = true
+    #expect(SystemProxyCommands.scutilWriteProxyScript(serviceID: "gpd.pan", base: nested, http: ("127.0.0.1", 9090), https: nil) == nil)
+    #expect(SystemProxyCommands.scutilWriteProxyScript(serviceID: "gpd.pan", base: d, http: ("evil\nquit", 1), https: nil) == nil)
+}
+@Test func restoreScriptPutsBackCorporateHTTPS() {
+    var d = dict(exceptions: ["dns.google"])
+    d.proxy = .init(httpEnabled: false, httpHost: "", httpPort: 0, httpsEnabled: true, httpsHost: "proxy.corp.example", httpsPort: 8080)
+    let s = VPNProxySnapshot(d, existed: true, ownPort: 9090)
+    #expect(SystemProxyCommands.scutilRestoreScript(serviceID: "gpd.pan", s) == """
+    d.init
+    d.add FTPPassive # 1
+    d.add HTTPEnable # 0
+    d.add HTTPSEnable # 1
+    d.add HTTPSProxy proxy.corp.example
+    d.add HTTPSPort # 8080
+    d.add ExceptionsList * dns.google
+    set State:/Network/Service/gpd.pan/Proxies
+    quit
+    """)
+    var bad = s; bad.httpsHost = "a b"
+    #expect(SystemProxyCommands.scutilRestoreScript(serviceID: "gpd.pan", bad) == nil)
+}
+@Test func snapshotNeverRecordsOurProxyAsOriginal() {
+    let s = VPNProxySnapshot(SystemProxyCommands.parseScutilProxyDictionary(vpnProxiesOurs), existed: true, ownPort: 9090)
+    #expect(!s.httpEnabled && !s.httpsEnabled && s.httpHost.isEmpty)
+    #expect(s.exceptions == ["dns.google", "one.one.one.one"] && s.other.map(\.key) == ["ProxyAutoConfigEnable", "SOCKSEnable"])
+}
+@Test func removeScriptForMissingKey() {
+    let s = VPNProxySnapshot(.init(), existed: false, ownPort: 9090)
+    #expect(SystemProxyCommands.scutilRestoreScript(serviceID: "gpd.pan", s) == "remove State:/Network/Service/gpd.pan/Proxies\nquit")
+    #expect(SystemProxyCommands.scutilRemoveProxyScript(serviceID: "gpd.pan\nquit") == nil)
+}
+@Test func backupCodableWithAndWithoutSnapshot() throws {
+    let base = SystemProxyBackup(service: "Wi-Fi", httpEnabled: false, httpHost: "", httpPort: 0, httpsEnabled: false, httpsHost: "", httpsPort: 0, bypass: ["*.local"])
+    var withSnap = base
+    withSnap.vpnService = "gpd.pan"
+    withSnap.vpnOriginal = VPNProxySnapshot(dict(exceptions: ["dns.google"], other: [("SOCKSEnable", "0")]), existed: true, ownPort: 9090)
+    for b in [base, withSnap] { #expect(try JSONDecoder().decode(SystemProxyBackup.self, from: JSONEncoder().encode(b)) == b) }
+    // 이전 버전 백업(vpn 필드 없음)도 읽힌다.
+    let old = #"{"service":"Wi-Fi","httpEnabled":true,"httpHost":"10.0.0.1","httpPort":8080,"httpsEnabled":false,"httpsHost":"","httpsPort":0,"bypass":[]}"#
+    let decoded = try JSONDecoder().decode(SystemProxyBackup.self, from: Data(old.utf8))
+    #expect(decoded.httpHost == "10.0.0.1" && decoded.vpnService == nil && decoded.vpnOriginal == nil)
+}
+@Test func snapshotIsAddedToExistingBackupButNeverOverwritten() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).json")
+    let p = SystemProxy(backupURL: url)
+    let a = SystemProxyBackup(service: "Wi-Fi", httpEnabled: true, httpHost: "orig", httpPort: 1, httpsEnabled: false, httpsHost: "", httpsPort: 0, bypass: [])
+    #expect(try p.saveBackupIfAbsent(a))
+    var withSnap = a; withSnap.vpnService = "gpd.pan"; withSnap.vpnOriginal = VPNProxySnapshot(dict(), existed: true, ownPort: 9090)
+    #expect(try p.saveBackupIfAbsent(withSnap)); #expect(p.pendingRestore() == withSnap)
+    var other = withSnap; other.vpnOriginal = VPNProxySnapshot(dict(), existed: false, ownPort: 9090)
+    #expect(try !p.saveBackupIfAbsent(other)); #expect(p.pendingRestore() == withSnap)
+}

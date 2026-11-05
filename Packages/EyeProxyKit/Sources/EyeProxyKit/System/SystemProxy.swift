@@ -5,11 +5,47 @@ public struct SystemProxyBackup: Codable, Equatable, Sendable {
     public let httpEnabled: Bool; public let httpHost: String; public let httpPort: Int
     public let httpsEnabled: Bool; public let httpsHost: String; public let httpsPort: Int
     public let bypass: [String]
-    public init(service: String, httpEnabled: Bool, httpHost: String, httpPort: Int, httpsEnabled: Bool, httpsHost: String, httpsPort: Int, bypass: [String]) {
+    /// VPN 기본 서비스(GlobalProtect `gpd.pan` 등)에 EyeProxy 프록시를 직접 써 넣었을 때 그 서비스 ID와 원래 State 사전.
+    /// 이전 버전 백업 파일에는 없다(nil로 읽힌다).
+    public var vpnService: String?
+    public var vpnOriginal: VPNProxySnapshot?
+    public init(service: String, httpEnabled: Bool, httpHost: String, httpPort: Int, httpsEnabled: Bool, httpsHost: String, httpsPort: Int, bypass: [String],
+                vpnService: String? = nil, vpnOriginal: VPNProxySnapshot? = nil) {
         self.service = service
         self.httpEnabled = httpEnabled; self.httpHost = httpHost; self.httpPort = httpPort
         self.httpsEnabled = httpsEnabled; self.httpsHost = httpsHost; self.httpsPort = httpsPort
         self.bypass = bypass
+        self.vpnService = vpnService; self.vpnOriginal = vpnOriginal
+    }
+}
+
+/// `State:/Network/Service/<id>/Proxies`의 원본. existed == false면 키가 없었다(복원 = remove).
+public struct VPNProxySnapshot: Codable, Equatable, Sendable {
+    public struct Entry: Codable, Equatable, Sendable { public var key: String, value: String }
+    public var exceptions: [String], ftpPassive: Bool
+    public var httpEnabled: Bool, httpHost: String, httpPort: Int
+    public var httpsEnabled: Bool, httpsHost: String, httpsPort: Int
+    public var other: [Entry]
+    public var existed: Bool
+
+    /// 원본에 EyeProxy(127.0.0.1:ownPort)가 들어 있으면 잔여물이므로 그쪽은 꺼짐으로 기록한다.
+    public init(_ d: SystemProxyCommands.ProxyDictionary, existed: Bool, ownPort: Int) {
+        let own = { (h: String, p: Int) in h == SystemProxyCommands.ownHost && p == ownPort }
+        let p = d.proxy
+        exceptions = d.exceptions; ftpPassive = d.ftpPassive
+        (httpEnabled, httpHost, httpPort) = own(p.httpHost, p.httpPort) ? (false, "", 0) : (p.httpEnabled, p.httpHost, p.httpPort)
+        (httpsEnabled, httpsHost, httpsPort) = own(p.httpsHost, p.httpsPort) ? (false, "", 0) : (p.httpsEnabled, p.httpsHost, p.httpsPort)
+        other = d.other.map { Entry(key: $0.key, value: $0.value) }
+        self.existed = existed
+    }
+
+    public var dictionary: SystemProxyCommands.ProxyDictionary {
+        var d = SystemProxyCommands.ProxyDictionary()
+        d.exceptions = exceptions; d.ftpPassive = ftpPassive
+        d.proxy = .init(httpEnabled: httpEnabled, httpHost: httpHost, httpPort: httpPort,
+                        httpsEnabled: httpsEnabled, httpsHost: httpsHost, httpsPort: httpsPort)
+        d.other = other.map { ($0.key, $0.value) }
+        return d
     }
 }
 
@@ -17,6 +53,8 @@ public enum SystemProxyError: Error {
     case noActiveService, commandFailed(String)
     /// VPN 서비스(GlobalProtect 등)가 복사해 간 EyeProxy 프록시를 치우지 못했다. 실효 프록시가 아직 EyeProxy를 가리킨다.
     case vpnProxyLeftover(service: String)
+    /// VPN 기본 서비스에 EyeProxy 프록시를 써 넣지 못했다(옮길 수 없는 설정·써도 실효 프록시가 바뀌지 않음).
+    case vpnMirrorFailed(service: String)
 }
 
 public enum SystemProxyCommands {
@@ -180,11 +218,33 @@ public enum SystemProxyCommands {
     /// 우리 것이 아닌 쪽(회사 프록시 등)과 나머지 항목은 그대로 다시 쓴다. `d.init`+`set`은 키 전체를 바꾸므로
     /// 옮길 수 없는 중첩 항목이 있거나 검증되지 않는 텍스트가 섞이면 nil — 신뢰할 수 없는 출력으로 루트 권한 스크립트를 만들지 않는다.
     public static func scutilDisableProxyScript(serviceID: String, _ d: ProxyDictionary, ownPort: Int) -> String? {
+        let keep = { (on: Bool, host: String, port: Int) -> (host: String, port: Int)? in
+            on && !(host == ownHost && port == ownPort) ? (host, port) : nil
+        }
+        return scutilWriteProxyScript(serviceID: serviceID, base: d,
+                                      http: keep(d.proxy.httpEnabled, d.proxy.httpHost, d.proxy.httpPort),
+                                      https: keep(d.proxy.httpsEnabled, d.proxy.httpsHost, d.proxy.httpsPort))
+    }
+
+    /// 스냅숏을 그대로 되돌리는 스크립트. 원래 키가 없었으면 remove.
+    public static func scutilRestoreScript(serviceID: String, _ s: VPNProxySnapshot) -> String? {
+        guard s.existed else { return scutilRemoveProxyScript(serviceID: serviceID) }
+        return scutilWriteProxyScript(serviceID: serviceID, base: s.dictionary,
+                                      http: s.httpEnabled ? (s.httpHost, s.httpPort) : nil,
+                                      https: s.httpsEnabled ? (s.httpsHost, s.httpsPort) : nil)
+    }
+
+    public static func scutilRemoveProxyScript(serviceID: String) -> String? {
+        isSafeServiceID(serviceID) ? "remove State:/Network/Service/\(serviceID)/Proxies\nquit" : nil
+    }
+
+    /// base의 나머지 항목을 보존하고 HTTP·HTTPS만 주어진 값(nil = 끔)으로 State 키 전체를 다시 쓰는 scutil 스크립트.
+    public static func scutilWriteProxyScript(serviceID: String, base d: ProxyDictionary,
+                                              http: (host: String, port: Int)?, https: (host: String, port: Int)?) -> String? {
         guard isSafeServiceID(serviceID), !d.droppedContainer, d.exceptions.allSatisfy(isSafeException) else { return nil }
         var lines = ["d.init", "d.add FTPPassive # \(d.ftpPassive ? 1 : 0)"]
-        for (prefix, on, host, port) in [("HTTP", d.proxy.httpEnabled, d.proxy.httpHost, d.proxy.httpPort),
-                                         ("HTTPS", d.proxy.httpsEnabled, d.proxy.httpsHost, d.proxy.httpsPort)] {
-            if on, !(host == ownHost && port == ownPort) {
+        for (prefix, target) in [("HTTP", http), ("HTTPS", https)] {
+            if let (host, port) = target {
                 guard isSafeValue(host) else { return nil }
                 lines += ["d.add \(prefix)Enable # 1", "d.add \(prefix)Proxy \(host)", "d.add \(prefix)Port # \(port)"]
             } else {
@@ -201,6 +261,12 @@ public enum SystemProxyCommands {
         }
         lines += ["set State:/Network/Service/\(serviceID)/Proxies", "quit"]
         return lines.joined(separator: "\n")
+    }
+
+    /// 물리 서비스에 프록시를 켠 뒤에도 실효 프록시가 우리 것이 아니고 기본 서비스가 VPN(Setup 키 없음)이면
+    /// VPN이 Wi-Fi 변경을 따라오지 않은 것이다 → VPN State 키에 직접 써야 한다.
+    public static func needsVPNMirror(effective: EffectiveProxy, ownPort: Int, primaryHasSetup: Bool) -> Bool {
+        !primaryHasSetup && !isOurs(effective, ownPort: ownPort)
     }
 
     /// EyeProxy 자신의 주소(127.0.0.1:ownPort)를 HTTP나 HTTPS로 쓰고 있는가.
@@ -258,6 +324,7 @@ public final class SystemProxy: Sendable {
         if let svc = try? await activeService() {
             try await apply(SystemProxyCommands.turnOffOwn(service: svc, http: readProxy("-getwebproxy", svc), https: readProxy("-getsecurewebproxy", svc), port: ownPort))
         }
+        try await restoreVPNOriginal(b, ownPort: ownPort)
         try? FileManager.default.removeItem(at: backupURL)
         return true
     }
@@ -275,6 +342,7 @@ public final class SystemProxy: Sendable {
         let stale = SystemProxyCommands.restoreStale(pendingRestore(), currentService: svc)
         if !stale.isEmpty {
             try await apply(stale)
+            try await restoreVPNOriginal(pendingRestore(), ownPort: port)
             try FileManager.default.removeItem(at: backupURL)
         }
         if pendingRestore() == nil {  // 기존 백업(원본 설정)은 절대 덮어쓰지 않는다.
@@ -295,15 +363,68 @@ public final class SystemProxy: Sendable {
                                                      httpsEnabled: https0.enabled, httpsHost: https0.host, httpsPort: https0.port, bypass: by))
         }
         try await apply(SystemProxyCommands.enable(service: svc, host: host, port: port, bypass: bypass))
+        try await mirrorIntoVPNIfNeeded(port: port)
     }
 
-    /// 백업이 이미 있으면 그대로 두고 false.
+    /// 기본 서비스가 VPN이면 VPN은 Wi-Fi 변경을 따라오지 않는다(연결 시점에만 복사) → 실효 프록시가 우리 것이 아니면
+    /// 그 State 키의 원본을 백업에 스냅숏으로 남기고 EyeProxy 프록시를 직접 쓴다(관리자 인증 1회).
+    private func mirrorIntoVPNIfNeeded(port: Int) async throws {
+        guard let primary = try await primaryService(), !primary.hasSetup else { return }
+        let (id, hasSetup) = primary
+        // configd가 실효 프록시를 다시 계산할 시간을 준다. VPN이 변경을 따라왔다면 여기서 우리 것이 된다.
+        if await waitEffective(ours: true, ownPort: port) { return }
+        guard let out = try? await Shell.run(Self.scutil, ["--proxy"]), out.status == 0,
+              SystemProxyCommands.needsVPNMirror(effective: SystemProxyCommands.parseScutilProxy(out.stdout), ownPort: port, primaryHasSetup: hasSetup)
+        else { return }
+        guard SystemProxyCommands.isSafeServiceID(id), var b = pendingRestore() else { throw SystemProxyError.vpnMirrorFailed(service: id) }
+        let current = try await scutilShow("State:/Network/Service/\(id)/Proxies")
+        let dict = SystemProxyCommands.parseScutilProxyDictionary(current)
+        let snapshot = VPNProxySnapshot(dict, existed: current.contains("<dictionary>"), ownPort: port)
+        // 되돌릴 수 없는 원본(중첩 항목·검증 안 되는 값)이면 쓰지 않는다.
+        guard let script = SystemProxyCommands.scutilWriteProxyScript(serviceID: id, base: dict, http: (SystemProxyCommands.ownHost, port),
+                                                                      https: (SystemProxyCommands.ownHost, port)),
+              SystemProxyCommands.scutilRestoreScript(serviceID: id, snapshot) != nil
+        else { throw SystemProxyError.vpnMirrorFailed(service: id) }
+        // 기존 스냅숏(진짜 원본)은 덮어쓰지 않는다. ponytail: 다른 VPN 서비스의 스냅숏이 남아 있으면 새 서비스는 스냅숏 없이 쓰고
+        // 끌 때 clearVPNCopyIfNeeded가 우리 쪽만 끈다.
+        let snapshotted = b.vpnOriginal == nil
+        if snapshotted {
+            b.vpnService = id; b.vpnOriginal = snapshot
+            try saveBackupIfAbsent(b)
+        }
+        do { try await runScutilPrivileged(script) } catch {
+            // 쓰지 못했으므로(취소 등) 방금 남긴 스냅숏을 지운다 — 되돌릴 때 불필요한 인증을 묻지 않는다.
+            if snapshotted { b.vpnService = nil; b.vpnOriginal = nil; try? writeBackup(b) }
+            throw error
+        }
+        if await waitEffective(ours: true, ownPort: port) { return }
+        try? await restoreVPNOriginal(pendingRestore(), ownPort: port)
+        throw SystemProxyError.vpnMirrorFailed(service: id)
+    }
+
+    /// 백업에 VPN 스냅숏이 있으면 그 State 키를 정확히 되돌리고(원래 없었으면 remove) 백업에서 스냅숏을 지운다.
+    private func restoreVPNOriginal(_ b: SystemProxyBackup?, ownPort: Int) async throws {
+        guard var b, let id = b.vpnService, let s = b.vpnOriginal else { return }
+        guard let script = SystemProxyCommands.scutilRestoreScript(serviceID: id, s) else { throw SystemProxyError.vpnProxyLeftover(service: id) }
+        try await runScutilPrivileged(script)
+        b.vpnService = nil; b.vpnOriginal = nil
+        try? writeBackup(b)
+        _ = await waitEffective(ours: false, ownPort: ownPort)
+    }
+
+    /// 백업이 이미 있으면 그대로 두고 false. 단, 기존 백업에 VPN 스냅숏이 없고 b에 있으면 스냅숏만 더한다(true).
     @discardableResult
     func saveBackupIfAbsent(_ b: SystemProxyBackup) throws -> Bool {
-        guard pendingRestore() == nil else { return false }
+        guard var cur = pendingRestore() else { try writeBackup(b); return true }
+        guard cur.vpnOriginal == nil, b.vpnOriginal != nil else { return false }
+        cur.vpnService = b.vpnService; cur.vpnOriginal = b.vpnOriginal
+        try writeBackup(cur)
+        return true
+    }
+
+    private func writeBackup(_ b: SystemProxyBackup) throws {
         try FileManager.default.createDirectory(at: backupURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try JSONEncoder().encode(b).write(to: backupURL, options: .atomic)
-        return true
     }
 
     /// ownPort: EyeProxy의 포트. 백업이 없을 때 127.0.0.1:ownPort 프록시만 끈다(사용자의 다른 프록시는 건드리지 않는다).
@@ -315,6 +436,8 @@ public final class SystemProxy: Sendable {
         }
         if let b = pendingRestore() {
             try await apply(SystemProxyCommands.restore(b))
+            // 실패(취소 등)하면 백업을 남겨 다음 끄기에서 다시 시도한다. 물리 서비스 복원은 반복해도 같다.
+            try await restoreVPNOriginal(b, ownPort: ownPort)
         } else {
             let svc = try await activeService()
             try await apply(SystemProxyCommands.turnOffOwn(service: svc, http: readProxy("-getwebproxy", svc),
@@ -339,26 +462,48 @@ public final class SystemProxy: Sendable {
     /// GlobalProtect 같은 VPN은 기본 서비스가 되어 물리 서비스(Wi-Fi)의 프록시를 자기 State 키로 복사해 가고,
     /// 물리 서비스를 되돌려도 복사본을 지우지 않는다 → 실효 프록시가 죽은 127.0.0.1:<port>로 남아 Mac 인터넷이 끊긴다.
     /// 그 State 키를 HTTP·HTTPS 끔으로 다시 쓴다(관리자 인증). 나머지 VPN 설정은 보존한다.
+    /// 스냅숏이 없을 때의 대비책(스냅숏 전 비정상 종료·이전 버전 백업·캡처 중 VPN 연결).
     public func clearVPNCopyIfNeeded(ownPort: Int) async throws {
-        guard await effectiveProxyIsOurs(ownPort: ownPort),
-              let id = SystemProxyCommands.parsePrimaryService(try await scutilShow("State:/Network/Global/IPv4")) else { return }
+        guard await effectiveProxyIsOurs(ownPort: ownPort), let primary = try await primaryService() else { return }
+        let (id, hasSetup) = primary
+        // 물리 서비스(Setup 키가 있음)는 networksetup이 이미 처리했다. State는 configd가 Setup에서 다시 만든다.
+        if hasSetup { return }
         // 아래에서 id를 scutil 명령에 넣으므로 먼저 검증한다.
         guard SystemProxyCommands.isSafeServiceID(id) else { throw SystemProxyError.vpnProxyLeftover(service: id) }
-        // 물리 서비스(Setup 키가 있음)는 networksetup이 이미 처리했다. State는 configd가 Setup에서 다시 만든다.
-        // ponytail: 서비스 ID 기준(`-listnetworkserviceorder`는 이름만 줘서 PrimaryService UUID와 비교할 수 없다).
-        if try await scutilShow("Setup:/Network/Service/\(id)").contains("<dictionary>") { return }
-        let key = "State:/Network/Service/\(id)/Proxies"
-        let current = try await scutilShow(key)
+        let current = try await scutilShow("State:/Network/Service/\(id)/Proxies")
         guard SystemProxyCommands.isOurs(SystemProxyCommands.parseScutilProxy(current), ownPort: ownPort) else { return }
         guard let script = SystemProxyCommands.scutilDisableProxyScript(serviceID: id, SystemProxyCommands.parseScutilProxyDictionary(current),
                                                                       ownPort: ownPort)
         else { throw SystemProxyError.vpnProxyLeftover(service: id) }
+        try await runScutilPrivileged(script)
+        if !(await waitEffective(ours: false, ownPort: ownPort)) { throw SystemProxyError.vpnProxyLeftover(service: id) }
+    }
+
+    /// 기본 서비스(`State:/Network/Global/IPv4`의 PrimaryService)와 Setup 키 유무. 물리 서비스는 Setup 키가 있고 VPN(`gpd.pan`)은 없다.
+    /// ponytail: 서비스 ID 기준(`-listnetworkserviceorder`는 이름만 줘서 PrimaryService UUID와 비교할 수 없다).
+    /// 안전하지 않은 ID는 scutil에 넣지 않고 hasSetup false로 돌려준다(호출자가 검증).
+    private func primaryService() async throws -> (id: String, hasSetup: Bool)? {
+        guard let id = SystemProxyCommands.parsePrimaryService(try await scutilShow("State:/Network/Global/IPv4")) else { return nil }
+        guard SystemProxyCommands.isSafeServiceID(id) else { return (id, false) }
+        return (id, try await scutilShow("Setup:/Network/Service/\(id)").contains("<dictionary>"))
+    }
+
+    /// 기본 서비스가 VPN(Setup 키 없음)인가. 켜고 끌 때 관리자 인증이 필요함을 안내하는 데 쓴다.
+    public func primaryIsVPN() async -> Bool {
+        guard let p = try? await primaryService() else { return false }
+        return !p.hasSetup
+    }
+
+    /// configd가 실효 프록시를 다시 계산할 시간을 준다(최대 약 2초). 기대한 상태가 되면 true.
+    private func waitEffective(ours: Bool, ownPort: Int) async -> Bool {
+        for _ in 0..<4 where await effectiveProxyIsOurs(ownPort: ownPort) != ours { try? await Task.sleep(for: .milliseconds(500)) }
+        return await effectiveProxyIsOurs(ownPort: ownPort) == ours
+    }
+
+    private func runScutilPrivileged(_ script: String) async throws {
         do { _ = try await PrivilegedShell.run("\(Self.scutil) <<'EYEPROXY_EOF'\n\(script)\nEYEPROXY_EOF") }
         catch ShellError.privilegedFailed(let stderr) { throw SystemProxyError.commandFailed(stderr) }  // 취소 시 "User canceled. (-128)"
         catch { throw SystemProxyError.commandFailed(error.localizedDescription) }
-        // configd가 실효 프록시를 다시 계산할 시간을 준다(최대 약 2초).
-        for _ in 0..<4 where await effectiveProxyIsOurs(ownPort: ownPort) { try? await Task.sleep(for: .milliseconds(500)) }
-        if await effectiveProxyIsOurs(ownPort: ownPort) { throw SystemProxyError.vpnProxyLeftover(service: id) }
     }
 
     public func pendingRestore() -> SystemProxyBackup? {
