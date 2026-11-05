@@ -28,20 +28,35 @@ public enum ProcessLookup {
 
 /// 클라이언트 로컬 포트 → 소켓을 연 프로세스(헬퍼면 책임 앱). 100ms 디바운스로 lsof 한 번에 여러 포트를 묶는다.
 public actor ProcessResolver {
-    private var cache: [Int: ProcessIdentity] = [:]
+    private static let ttl: Duration = .seconds(60)   // 임시 포트는 재사용되므로 오래된 귀속은 버린다.
+    private var cache: [Int: (identity: ProcessIdentity, at: ContinuousClock.Instant)] = [:]
     private var pending: Set<Int> = []
     private var batch: Task<Void, Never>?
 
     public init() {}
 
     public func resolve(port: Int, proxyPort: Int) async -> ProcessIdentity? {
-        if let hit = cache[port] { return hit }
+        if let hit = cached(port) { return hit }
         await enqueue(port, proxyPort)
-        if let hit = cache[port] { return hit }
+        if let hit = cached(port) { return hit }
         // 소켓이 막 열려 lsof에 아직 안 보일 수 있다: 한 번만 재시도.
         try? await Task.sleep(for: .milliseconds(300))
+        if let hit = cached(port) { return hit }
         await enqueue(port, proxyPort)
-        return cache[port]
+        return cached(port)
+    }
+
+    /// 삽입 시각 기준 TTL 안의 항목만 반환(히트해도 시각을 갱신하지 않는다).
+    func cached(_ port: Int, now: ContinuousClock.Instant = .now) -> ProcessIdentity? {
+        guard let e = cache[port] else { return nil }
+        if now - e.at >= Self.ttl { cache[port] = nil; return nil }
+        return e.identity
+    }
+
+    /// 경로를 못 얻은 신원(lsof와 proc_pidpath 사이에 종료)은 성공으로 캐시하지 않는다.
+    func store(_ identity: ProcessIdentity, for port: Int, at: ContinuousClock.Instant = .now) {
+        guard identity.path != nil else { return }
+        cache[port] = (identity, at)
     }
 
     // ponytail: 배치는 첫 요청의 proxyPort를 쓴다. 프록시 포트가 동시에 둘 이상 필요해지면 pending을 포트별로 나눈다.
@@ -63,13 +78,14 @@ public actor ProcessResolver {
         let found = ProcessLookup.parseLsof(r.stdout, proxyPort: proxyPort, excludingPID: ProcessInfo.processInfo.processIdentifier)
         for (port, pid) in found where ports.contains(port) {
             let owner = ResponsiblePID.lookup(pid)
-            cache[port] = ProcessIdentity(pid: owner, path: Self.path(of: owner))
+            store(ProcessIdentity(pid: owner, path: Self.path(of: owner)), for: port)
         }
     }
 
     private static func path(of pid: Int32) -> String? {
         var buf = [CChar](repeating: 0, count: Int(MAXPATHLEN))
-        guard proc_pidpath(pid, &buf, UInt32(buf.count)) > 0 else { return nil }
-        return String(cString: buf)
+        let n = proc_pidpath(pid, &buf, UInt32(buf.count))
+        guard n > 0 else { return nil }
+        return String(decoding: buf[..<Int(n)].map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 }

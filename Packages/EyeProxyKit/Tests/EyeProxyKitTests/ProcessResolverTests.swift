@@ -7,6 +7,17 @@ import Testing
     #expect(m == [52001: 200, 52002: 300])
 }
 
+@Test func cacheEntriesExpireAfterTTLAndNeedPath() async {
+    let r = ProcessResolver()
+    let t0 = ContinuousClock.now
+    let id = ProcessIdentity(pid: 5, path: "/Applications/Safari.app/Contents/MacOS/Safari")
+    await r.store(id, for: 50000, at: t0)
+    #expect(await r.cached(50000, now: t0 + .seconds(59)) == id)
+    #expect(await r.cached(50000, now: t0 + .seconds(60)) == nil)
+    await r.store(ProcessIdentity(pid: 6, path: nil), for: 50001, at: t0)
+    #expect(await r.cached(50001, now: t0) == nil)
+}
+
 @Test func resolverReturnsNilWhenPortAbsent() async {
     let r = ProcessResolver()
     let t = ContinuousClock.now
