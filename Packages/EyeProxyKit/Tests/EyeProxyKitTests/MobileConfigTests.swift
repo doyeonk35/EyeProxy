@@ -38,3 +38,14 @@ private func parse(_ data: Data) throws -> [String: Any] {
     #expect(ca["PayloadContent"] as? Data == Data(der))
     #expect(data == MobileConfig.caProfile(certificateDER: der, commonName: "Test CA"))  // 결정적 UUID
 }
+
+@Test func wifiProfileStripsInvalidXMLCharacters() throws {
+    let data = MobileConfig.wifiProxyProfile(ssid: "A\u{0001}B", security: .wpa2, password: "p\u{0002}w", proxyHost: "1.2.3.4", proxyPort: 1)
+    let wifi = try #require((try parse(data)["PayloadContent"] as? [[String: Any]])?.first)
+    #expect(wifi["SSID_STR"] as? String == "AB" && wifi["Password"] as? String == "pw")
+}
+
+@Test func caProfileSeedDistinguishesLowBytes() {
+    // 0x01,0x23 vs 0x12,0x03 는 패딩 없는 hex로는 같은 문자열 "123"이 된다.
+    #expect(MobileConfig.caProfile(certificateDER: [0x01, 0x23], commonName: "x") != MobileConfig.caProfile(certificateDER: [0x12, 0x03], commonName: "x"))
+}

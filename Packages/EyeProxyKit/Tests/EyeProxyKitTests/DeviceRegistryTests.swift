@@ -40,3 +40,17 @@ import EyeProxyCore
     expected.lastSeen = loaded[0].lastSeen  // iso8601은 초 미만을 버린다
     #expect(loaded[0] == expected && abs(loaded[0].lastSeen.timeIntervalSince(r.devices[0].lastSeen)) < 1)
 }
+
+@Test @MainActor func corruptFileIsMovedAsideNotOverwritten() throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let url = dir.appendingPathComponent("devices.json")
+    try Data("{not json".utf8).write(to: url)
+    let r = DeviceRegistry(storageURL: url)
+    #expect(r.devices.isEmpty)
+    try r.save()
+    let names = try FileManager.default.contentsOfDirectory(atPath: dir.path)
+    let corrupt = try #require(names.first { $0.hasPrefix("devices.corrupt-") && $0.hasSuffix(".json") })
+    #expect(try Data(contentsOf: dir.appendingPathComponent(corrupt)) == Data("{not json".utf8))
+}

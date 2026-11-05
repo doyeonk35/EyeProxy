@@ -40,7 +40,14 @@ public final class DeviceRegistry {
         guard let storageURL, let data = try? Data(contentsOf: storageURL) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        devices = (try? decoder.decode([Device].self, from: data)) ?? []
+        do {
+            devices = try decoder.decode([Device].self, from: data)
+        } catch {
+            // 손상된 파일을 덮어쓰지 않도록 옆으로 치워 둔다.
+            let stamp = Int(Date().timeIntervalSince1970)
+            let aside = storageURL.deletingPathExtension().appendingPathExtension("corrupt-\(stamp).json")
+            try? FileManager.default.moveItem(at: storageURL, to: aside)
+        }
     }
 
     public func observe(_ event: FlowEvent) {
