@@ -4,6 +4,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
+    @State private var collapsed: Set<String> = []
 
     var body: some View {
         @Bindable var model = model
@@ -22,9 +23,9 @@ struct SidebarView: View {
             }
             Section("기기") {
                 ForEach(tree.devices, id: \.address) { device in
-                    DisclosureGroup {
+                    DisclosureGroup(isExpanded: expansion(device.address)) {
                         ForEach(device.apps, id: \.groupKey) { app in
-                            DisclosureGroup {
+                            DisclosureGroup(isExpanded: expansion("\(device.address)|\(app.groupKey)")) {
                                 ForEach(app.hosts, id: \.host) { node in
                                     hostRow(node, icon: "globe", tag: .scope(FlowScope(device: device.address, process: app.groupKey, host: node.host)))
                                 }
@@ -50,6 +51,13 @@ struct SidebarView: View {
                 }
             }
         }
+    }
+
+    private func expansion(_ key: String) -> Binding<Bool> {
+        Binding(
+            get: { !collapsed.contains(key) },
+            set: { if $0 { collapsed.remove(key) } else { collapsed.insert(key) } }
+        )
     }
 
     private func hostRow(_ node: HostNode, icon: String, tag: SidebarItem) -> some View {
