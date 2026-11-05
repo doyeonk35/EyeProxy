@@ -21,6 +21,13 @@ public enum ProcessLookup {
         return result
     }
 
+    /// 책임 pid로 갈아타는 조건: XPC 헬퍼(예: WebKit.Networking)이고, 책임 프로세스가 .app이며, 시뮬레이터 앱이 아닐 때만.
+    /// 그 외(시뮬레이터 앱·CLI 도구·nsurlsessiond)는 원래 프로세스를 유지한다.
+    static func shouldUseResponsible(originalPath: String?, responsiblePath: String?) -> Bool {
+        guard let originalPath, let responsiblePath else { return false }
+        return originalPath.contains(".xpc/") && responsiblePath.contains(".app/") && !originalPath.contains("/CoreSimulator/")
+    }
+
     private static func port(of endpoint: String) -> Int? {
         endpoint.lastIndex(of: ":").flatMap { Int(endpoint[endpoint.index(after: $0)...]) }
     }
@@ -77,8 +84,16 @@ public actor ProcessResolver {
         guard let r = try? await Shell.run("/usr/sbin/lsof", ["-nP", "-iTCP:\(proxyPort)", "-F", "pcn"]) else { return }
         let found = ProcessLookup.parseLsof(r.stdout, proxyPort: proxyPort, excludingPID: ProcessInfo.processInfo.processIdentifier)
         for (port, pid) in found where ports.contains(port) {
-            let owner = ResponsiblePID.lookup(pid)
-            store(ProcessIdentity(pid: owner, path: Self.path(of: owner)), for: port)
+            let path = Self.path(of: pid)
+            if path?.contains(".xpc/") == true {
+                let owner = ResponsiblePID.lookup(pid)
+                let ownerPath = Self.path(of: owner)
+                if ProcessLookup.shouldUseResponsible(originalPath: path, responsiblePath: ownerPath) {
+                    store(ProcessIdentity(pid: owner, path: ownerPath), for: port)
+                    continue
+                }
+            }
+            store(ProcessIdentity(pid: pid, path: path), for: port)
         }
     }
 

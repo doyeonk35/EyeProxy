@@ -16,7 +16,7 @@ macOS용 MITM 디버깅 프록시 (Proxyman류). Mac·시뮬레이터·Apple TV�
 
 ## 기기 연결
 
-- **Mac**: 위 첫 실행 절차. 브라우저·앱 트래픽이 바로 잡힌다. 사이드바는 Mac 트래픽을 앱별로 나누며, Safari·WKWebView 트래픽은 책임 앱 아래로 묶이고 시뮬레이터 앱은 "<앱> (<플랫폼> 시뮬레이터)"로 표시된다.
+- **Mac**: 위 첫 실행 절차. 브라우저·앱 트래픽이 바로 잡힌다. 사이드바는 Mac 트래픽을 프로세스별로 나눈다. Safari·WKWebView의 XPC 헬퍼 트래픽은 책임 앱 아래로 묶이고, 시뮬레이터 앱은 "<앱> (<플랫폼> 시뮬레이터)"로, curl 같은 명령줄 도구는 자기 이름으로 표시된다.
 - **시뮬레이터**: `기기…` 창의 시뮬레이터 섹션에서 부팅된 iOS·tvOS 시뮬레이터마다 **CA 설치** → 시뮬레이터 앱 재실행.
 - **Apple TV·iPhone·iPad**: 기기 창(⌘D) › **실기기 프로필 만들기**에서 SSID·보안 유형·비밀번호·Mac IP·포트를 입력해 `EyeProxy-<SSID>.mobileconfig`(Wi-Fi + 수동 프록시)를 저장한다. Apple TV는 Apple Configurator로 페어링 후 프로필을 드래그, iPhone·iPad는 AirDrop·메일로 전달한다. 그다음 기기에서 `http://eyeproxy/ssl`로 CA 프로필을 설치하고 `인증서 신뢰 설정`에서 신뢰한다. (프로필에 Wi-Fi 비밀번호가 평문으로 들어가며 앱은 비밀번호를 저장하지 않는다.)
 

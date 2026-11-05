@@ -42,6 +42,7 @@ public struct FlowFilter: Equatable, Sendable {
         if let device, !Self.sameDevice(flow.clientAddress, device) { return false }
         if let wanted = self.process, (process ?? Self.unknownProcessKey) != wanted { return false }
         if let host, flow.request.host != host { return false }
+        if text.isEmpty { return true }
         let fields = [flow.request.url, flow.request.method, flow.response.map { String($0.status) } ?? "", flow.clientAddress]
         return text.split(whereSeparator: \.isWhitespace).allSatisfy { token in
             fields.contains { $0.range(of: token, options: .caseInsensitive) != nil }

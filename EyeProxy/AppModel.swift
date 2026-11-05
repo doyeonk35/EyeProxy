@@ -189,7 +189,10 @@ final class AppModel {
            FlowFilter.sameDevice(flow.clientAddress, "127.0.0.1"), let port = flow.clientPort, let proxyPort = runningPort {
             let id = flow.id
             Task { [resolver, processes] in
-                if let identity = await resolver.resolve(port: port, proxyPort: proxyPort) { processes.set(identity, for: id) }
+                guard let identity = await resolver.resolve(port: port, proxyPort: proxyPort) else { return }
+                processes.set(identity, for: id)
+                // 기기 창을 열지 않아도 시뮬레이터 런타임(플랫폼 표기)을 알 수 있게 처음 보는 udid면 목록을 갱신한다.
+                if let sim = identity.simulator, !bootedSimulators.contains(where: { $0.udid == sim.udid }) { await refreshSimulators() }
             }
         }
     }
