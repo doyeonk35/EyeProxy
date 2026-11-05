@@ -50,7 +50,10 @@ struct MainToolbar: ToolbarContent {
             }
             .foregroundStyle(.secondary)
         case .failed(let message):
-            Label(message, systemImage: "exclamationmark.triangle.fill").labelStyle(.titleAndIcon).foregroundStyle(.red)
+            HStack(spacing: 8) {
+                Label(message, systemImage: "exclamationmark.triangle.fill").labelStyle(.titleAndIcon).foregroundStyle(.red)
+                Button("다시 시도") { Task { await model.startServer() } }
+            }
         }
     }
 }

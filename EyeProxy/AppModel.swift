@@ -114,7 +114,9 @@ final class AppModel {
         } catch {
             guard self.server === server else { return }
             if case ProxyServerError.portInUse(let p) = error {
-                serverState = .failed(message: String(localized: "포트 \(String(p)) 사용 중 — Proxyman을 끄거나 설정에서 포트를 바꾸세요"))
+                let owners = await PortOwner.listeners(onPort: p)
+                guard self.server === server else { return }   // 조회 중 stopServer가 불렸다
+                serverState = .failed(message: Self.portInUseMessage(port: p, owners: owners))
             } else {
                 serverState = .failed(message: error.localizedDescription)
             }
@@ -122,6 +124,15 @@ final class AppModel {
             consumer = nil
             self.server = nil
         }
+    }
+
+    private static func portInUseMessage(port p: Int, owners: [(name: String, pid: Int32)]) -> String {
+        if let old = owners.first(where: { $0.name.hasPrefix("EyeProxy") }) {
+            return String(localized: "이전 EyeProxy 인스턴스(\(String(old.pid)))가 아직 포트를 쓰고 있습니다 — 잠시 후 다시 시도하세요")
+        }
+        guard !owners.isEmpty else { return String(localized: "포트 \(String(p)) 사용 중 — Proxyman을 끄거나 설정에서 포트를 바꾸세요") }
+        let names = owners.map { "\($0.name)(\($0.pid))" }.joined(separator: ", ")
+        return String(localized: "\(names)이 포트 \(String(p))을 사용 중 — 그 앱을 끄거나 설정에서 포트를 바꾼 뒤 다시 시도하세요")
     }
 
     func stopServer() async {

@@ -22,6 +22,8 @@ import SwiftUI
             CommandMenu("프록시") {
                 Toggle("기록", isOn: Bindable(model.settings).isRecording)
                     .keyboardShortcut("r")
+                Button("서버 다시 시작") { Task { await model.restartServer() } }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
                 Divider()
                 OpenDevicesButton()
             }
