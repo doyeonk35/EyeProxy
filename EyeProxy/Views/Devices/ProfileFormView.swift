@@ -21,22 +21,19 @@ struct ProfileFormView: View {
         if security != .none {
             SecureField("비밀번호", text: $password)
         }
-        if addresses.isEmpty {
-            LabeledContent("Mac IP") { Text("LAN 주소 없음").foregroundStyle(.secondary) }
-        } else {
-            Picker("Mac IP", selection: $host) {
-                ForEach(addresses, id: \.self) { Text(verbatim: $0).tag($0) }
-            }
+        Picker("Mac IP", selection: hostBinding) {
+            if addresses.isEmpty { Text("(LAN 주소 없음)").tag("") }
+            ForEach(addresses, id: \.self) { Text(verbatim: $0).tag($0) }
         }
+        .disabled(addresses.isEmpty)
         LabeledContent("포트") { Text(verbatim: String(model.runningPort ?? model.settings.port)) }
         HStack {
             Spacer()
             Button("프로필 저장…") {
                 if needsPassword { confirmingPlaintext = true } else { save() }
             }
-            .disabled(ssid.isEmpty || !addresses.contains(host))
+            .disabled(ssid.isEmpty || effectiveHost.isEmpty)
         }
-        .onAppear { if !addresses.contains(host) { host = addresses.first ?? "" } }
         .alert("이 파일에 Wi-Fi 비밀번호가 평문으로 들어 있습니다", isPresented: $confirmingPlaintext) {
             Button("계속") { save() }
             Button("취소", role: .cancel) {}
@@ -45,11 +42,18 @@ struct ProfileFormView: View {
         }
     }
 
+    /// 선택값이 목록에 없으면(초기·주소 변경) 첫 주소, 목록이 비면 "". onAppear 없이 항상 유효한 tag를 유지한다.
+    private var effectiveHost: String {
+        let addresses = model.lanAddresses
+        return addresses.contains(host) ? host : (addresses.first ?? "")
+    }
+    private var hostBinding: Binding<String> { Binding(get: { effectiveHost }, set: { host = $0 }) }
+
     private var needsPassword: Bool { security != .none && !password.isEmpty }
 
     private func save() {
         Task {
-            if await model.saveWiFiProfile(ssid: ssid, security: security, password: needsPassword ? password : nil, proxyHost: host) {
+            if await model.saveWiFiProfile(ssid: ssid, security: security, password: needsPassword ? password : nil, proxyHost: effectiveHost) {
                 password = ""   // 저장 후 메모리에도 남기지 않는다
             }
         }
