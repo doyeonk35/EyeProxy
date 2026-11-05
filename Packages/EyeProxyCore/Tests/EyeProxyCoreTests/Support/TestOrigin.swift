@@ -148,6 +148,9 @@ private final class TrustDelegate: NSObject, URLSessionDelegate, Sendable {
 /// 프록시를 통해 요청을 보내는 간단한 클라이언트(URLSession + connectionProxyDictionary). 응답(status, headers, body)을 반환.
 func fetchViaProxy(_ url: String, proxyPort: Int, method: String = "GET", body: Data? = nil,
                    headers: [String: String] = [:], trustRootDER: [UInt8]? = nil) async throws -> (Int, [String: String], Data) {
+    if url.hasPrefix("https:") {
+        return try await fetchViaCONNECT(URL(string: url)!, proxyPort: proxyPort, method: method, body: body, headers: headers, trustRootDER: trustRootDER)
+    }
     let config = URLSessionConfiguration.ephemeral
     config.connectionProxyDictionary = [
         kCFNetworkProxiesHTTPEnable: 1, kCFNetworkProxiesHTTPProxy: "127.0.0.1", kCFNetworkProxiesHTTPPort: proxyPort,
@@ -164,4 +167,124 @@ func fetchViaProxy(_ url: String, proxyPort: Int, method: String = "GET", body: 
     var out: [String: String] = [:]
     for (k, v) in http.allHeaderFields { out["\(k)"] = "\(v)" }
     return (http.statusCode, out, data)
+}
+
+struct ConnectRefused: Error { let status: String }
+
+/// URLSession(Network.framework)은 루프백 목적지의 https에 프록시를 쓰지 않고 직접 붙는다(실측: CONNECT가 안 온다).
+/// 그래서 https는 NIO로 직접 `CONNECT` → 200 확인 → 같은 연결 위에서 TLS(trustRootDER만 신뢰, SNI=host) → HTTP/1.1 요청.
+/// CONNECT가 200이 아니면 `ConnectRefused`를 던진다.
+private func fetchViaCONNECT(_ url: URL, proxyPort: Int, method: String, body: Data?, headers: [String: String],
+                             trustRootDER: [UInt8]?) async throws -> (Int, [String: String], Data) {
+    let host = url.host!, port = url.port ?? 443
+    var tls = TLSConfiguration.makeClientConfiguration()
+    if let trustRootDER { tls.trustRoots = .certificates([try NIOSSLCertificate(bytes: trustRootDER, format: .der)]) }
+    let sslContext = try NIOSSLContext(configuration: tls)
+    var path = url.path.isEmpty ? "/" : url.path
+    if let query = url.query { path += "?" + query }
+    var requestHeaders = HTTPHeaders([("Host", "\(host):\(port)"), ("Connection", "close")] + headers.map { ($0.key, $0.value) })
+    if let body { requestHeaders.add(name: "Content-Length", value: String(body.count)) }
+    let request = HTTPRequestHead(version: .http1_1, method: HTTPMethod(rawValue: method), uri: path, headers: requestHeaders)
+    let loop = MultiThreadedEventLoopGroup.singleton.next()
+    let promise = loop.makePromise(of: (Int, [String: String], Data).self)
+    let channel = try await ClientBootstrap(group: loop)
+        .channelInitializer { channel in
+            channel.eventLoop.makeCompletedFuture {
+                try channel.pipeline.syncOperations.addHandler(ConnectThenRequest(
+                    authority: "\(host):\(port)", sslContext: sslContext, request: request, body: body, promise: promise))
+            }
+        }
+        .connect(host: "127.0.0.1", port: proxyPort).get()
+    defer { channel.close(promise: nil) }
+    return try await promise.futureResult.get()
+}
+
+private final class ConnectThenRequest: ChannelInboundHandler, RemovableChannelHandler {
+    typealias InboundIn = ByteBuffer
+
+    private let authority: String
+    private let sslContext: NIOSSLContext
+    private let request: HTTPRequestHead
+    private let body: Data?
+    private let promise: EventLoopPromise<(Int, [String: String], Data)>
+    private var received = ByteBuffer()
+
+    init(authority: String, sslContext: NIOSSLContext, request: HTTPRequestHead, body: Data?,
+         promise: EventLoopPromise<(Int, [String: String], Data)>) {
+        self.authority = authority
+        self.sslContext = sslContext
+        self.request = request
+        self.body = body
+        self.promise = promise
+    }
+
+    func channelActive(context: ChannelHandlerContext) {
+        context.writeAndFlush(NIOAny(ByteBuffer(string: "CONNECT \(authority) HTTP/1.1\r\nHost: \(authority)\r\n\r\n")), promise: nil)
+        context.fireChannelActive()
+    }
+
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        var bytes = unwrapInboundIn(data)
+        received.writeBuffer(&bytes)
+        let text = String(buffer: received)
+        guard let end = text.range(of: "\r\n\r\n") else { return }
+        let statusLine = String(text[..<end.lowerBound].prefix { $0 != "\r" })
+        guard statusLine.split(separator: " ").dropFirst().first == "200" else {
+            promise.fail(ConnectRefused(status: statusLine))
+            context.close(promise: nil)
+            return
+        }
+        do {
+            let ops = context.pipeline.syncOperations
+            let ssl = try NIOSSLClientHandler(context: sslContext, serverHostname: String(authority.split(separator: ":").first!))
+            try ops.addHandler(ssl, position: .first)
+            try ops.addHTTPClientHandlers(position: .after(ssl))
+            try ops.addHandler(ResponseCollector(promise: promise))
+            let channel = context.channel
+            channel.write(HTTPClientRequestPart.head(request), promise: nil)
+            if let body { channel.write(HTTPClientRequestPart.body(.byteBuffer(ByteBuffer(bytes: body))), promise: nil) }
+            channel.writeAndFlush(HTTPClientRequestPart.end(nil), promise: nil)
+            ops.removeHandler(context: context, promise: nil)
+        } catch {
+            promise.fail(error)
+            context.close(promise: nil)
+        }
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        promise.fail(ConnectRefused(status: "closed before CONNECT response"))
+        context.fireChannelInactive()
+    }
+}
+
+private final class ResponseCollector: ChannelInboundHandler {
+    typealias InboundIn = HTTPClientResponsePart
+
+    private let promise: EventLoopPromise<(Int, [String: String], Data)>
+    private var head: HTTPResponseHead?
+    private var body = Data()
+
+    init(promise: EventLoopPromise<(Int, [String: String], Data)>) { self.promise = promise }
+
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        switch unwrapInboundIn(data) {
+        case .head(let h): head = h
+        case .body(let b): body.append(contentsOf: b.readableBytesView)
+        case .end:
+            guard let head else { return }
+            var headers: [String: String] = [:]
+            for (name, value) in head.headers { headers[name] = value }
+            promise.succeed((Int(head.status.code), headers, body))
+        }
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        promise.fail(error)
+        context.close(promise: nil)
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        promise.fail(ConnectRefused(status: "closed before response completed"))
+        context.fireChannelInactive()
+    }
 }

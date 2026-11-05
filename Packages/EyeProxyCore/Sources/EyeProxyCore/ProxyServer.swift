@@ -95,6 +95,9 @@ public actor ProxyServer {
     public func update(sslPolicy: SSLProxyingPolicy) { self.sslPolicy = sslPolicy }
     public func update(interceptors: InterceptorChain) { self.interceptors = interceptors }
 
+    /// 이벤트루프(터널 등)에서 바로 이벤트를 낸다.
+    nonisolated func emit(_ event: FlowEvent) { eventSink.yield(event) }
+
     /// 요청 하나의 수명: 이벤트 → 요청 인터셉터 → 업스트림 → 응답 인터셉터 → 이벤트. 실패는 502로 바꿔 돌려준다.
     func exchange(_ request: FlowRequest, clientAddress: String, upstream: UpstreamClient) async -> FlowResponse {
         let id = FlowID()
