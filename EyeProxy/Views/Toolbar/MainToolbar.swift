@@ -14,7 +14,14 @@ struct MainToolbar: ToolbarContent {
             Button("지우기", systemImage: "trash") { model.clear() }
                 .help("목록 지우기 (⌘K)")
         }
-        ToolbarItem(placement: .status) { status }
+        ToolbarItem(placement: .status) {
+            status
+                .font(.caption)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+        }
         ToolbarItemGroup(placement: .primaryAction) {
             Toggle(isOn: Binding(get: { settings.sslEnabled }, set: { enabled in
                 settings.sslEnabled = enabled
