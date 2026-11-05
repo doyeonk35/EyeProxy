@@ -91,7 +91,7 @@ gh api -X POST repos/doyeonk35/EyeProxy/pages -f build_type=legacy -f 'source[br
 - Task 10+11: minor (deferred): JSON 리터럴 배열 매 토큰 할당 / UTF-8 BOM 미처리→.text / 출력 상한 전용 테스트 없음
 - Task 12: minor (deferred): apply 실패 시 무조건 관리자 승격(서비스 소멸도) / 부분 적용 복구는 호출자 책임 / Shell 파이프 64KB·취소 없음 / SystemProxy 동시 호출 직렬화 없음(MainActor에서만 호출) / CA 제거 API 없음(P2)
 - Task 12: minor (deferred): isInstalled은 존재만 확인(신뢰 여부 아님) / 풀터널 VPN에서는 Wi-Fi 프록시 설정이 무효일 수 있음(Task 15 수동 확인) / ShellError 케이스 명칭 / route·listnetworkserviceorder 종료코드 미검사
-- Task 13: minor (deferred): # 컬럼이 필터 위치 기반(안정 ID 아님) / 기기 배지는 누적 flowCount vs 전체는 세션 카운트 / lanAddresses 네트워크 변경 시 갱신 없음 / 상세 바디 매 이벤트 재디코드(T14) / devices.save는 종료 시만
+- Task 13: minor (deferred): # 컬럼이 필터 위치 기반(안정 ID 아님) → flow-readability에서 해결 / 기기 배지는 누적 flowCount vs 전체는 세션 카운트 → flow-readability에서 해결 / lanAddresses 네트워크 변경 시 갱신 없음 / 상세 바디 매 이벤트 재디코드(T14) / devices.save는 종료 시만
 - Task 14: minor (deferred): 탭 전환 시 BodyView 재생성(재디코드·WKWebView 재생성) / data.count 키로 같은 길이 바디 변경 미감지 / 빈 {} [] 트리에 "(없음)" 없음 / 쿼리 + → 공백 미변환 / 절대형 path면 URLComponents 파싱 깨짐(현재 Core는 origin-form 보장)
 - Task 14: minor (deferred): capped()의 줄 경계 컷이 멀리 있는 개행에 끌려감·멀티바이트 분절 / LargeText.updateNSView 비어 있음 / 이미지 케이스에서도 hex 생성 / 차단 검증 하네스는 scratchpad(레포 외)
 - Task 15: minor (deferred): 시뮬레이터 설치됨 표시가 뷰 상태 / stopServer 종료 await 무제한(타임아웃 권장) / 토글 busy 진행 표시 없음 / 로그 강조가 "신뢰" 문자열 의존 / (b)(c) 테스트 없음
@@ -104,7 +104,7 @@ gh api -X POST repos/doyeonk35/EyeProxy/pages -f build_type=legacy -f 'source[br
 - UpstreamClient: https 업스트림은 차단 검사 전에 TLS ClientHello(SNI)가 루프백 서비스에 전송됨 → TLS 핸들러를 검사 후 추가.
 - `::ffff:127.0.0.1` 분기 테스트 없음. Mac 자신의 LAN IP로 프록시에 붙는 로컬 클라이언트는 LAN으로 취급.
 - MITM 핸드셰이크 실패 시 메인 목록에 실패 CONNECT 행 없음(기기 창 연결 로그만) — Proxyman은 실패 행 표시. Task 18 Step 12가 불편하면 당겨서 수정.
-- JSON Tree 탭은 키 정렬·NSNumber 정밀도 손실(Pretty는 원문 보존) → 토크나이저로 트리 구성.
+- JSON Tree 탭은 키 정렬·NSNumber 정밀도 손실(Pretty는 원문 보존) → 토크나이저로 트리 구성. → flow-readability에서 해결
 - 세션 열기 시 라이브 트래픽이 섞이고 사이드바 기기 목록은 DeviceRegistry 기준.
 - 복호화 호스트의 WebSocket/SSE는 Connection: close·전체 버퍼링으로 끊김(README 기재됨).
 - SessionStore 메모리 무제한, visibleFlows O(n) 매 이벤트.
