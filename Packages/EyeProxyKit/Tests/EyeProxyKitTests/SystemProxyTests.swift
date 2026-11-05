@@ -53,3 +53,9 @@ An asterisk (*) denotes that a network service is disabled.
     #expect(try !p.saveBackupIfAbsent(b)); #expect(try Data(contentsOf: url) == before)
     #expect(p.pendingRestore() == a)
 }
+@Test func staleBackupFromOtherServiceIsRestoredFirst() {
+    let b = SystemProxyBackup(service: "Wi-Fi", httpEnabled: false, httpHost: "", httpPort: 0, httpsEnabled: false, httpsHost: "", httpsPort: 0, bypass: [])
+    #expect(SystemProxyCommands.restoreStale(b, currentService: "Ethernet") == SystemProxyCommands.restore(b))
+    #expect(SystemProxyCommands.restoreStale(b, currentService: "Wi-Fi").isEmpty)
+    #expect(SystemProxyCommands.restoreStale(nil, currentService: "Wi-Fi").isEmpty)
+}

@@ -28,6 +28,12 @@ public enum SystemProxyCommands {
          ["-setsecurewebproxystate", svc, "on"]]
     }
 
+    /// 백업이 다른 서비스의 것이면(그 사이 기본 네트워크가 바뀜) 그 서비스를 먼저 되돌릴 명령. 아니면 [].
+    public static func restoreStale(_ backup: SystemProxyBackup?, currentService: String) -> [[String]] {
+        guard let backup, backup.service != currentService else { return [] }
+        return restore(backup)
+    }
+
     public static func restore(_ b: SystemProxyBackup) -> [[String]] {
         var c: [[String]] = []
         // 꺼져 있던 경우에도 host/port를 되돌려 EyeProxy 주소가 설정 화면에 남지 않게 한다.
@@ -88,14 +94,21 @@ public final class SystemProxy: Sendable {
         if !tunnel, let m = order.first(where: { $0.enabled && $0.device == iface }) { return m.name }
         // VPN 등으로 기본 인터페이스가 서비스와 맞지 않으면 IPv4 주소를 가진 첫 활성 서비스.
         for s in order where s.enabled && !s.device.isEmpty {
-            if !(try await Shell.run("/usr/sbin/ipconfig", ["getifaddr", s.device]).stdout
-                .trimmingCharacters(in: .whitespacesAndNewlines)).isEmpty { return s.name }
+            let ip = try await Shell.run("/usr/sbin/ipconfig", ["getifaddr", s.device]).stdout
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !ip.isEmpty && !ip.hasPrefix("169.254.") { return s.name }  // 링크로컬(DHCP 실패)은 인터넷 경로가 아니다
         }
         throw SystemProxyError.noActiveService
     }
 
     public func enable(host: String, port: Int, bypass: [String]) async throws {
         let svc = try await activeService()
+        // 다른 서비스에 남은 EyeProxy 프록시를 되돌리고 백업을 지워야 현재 서비스의 원본을 새로 백업할 수 있다.
+        let stale = SystemProxyCommands.restoreStale(pendingRestore(), currentService: svc)
+        if !stale.isEmpty {
+            try await apply(stale)
+            try FileManager.default.removeItem(at: backupURL)
+        }
         if pendingRestore() == nil {  // 기존 백업(원본 설정)은 절대 덮어쓰지 않는다.
             func read(_ a: String) async throws -> String {
                 let r = try await Shell.run(Self.networksetup, [a, svc])

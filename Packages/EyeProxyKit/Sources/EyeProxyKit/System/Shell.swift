@@ -14,7 +14,16 @@ enum Shell {
             let outURL = dir.appending(path: "eyeproxy-\(UUID()).out"), errURL = dir.appending(path: "eyeproxy-\(UUID()).err")
             FileManager.default.createFile(atPath: outURL.path, contents: nil)
             FileManager.default.createFile(atPath: errURL.path, contents: nil)
-            guard let out = try? FileHandle(forWritingTo: outURL), let err = try? FileHandle(forWritingTo: errURL) else {
+            let outHandle = try? FileHandle(forWritingTo: outURL), errHandle = try? FileHandle(forWritingTo: errURL)
+            var started = false
+            // 시작하지 못하면(핸들 실패·run() throw) terminationHandler가 불리지 않으므로 여기서 정리한다.
+            defer {
+                if !started {
+                    try? outHandle?.close(); try? errHandle?.close()
+                    try? FileManager.default.removeItem(at: outURL); try? FileManager.default.removeItem(at: errURL)
+                }
+            }
+            guard let out = outHandle, let err = errHandle else {
                 cont.resume(throwing: ShellError.privilegedFailed("temp file")); return
             }
             p.standardOutput = out; p.standardError = err
@@ -25,7 +34,7 @@ enum Shell {
                 try? FileManager.default.removeItem(at: outURL); try? FileManager.default.removeItem(at: errURL)
                 cont.resume(returning: (proc.terminationStatus, o, e))
             }
-            do { try p.run() } catch { cont.resume(throwing: error) }
+            do { try p.run(); started = true } catch { cont.resume(throwing: error) }
         }
     }
 }
