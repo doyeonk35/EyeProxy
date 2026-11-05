@@ -22,6 +22,7 @@ gh api -X POST repos/doyeonk35/EyeProxy/pages -f build_type=legacy -f 'source[br
 1. 켜기 → `scutil --proxy`에 127.0.0.1:<포트> → 끄기 → `-get…` 세 값이 원래와 동일, `~/Library/Application Support/com.tv.eyeproxy/system-proxy-backup.json` 없음.
 2. 켠 채 ⌘Q(두 번 연타 포함) → 종료 후 원복.
 3. 켠 채 `kill -9 $(pgrep -f EyeProxy)` → 재실행 → 복원 알럿(Return=복원) → 원복.
+   - **항목 2/3을 VPN(GlobalProtect) 켠 상태에서 재검증**: 종료·복원 후 `scutil --proxy`가 `HTTPEnable : 0`(VPN 서비스 `gpd.pan` 복사본까지 정리됨, 관리자 인증 1회)이고 인터넷이 되는지 확인.
 4. 켠 채 설정에서 포트 변경 → 재시작 → `scutil`이 새 포트.
 5. 켠 채 Wi-Fi↔이더넷 전환 → 끄기 → 원복.
 6. 켜기 → 관리자 프롬프트 취소 → 토글 off 유지, 백업 없음, 에러 표시.
@@ -69,6 +70,7 @@ gh api -X POST repos/doyeonk35/EyeProxy/pages -f build_type=legacy -f 'source[br
 - Ruling: 재리뷰 마이너 중 죽은 프록시 경로 3건(서비스 이름 변경 시 orphan 오판→127.0.0.1 잔류, 종료 중 토글 on 슬립, 유지가 .cancel 역할이고 서버 미실행 시에도 적용)은 Task 16 디스패치에 후속으로 포함. — 비용: 몇 줄.
 - Ruling: 컨트롤러가 .gitignore에 build/ 한 줄을 직접 커밋(48ba227) — 리뷰 마이너, 한 줄, 코드 아님. 규칙 위반 최소 사례로 기록.
 - Ruling: 공증된 0.1.0 zip(375a3a0)은 최종 수정 웨이브 이전 빌드 → Task 18 통과 후 `release.sh 0.1.1`로 재릴리스해야 배포본에 루프백 차단·CA 식별자 수정이 포함됨. — 비용: 재공증 1회.
+- Ruling: VPN(GlobalProtect)이 Wi-Fi 프록시를 `State:/Network/Service/<id>/Proxies`로 복사하고 되돌려도 지우지 않아 종료 후 인터넷이 끊김(현장 확인) → disable 끝에서 실효 프록시가 우리 것이고 기본 서비스가 물리 서비스(Setup 키 없음)가 아니면 그 State 키를 관리자 권한 `scutil`로 HTTP·HTTPS 끔으로 다시 씀(나머지 항목 보존, 입력 검증). 실패 시 오류·주황 경고 → VPN 재연결로 복구. — 비용: VPN 사용자는 끌 때 관리자 인증 1회 추가, VPN 재연결 시 VPN이 다시 덮어씀(정상).
 - Ruling: 워크스페이스 삭제 전 판정 목록·P2 이월 마이너·Task 18 체크리스트를 docs/superpowers/plans/2026-11-05-eyeproxy-p1-handover.md 로 레포에 보존.
 
 ## 3. P2 이월 백로그 (태스크 리뷰에서 나온 마이너, 미수정)
