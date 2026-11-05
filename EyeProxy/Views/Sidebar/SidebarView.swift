@@ -1,3 +1,4 @@
+import EyeProxyKit
 import SwiftUI
 
 struct SidebarView: View {
@@ -10,17 +11,17 @@ struct SidebarView: View {
                 .badge(model.session.flows.count)
                 .tag(SidebarItem.allFlows)
             Section("기기") {
-                ForEach(model.devices.devices) { device in
-                    Label(device.displayName, systemImage: device.kind == .thisMac ? "laptopcomputer" : "display")
-                        .badge(device.flowCount)
-                        .tag(SidebarItem.device(device.address))
+                ForEach(model.sidebarTree.devices, id: \.address) { node in
+                    Label(node.displayName, systemImage: node.kind == .thisMac ? "laptopcomputer" : "display")
+                        .badge(node.count)
+                        .tag(SidebarItem.scope(FlowScope(device: node.address)))
                 }
             }
             Section("도메인") {
-                ForEach(model.hosts, id: \.host) { entry in
-                    Label(entry.host, systemImage: "globe")
-                        .badge(entry.count)
-                        .tag(SidebarItem.host(entry.host))
+                ForEach(model.sidebarTree.hosts, id: \.host) { node in
+                    Label(node.host, systemImage: "globe")
+                        .badge(node.count)
+                        .tag(SidebarItem.host(node.host))
                 }
             }
         }
