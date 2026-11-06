@@ -4,6 +4,9 @@ import Observation
 
 public enum FlowLayout: String, Codable, Sendable { case classic, sideBySide }
 
+/// 앱 외관. `system`은 macOS 설정을 따른다.
+public enum Appearance: String, Codable, Sendable, CaseIterable { case system, light, dark }
+
 @Observable @MainActor
 public final class AppSettings {
     @ObservationIgnored private let defaults: UserDefaults
@@ -15,6 +18,7 @@ public final class AppSettings {
     public var layout: FlowLayout { didSet { defaults.set(layout.rawValue, forKey: "eyeproxy.layout") } }
     public var pinnedHosts: [String] { didSet { defaults.set(pinnedHosts, forKey: "eyeproxy.pinnedHosts") } }
     public var wrapLongLines: Bool { didSet { defaults.set(wrapLongLines, forKey: "eyeproxy.wrapLongLines") } }
+    public var appearance: Appearance { didSet { defaults.set(appearance.rawValue, forKey: "eyeproxy.appearance") } }
     /// 저장하지 않는다 (실행할 때마다 기록 중으로 시작).
     public var isRecording = true
 
@@ -29,6 +33,7 @@ public final class AppSettings {
         layout = defaults.string(forKey: "eyeproxy.layout").flatMap(FlowLayout.init(rawValue:)) ?? .classic
         pinnedHosts = defaults.stringArray(forKey: "eyeproxy.pinnedHosts") ?? []
         wrapLongLines = defaults.object(forKey: "eyeproxy.wrapLongLines") as? Bool ?? true
+        appearance = defaults.string(forKey: "eyeproxy.appearance").flatMap(Appearance.init(rawValue:)) ?? .system
     }
 
     public func togglePin(_ host: String) {

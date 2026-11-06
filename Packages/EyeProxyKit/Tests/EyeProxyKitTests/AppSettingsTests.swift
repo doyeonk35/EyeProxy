@@ -15,4 +15,7 @@ import Testing
     #expect(s.pinnedHosts.isEmpty && s.wrapLongLines)
     s.togglePin("api.tving.com"); s.togglePin("gw.tving.com"); s.togglePin("api.tving.com"); s.wrapLongLines = false
     #expect(AppSettings(defaults: d).pinnedHosts == ["gw.tving.com"] && !AppSettings(defaults: d).wrapLongLines)
+    #expect(s.appearance == .system)
+    s.appearance = .dark
+    #expect(AppSettings(defaults: d).appearance == .dark)
 }

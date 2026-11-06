@@ -21,7 +21,13 @@ private struct GeneralSettings: View {
     private var parsed: Int? { Int(draft).flatMap { (1024...65535).contains($0) ? $0 : nil } }
 
     var body: some View {
+        @Bindable var settings = model.settings
         Form {
+            Picker("외관", selection: $settings.appearance) {
+                Text("시스템").tag(Appearance.system)
+                Text("라이트").tag(Appearance.light)
+                Text("다크").tag(Appearance.dark)
+            }
             TextField("포트", text: $draft)
                 .focused($focused)
                 .onSubmit(commit)

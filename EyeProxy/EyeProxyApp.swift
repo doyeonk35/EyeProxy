@@ -14,6 +14,14 @@ import SwiftUI
                 .environment(model)
                 .frame(minWidth: 1100, minHeight: 700)
                 .task { await model.startServer() }
+                // 앱 전체(설정·기기 창 포함)에 적용되도록 NSApp 수준에서 바꾼다.
+                .onChange(of: model.settings.appearance, initial: true) { _, appearance in
+                    NSApp.appearance = switch appearance {
+                    case .system: nil
+                    case .light: NSAppearance(named: .aqua)
+                    case .dark: NSAppearance(named: .darkAqua)
+                    }
+                }
                 .pendingProxyRestoreAlert(model)
                 .systemErrorAlert(model, presenting: !model.devicesWindowOpen)
         }
