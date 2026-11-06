@@ -13,6 +13,8 @@ public final class AppSettings {
     public var sslPatterns: [String] { didSet { defaults.set(sslPatterns, forKey: "eyeproxy.sslPatterns") } }
     public var bypassHosts: [String] { didSet { defaults.set(bypassHosts, forKey: "eyeproxy.bypassHosts") } }
     public var layout: FlowLayout { didSet { defaults.set(layout.rawValue, forKey: "eyeproxy.layout") } }
+    public var pinnedHosts: [String] { didSet { defaults.set(pinnedHosts, forKey: "eyeproxy.pinnedHosts") } }
+    public var wrapLongLines: Bool { didSet { defaults.set(wrapLongLines, forKey: "eyeproxy.wrapLongLines") } }
     /// 저장하지 않는다 (실행할 때마다 기록 중으로 시작).
     public var isRecording = true
 
@@ -25,5 +27,11 @@ public final class AppSettings {
         sslPatterns = defaults.stringArray(forKey: "eyeproxy.sslPatterns") ?? []
         bypassHosts = defaults.stringArray(forKey: "eyeproxy.bypassHosts") ?? ["localhost", "127.0.0.1", "*.local"]
         layout = defaults.string(forKey: "eyeproxy.layout").flatMap(FlowLayout.init(rawValue:)) ?? .classic
+        pinnedHosts = defaults.stringArray(forKey: "eyeproxy.pinnedHosts") ?? []
+        wrapLongLines = defaults.object(forKey: "eyeproxy.wrapLongLines") as? Bool ?? true
+    }
+
+    public func togglePin(_ host: String) {
+        if let i = pinnedHosts.firstIndex(of: host) { pinnedHosts.remove(at: i) } else { pinnedHosts.append(host) }
     }
 }

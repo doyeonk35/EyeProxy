@@ -12,4 +12,7 @@ import Testing
     #expect(again.port == 9191 && again.layout == .sideBySide)
     #expect(again.sslPolicy.shouldDecrypt(host: "a.tving.com"))
     #expect(again.isRecording)  // 저장하지 않음
+    #expect(s.pinnedHosts.isEmpty && s.wrapLongLines)
+    s.togglePin("api.tving.com"); s.togglePin("gw.tving.com"); s.togglePin("api.tving.com"); s.wrapLongLines = false
+    #expect(AppSettings(defaults: d).pinnedHosts == ["gw.tving.com"] && !AppSettings(defaults: d).wrapLongLines)
 }

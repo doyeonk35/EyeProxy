@@ -38,3 +38,12 @@ import Testing
     try Data(#"{"version":99,"flows":[],"connectionLog":[]}"#.utf8).write(to: url.appending(path: "index.json"))
     #expect(throws: (any Error).self) { try SessionDocument.load(from: url) }
 }
+
+@Test func roundTripProcessesAndToleratesMissingKey() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).eyeproxy"); defer { try? FileManager.default.removeItem(at: url) }
+    let f = Flow.fixture(client: "127.0.0.1", decrypted: false); let p = ProcessIdentity(pid: 1, path: "/Applications/Safari.app/Contents/MacOS/Safari")
+    try SessionDocument.save(flows: [f], connectionLog: [], processes: [f.id: p], to: url)
+    #expect(try SessionDocument.load(from: url).processes == [f.id: p])
+    try SessionDocument.save(flows: [f], connectionLog: [], to: url)
+    #expect(try SessionDocument.load(from: url).processes.isEmpty)
+}

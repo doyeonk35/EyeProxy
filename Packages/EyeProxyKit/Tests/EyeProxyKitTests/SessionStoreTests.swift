@@ -28,3 +28,12 @@ import Testing
     s.replace(flows: [])
     #expect(s.connectionLog.isEmpty)
 }
+
+@Test @MainActor func storeNumbersFlowsInArrivalOrderAndResets() {
+    let s = SessionStore(); let a = Flow.fixture(client: "1", decrypted: false), b = Flow.fixture(client: "2", decrypted: false)
+    s.apply(.requestStarted(a)); s.apply(.requestStarted(b))
+    #expect(s.number(a.id) == 1 && s.number(b.id) == 2)
+    s.clear(); let c = Flow.fixture(client: "3", decrypted: false); s.apply(.requestStarted(c))
+    #expect(s.number(c.id) == 1 && s.number(a.id) == nil)
+    s.replace(flows: [b, a]); #expect(s.number(b.id) == 1 && s.number(a.id) == 2)
+}

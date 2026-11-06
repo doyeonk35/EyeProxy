@@ -113,10 +113,10 @@ public actor ProxyServer {
     nonisolated func emit(_ event: FlowEvent) { eventSink.yield(event) }
 
     /// 요청 하나의 수명: 이벤트 → 요청 인터셉터 → 업스트림 → 응답 인터셉터 → 이벤트. 실패는 502로 바꿔 돌려준다.
-    func exchange(_ request: FlowRequest, clientAddress: String, upstream: UpstreamClient, isDecrypted: Bool = false) async -> FlowResponse {
+    func exchange(_ request: FlowRequest, clientAddress: String, clientPort: Int? = nil, upstream: UpstreamClient, isDecrypted: Bool = false) async -> FlowResponse {
         let id = FlowID()
         let context = FlowContext(id: id, clientAddress: clientAddress)
-        eventSink.yield(.requestStarted(Flow(id: id, clientAddress: clientAddress, startedAt: Date(), request: request, isDecrypted: isDecrypted)))
+        eventSink.yield(.requestStarted(Flow(id: id, clientAddress: clientAddress, clientPort: clientPort, startedAt: Date(), request: request, isDecrypted: isDecrypted)))
         let chain = interceptors
         switch await chain.runRequest(request, context: context) {
         case .respond(let response):

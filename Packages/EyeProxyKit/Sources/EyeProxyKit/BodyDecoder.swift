@@ -2,7 +2,7 @@ import Compression
 import EyeProxyCore
 import Foundation
 
-public enum DecodedBody: Equatable, Sendable { case empty, json(pretty: String), text(String), image(Data), html(String), binary(Data) }
+public enum DecodedBody: Equatable, Sendable { case empty, json(pretty: String, raw: String), text(String), image(Data), html(String), binary(Data) }
 
 public enum BodyDecoder {
     public static func decode(body: Data, headers: [HTTPHeader]) -> DecodedBody {
@@ -13,7 +13,7 @@ public enum BodyDecoder {
         let type = (header("Content-Type") ?? "").split(separator: ";").first.map { $0.trimmingCharacters(in: .whitespaces).lowercased() } ?? ""
         if type.hasPrefix("image/") { return .image(data) }
         guard let s = String(data: data, encoding: .utf8) else { return .binary(data) }
-        if type == "application/json" || type.hasSuffix("+json"), let p = reindentJSON(Array(data)) { return .json(pretty: p) }
+        if type == "application/json" || type.hasSuffix("+json"), let p = reindentJSON(Array(data)) { return .json(pretty: p, raw: s) }
         return type == "text/html" ? .html(s) : .text(s)
     }
 

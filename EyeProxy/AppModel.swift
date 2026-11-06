@@ -13,8 +13,8 @@ enum ServerState: Equatable {
 
 enum SidebarItem: Hashable {
     case allFlows
-    case device(String)
     case host(String)
+    case scope(FlowScope)
 }
 
 @MainActor @Observable
@@ -24,6 +24,8 @@ final class AppModel {
 
     let settings = AppSettings()
     let session = SessionStore()
+    let processes = ProcessRegistry()
+    @ObservationIgnored let resolver = ProcessResolver()
     let devices: DeviceRegistry
     let certificateAuthority: CertificateAuthority
     /// 새로 만든 CA를 저장하지 못했으면 그 이유. 매 실행 새 루트 CA가 되므로 Task 15 인증서 화면에서 표시한다.
@@ -31,6 +33,7 @@ final class AppModel {
     private(set) var serverState: ServerState = .stopped
     var filter = FlowFilter()
     var selectedFlowID: FlowID?
+    var sortOrder: [KeyPathComparator<FlowRow>] = [KeyPathComparator(\.number)]
     var sidebarSelection: SidebarItem? = .allFlows
 
     // 온보딩(기기 윈도우)
@@ -181,6 +184,17 @@ final class AppModel {
         // 기록 중지 상태에서도 이미 보이는 요청의 응답·실패는 반영한다.
         if settings.isRecording || !isNewFlow { session.apply(event) }
         devices.observe(event)
+        // 소켓 조회는 비동기로 하고, 결과가 오면 귀속만 기록한다. 실제로 세션에 반영된 흐름만.
+        if case .requestStarted(let flow) = event, session.number(flow.id) != nil,
+           FlowFilter.sameDevice(flow.clientAddress, "127.0.0.1"), let port = flow.clientPort, let proxyPort = runningPort {
+            let id = flow.id
+            Task { [resolver, processes] in
+                guard let identity = await resolver.resolve(port: port, proxyPort: proxyPort) else { return }
+                processes.set(identity, for: id)
+                // 기기 창을 열지 않아도 시뮬레이터 런타임(플랫폼 표기)을 알 수 있게 처음 보는 udid면 목록을 갱신한다.
+                if let sim = identity.simulator, !bootedSimulators.contains(where: { $0.udid == sim.udid }) { await refreshSimulators() }
+            }
+        }
     }
 
     // MARK: - 동작
@@ -193,9 +207,13 @@ final class AppModel {
 
     func clear() {
         session.clear()
+        processes.clear()
         selectedFlowID = nil
-        // 지우면 도메인 목록이 비어 선택된 호스트 행이 사라진다 → 보이지 않는 필터가 남지 않게.
-        if case .host = sidebarSelection { sidebarSelection = .allFlows }
+        // 지우면 목록이 비어 선택된 행이 사라진다 → 보이지 않는 필터가 남지 않게.
+        switch sidebarSelection {
+        case .host, .scope: sidebarSelection = .allFlows
+        case .allFlows, nil: break
+        }
     }
 
     // MARK: - 세션 파일 · cURL
@@ -208,9 +226,9 @@ final class AppModel {
         stamp.dateFormat = "yyyyMMdd-HHmm"
         panel.nameFieldStringValue = "EyeProxy-\(stamp.string(from: .now)).\(SessionDocument.pathExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let (flows, log) = (session.flows, session.connectionLog)
+        let (flows, log, attribution) = (session.flows, session.connectionLog, processes.attribution)
         do {
-            try await Task.detached { try SessionDocument.save(flows: flows, connectionLog: log, to: url) }.value
+            try await Task.detached { try SessionDocument.save(flows: flows, connectionLog: log, processes: attribution, to: url) }.value
         } catch {
             systemError = String(localized: "세션을 저장하지 못했습니다: \(error.localizedDescription)")
         }
@@ -224,6 +242,7 @@ final class AppModel {
         do {
             let loaded = try await Task.detached { try SessionDocument.load(from: url) }.value
             session.replace(flows: loaded.flows, connectionLog: loaded.connectionLog)
+            processes.replace(loaded.processes)
             filter = FlowFilter()
             selectedFlowID = nil
             sidebarSelection = .allFlows
@@ -246,17 +265,26 @@ final class AppModel {
     var visibleFlows: [Flow] {
         var f = filter
         switch sidebarSelection {
-        case .device(let address): f.device = address
+        case .scope(let s): (f.device, f.process, f.host) = (s.device, s.process, s.host)
         case .host(let host): f.host = host
         case .allFlows, nil: break
         }
-        return session.flows.filter(f.matches)
+        return session.flows.filter { f.matches($0, process: processKey(for: $0)) }
     }
 
-    var hosts: [(host: String, count: Int)] {
-        session.flows.reduce(into: [String: Int]()) { $0[$1.request.host, default: 0] += 1 }
-            .map { (host: $0.key, count: $0.value) }
-            .sorted { $0.host < $1.host }
+    var visibleRows: [FlowRow] {
+        visibleFlows.map { FlowRow(flow: $0, number: session.number($0.id) ?? 0) }.sorted(using: sortOrder)
+    }
+
+    func processKey(for flow: Flow) -> String? { processes.attribution[flow.id]?.groupKey }
+
+    var simulatorRuntimes: [String: String] {
+        Dictionary(bootedSimulators.map { ($0.udid, $0.runtime) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    var sidebarTree: SidebarTree {
+        SidebarTree.build(flows: session.flows, attribution: processes.attribution, devices: devices.devices,
+                          pinned: settings.pinnedHosts, runtimes: simulatorRuntimes)
     }
 
     // MARK: - 온보딩
