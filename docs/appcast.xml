@@ -3,6 +3,14 @@
     <channel>
         <title>EyeProxy</title>
         <item>
+            <title>0.1.1</title>
+            <pubDate>Fri, 06 Nov 2026 11:01:53 +0900</pubDate>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/doyeonk35/EyeProxy/releases/download/v0.1.1/EyeProxy-0.1.1.zip" length="7074677" type="application/octet-stream" sparkle:edSignature="8TZPYetNv6OtRigHKO0KKJAw+LiepoSuMWmd9bWYfnECulHmF/Mpsoykpq3MRaZ7mZAGSPXmuUzhxS240uLVBg=="/>
+        </item>
+        <item>
             <title>0.1.0</title>
             <pubDate>Thu, 05 Nov 2026 13:48:39 +0900</pubDate>
             <sparkle:version>2</sparkle:version>
