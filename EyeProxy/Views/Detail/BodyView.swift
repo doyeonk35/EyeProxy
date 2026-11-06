@@ -167,6 +167,7 @@ private struct CodeBody: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             CodeTextView(text: text, wrap: model.settings.wrapLongLines)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)  // NSScrollView의 fitting 크기(문서 높이)로 커지지 않게
             if truncated { Text("… (2MB까지만 표시)").foregroundStyle(.secondary).padding(6) }
         }
     }

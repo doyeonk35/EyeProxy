@@ -20,28 +20,33 @@ enum FlowColors {
     }
 }
 
+/// 칩 스타일. 선택된 행 위에서는 시스템 강조색(파랑)과 칩 색(GET 파랑 등)이 겹쳐 안 보이므로
+/// 흰 글자 + 반투명 흰 배경으로 바꿔 어떤 강조색 위에서도 읽히게 한다.
 private struct Capsuled: ViewModifier {
     let color: Color
+    let selected: Bool
 
     func body(content: Content) -> some View {
         content
             .font(.system(size: 11, weight: .semibold)).monospacedDigit()
             .padding(.horizontal, 6).padding(.vertical, 1)
-            .foregroundStyle(color)
-            .background(color.opacity(0.15), in: Capsule())
+            .foregroundStyle(selected ? Color.white : color)
+            .background(selected ? Color.white.opacity(0.28) : color.opacity(0.15), in: Capsule())
     }
 }
 
 struct MethodTag: View {
     let method: String
+    var selected = false
 
     var body: some View {
-        Text(method.uppercased()).modifier(Capsuled(color: FlowColors.method(method)))
+        Text(method.uppercased()).modifier(Capsuled(color: FlowColors.method(method), selected: selected))
     }
 }
 
 struct StatusTag: View {
     let flow: Flow
+    var selected = false
 
     var body: some View {
         Group {
@@ -53,6 +58,6 @@ struct StatusTag: View {
                 Text(verbatim: "…")
             }
         }
-        .modifier(Capsuled(color: FlowColors.status(flow)))
+        .modifier(Capsuled(color: FlowColors.status(flow), selected: selected))
     }
 }

@@ -19,7 +19,7 @@ struct FlowListView: View {
             }
             .width(min: 32, ideal: 44, max: 80)
             .customizationID("index")
-            TableColumn("Method", value: \.method) { (row: FlowRow) in MethodTag(method: row.method) }
+            TableColumn("Method", value: \.method) { (row: FlowRow) in MethodTag(method: row.method, selected: row.id == model.selectedFlowID) }
                 .width(min: 50, ideal: 70, max: 110)
                 .customizationID("method")
             TableColumn("URL", value: \.url) { (row: FlowRow) in
@@ -39,7 +39,7 @@ struct FlowListView: View {
             }
             .width(min: 80, ideal: 140, max: 240)
             .customizationID("app")
-            TableColumn("Status", value: \.status) { (row: FlowRow) in StatusTag(flow: row.flow) }
+            TableColumn("Status", value: \.status) { (row: FlowRow) in StatusTag(flow: row.flow, selected: row.id == model.selectedFlowID) }
                 .width(min: 44, ideal: 56, max: 80)
                 .customizationID("status")
             TableColumn("Size", value: \.size) { (row: FlowRow) in Text(row.flow.response.map { Self.bytes($0.body.count) } ?? "") }
