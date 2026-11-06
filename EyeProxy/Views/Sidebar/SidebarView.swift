@@ -30,7 +30,7 @@ struct SidebarView: View {
                                     hostRow(node, icon: "globe", tag: .scope(FlowScope(device: device.address, process: app.groupKey, host: node.host)))
                                 }
                             } label: {
-                                Label { Text(app.displayName) } icon: { appIcon(app.path) }
+                                Label { Text(app.displayName) } icon: { AppIcon(path: app.path) }
                                     .badge(app.count)
                                     .tag(SidebarItem.scope(FlowScope(device: device.address, process: app.groupKey)))
                             }
@@ -68,14 +68,6 @@ struct SidebarView: View {
             .contextMenu {
                 Button(isPinned ? "고정 해제" : "고정") { model.settings.togglePin(node.host) }
             }
-    }
-
-    @ViewBuilder private func appIcon(_ path: String?) -> some View {
-        if let path {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: path)).resizable().frame(width: 16, height: 16)
-        } else {
-            Image(systemName: "app.dashed")
-        }
     }
 
     private func icon(_ kind: DeviceKind) -> String {

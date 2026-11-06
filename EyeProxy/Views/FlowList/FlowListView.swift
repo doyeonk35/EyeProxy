@@ -28,6 +28,17 @@ struct FlowListView: View {
             }
             .width(min: 200, ideal: 480)
             .customizationID("url")
+            TableColumn("앱") { (row: FlowRow) in
+                if let identity = model.processes.attribution[row.id] {
+                    HStack(spacing: 5) {
+                        AppIcon(path: identity.path)
+                        Text(identity.displayName(runtimes: model.simulatorRuntimes))
+                    }
+                    .lineLimit(1)
+                }
+            }
+            .width(min: 80, ideal: 140, max: 240)
+            .customizationID("app")
             TableColumn("Status", value: \.status) { (row: FlowRow) in StatusTag(flow: row.flow) }
                 .width(min: 44, ideal: 56, max: 80)
                 .customizationID("status")
@@ -46,9 +57,6 @@ struct FlowListView: View {
                     .defaultVisibility(.hidden)
                 TableColumn("기기") { (row: FlowRow) in Text(deviceNames[row.flow.clientAddress] ?? row.flow.clientAddress) }
                     .customizationID("device")
-                    .defaultVisibility(.hidden)
-                TableColumn("앱") { (row: FlowRow) in Text(model.processes.attribution[row.id]?.displayName(runtimes: model.simulatorRuntimes) ?? "") }
-                    .customizationID("app")
                     .defaultVisibility(.hidden)
                 TableColumn("시작 시각", value: \.startedAt) { (row: FlowRow) in Text(row.flow.startedAt, format: .dateTime.hour().minute().second()) }
                     .customizationID("startedAt")
