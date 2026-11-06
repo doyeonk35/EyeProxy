@@ -2,6 +2,9 @@ import AppKit
 import SwiftUI
 
 /// 읽기 전용·선택 가능한 모노 텍스트(줄번호·줄바꿈 토글). `text`는 인스턴스가 바뀔 때만 다시 넣는다.
+///
+/// 줄번호는 NSRulerView를 쓰지 않고 텍스트 뷰 왼쪽 여백에 직접 그린다. macOS 26에서 세로 ruler에
+/// 스크롤 가장자리 덮개(NSBannerView)가 붙어 본문과 그 위 툴바까지 가려 보이지 않았다.
 struct CodeTextView: NSViewRepresentable {
     let text: NSAttributedString
     let wrap: Bool
@@ -16,103 +19,93 @@ struct CodeTextView: NSViewRepresentable {
     final class Coordinator {
         var text: NSAttributedString?
         var wrap: Bool?
-        var observers: [NSObjectProtocol] = []
-        deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSTextView.scrollableTextView()
-        guard let tv = scroll.documentView as? NSTextView else { return scroll }
+        let tv = GutterTextView()
         tv.isEditable = false
         tv.isSelectable = true
         tv.usesFontPanel = false
         tv.font = Self.font
         tv.textColor = .textColor
         tv.backgroundColor = .textBackgroundColor
-        tv.textContainerInset = NSSize(width: 8, height: 6)
-        // 줄번호 ruler가 NSLayoutManager를 쓰므로 텍스트를 넣기 전에 TextKit 1로 고정한다.
+        tv.isVerticallyResizable = true
+        tv.autoresizingMask = [.width]
+        tv.minSize = .zero
         tv.layoutManager?.allowsNonContiguousLayout = true
 
-        let ruler = LineNumberRuler(textView: tv)
-        scroll.verticalRulerView = ruler
-        scroll.hasVerticalRuler = true
-        scroll.rulersVisible = true
-        scroll.contentView.postsBoundsChangedNotifications = true
-        let redraw: @Sendable (Notification) -> Void = { [weak ruler] _ in
-            MainActor.assumeIsolated { ruler?.needsDisplay = true }
-        }
-        let nc = NotificationCenter.default
-        context.coordinator.observers = [
-            nc.addObserver(forName: NSView.boundsDidChangeNotification, object: scroll.contentView, queue: .main, using: redraw),
-            nc.addObserver(forName: NSView.frameDidChangeNotification, object: tv, queue: .main, using: redraw),
-        ]
+        let scroll = NSScrollView()
+        scroll.documentView = tv
+        scroll.hasVerticalScroller = true
+        scroll.drawsBackground = true
+        scroll.backgroundColor = .textBackgroundColor
         updateNSView(scroll, context: context)
         return scroll
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
-        guard let tv = scroll.documentView as? NSTextView, let tc = tv.textContainer else { return }
+        guard let tv = scroll.documentView as? GutterTextView, let tc = tv.textContainer else { return }
         let c = context.coordinator
         if c.wrap != wrap {
             c.wrap = wrap
+            let big = CGFloat.greatestFiniteMagnitude
             tc.widthTracksTextView = wrap
             tv.isHorizontallyResizable = !wrap
+            tv.maxSize = NSSize(width: big, height: big)
             scroll.hasHorizontalScroller = !wrap
-            let big = CGFloat.greatestFiniteMagnitude
             if wrap {
-                tc.containerSize = NSSize(width: scroll.contentSize.width, height: big)
                 tv.setFrameSize(NSSize(width: scroll.contentSize.width, height: tv.frame.height))
             } else {
                 tc.containerSize = NSSize(width: big, height: big)
-                tv.maxSize = NSSize(width: big, height: big)
             }
         }
         if c.text !== text {
             c.text = text
             tv.textStorage?.setAttributedString(text)
-            (scroll.verticalRulerView as? LineNumberRuler)?.reload()
+            tv.reloadLineStarts()
         }
     }
 }
 
-/// `CodeTextView` 전용 줄번호. 줄을 시작하는 조각에만 번호를 그려 줄바꿈된 이어짐 조각은 비운다.
-final class LineNumberRuler: NSRulerView {
-    private static let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+/// 왼쪽 여백(gutter)에 줄번호를 그리는 텍스트 뷰. 줄을 시작하는 조각에만 번호를 그려 줄바꿈된 이어짐 조각은 비운다.
+final class GutterTextView: NSTextView {
+    private static let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+    private static let pad: CGFloat = 8
     private var lineStarts = [0]  // 각 줄 첫 글자의 UTF-16 인덱스
+    private var gutter: CGFloat = 28
 
-    init(textView: NSTextView) {
-        super.init(scrollView: textView.enclosingScrollView, orientation: .verticalRuler)
-        clientView = textView
-        reload()
-    }
-
-    required init(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    /// 텍스트가 바뀐 뒤 호출: 줄 시작 위치와 두께를 다시 계산한다.
-    func reload() {
+    /// 텍스트가 바뀐 뒤 호출: 줄 시작 위치와 여백 폭을 다시 계산한다.
+    func reloadLineStarts() {
         var starts = [0]
-        if let s = (clientView as? NSTextView)?.string {
-            var i = 0
-            for u in s.utf16 {
-                i += 1
-                if u == 10 { starts.append(i) }
-            }
+        var i = 0
+        for u in string.utf16 {
+            i += 1
+            if u == 10 { starts.append(i) }
         }
         lineStarts = starts
-        ruleThickness = CGFloat(max(2, String(starts.count).count) * 8 + 12)
+        gutter = CGFloat(max(2, String(starts.count).count) * 8 + 12)
+        // 좌우 여백 합 = gutter + 2·pad. 왼쪽은 textContainerOrigin에서 gutter + pad로 민다.
+        textContainerInset = NSSize(width: (gutter + 2 * Self.pad) / 2, height: 6)
         needsDisplay = true
     }
 
-    override func drawHashMarksAndLabels(in rect: NSRect) {
+    override var textContainerOrigin: NSPoint {
+        NSPoint(x: gutter + Self.pad, y: textContainerInset.height)
+    }
+
+    override func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
+        let gutterRect = NSRect(x: 0, y: rect.minY, width: gutter, height: rect.height)
+        guard gutterRect.intersects(rect), let lm = layoutManager, let tc = textContainer else { return }
         NSColor.windowBackgroundColor.setFill()
-        rect.fill()
-        guard let tv = clientView as? NSTextView, let lm = tv.layoutManager, let tc = tv.textContainer else { return }
-        let attrs: [NSAttributedString.Key: Any] = [.font: Self.font, .foregroundColor: NSColor.secondaryLabelColor]
-        let origin = tv.textContainerOrigin
-        let visible = tv.visibleRect.offsetBy(dx: -origin.x, dy: -origin.y)
-        let glyphs = lm.glyphRange(forBoundingRect: visible, in: tc)
+        gutterRect.fill()
+
+        let attrs: [NSAttributedString.Key: Any] = [.font: Self.numberFont, .foregroundColor: NSColor.secondaryLabelColor]
+        let origin = textContainerOrigin
+        let visible = rect.offsetBy(dx: -origin.x, dy: -origin.y)
+        let glyphs = lm.glyphRange(forBoundingRect: NSRect(x: 0, y: visible.minY, width: tc.size.width, height: visible.height), in: tc)
         lm.enumerateLineFragments(forGlyphRange: glyphs) { frag, _, _, range, _ in
             let ch = lm.characterIndexForGlyph(at: range.location)
             // ch 이하인 줄 시작의 개수 = 줄 번호
@@ -124,8 +117,8 @@ final class LineNumberRuler: NSRulerView {
             guard lo > 0, self.lineStarts[lo - 1] == ch else { return }
             let label = String(lo) as NSString
             let size = label.size(withAttributes: attrs)
-            let y = self.convert(NSPoint(x: 0, y: frag.minY + origin.y), from: tv).y
-            label.draw(at: NSPoint(x: self.ruleThickness - 6 - size.width, y: y + (frag.height - size.height) / 2), withAttributes: attrs)
+            let y = frag.minY + origin.y + (frag.height - size.height) / 2
+            label.draw(at: NSPoint(x: self.gutter - 6 - size.width, y: y), withAttributes: attrs)
         }
     }
 }
