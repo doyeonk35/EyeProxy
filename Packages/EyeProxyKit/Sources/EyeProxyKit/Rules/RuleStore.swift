@@ -24,6 +24,8 @@ public final class RuleStore {
 
     /// 파일 이름 → 디코드된 `RuleTree<R>`. 읽기만으로 뷰가 다시 그려지지 않게 관찰 제외.
     @ObservationIgnored private var cache: [String: any Sendable] = [:]
+    /// 읽지 못했고 옮기지도 못한 파일. 덮어쓰면 원본을 잃으므로 이번 실행에서는 저장하지 않는다.
+    @ObservationIgnored private var readOnly: Set<String> = []
 
     public init(directory: URL) { self.directory = directory }
 
@@ -34,41 +36,73 @@ public final class RuleStore {
         return loaded
     }
 
+    /// 저장에 실패하면 캐시·revision을 그대로 두고 경고한다(재시작 후 규칙이 사라지지 않게).
     public func set<R: ToolRule>(_ tree: RuleTree<R>, for file: RuleFile<R>) {
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try tree.encoded().write(to: directory.appendingPathComponent(file.name), options: .atomic)
-        } catch {
-            loadWarnings.append("\(file.name)을 저장하지 못했습니다: \(error.localizedDescription)")
-        }
+        guard write(name: file.name, { try tree.encoded() }) else { return }
         cache[file.name] = tree
         revision += 1
     }
 
+    /// 사용자가 경고를 확인했다.
+    public func clearWarnings() { loadWarnings = [] }
+
+    private func write(name: String, _ encode: () throws -> Data) -> Bool {
+        if readOnly.contains(name) {
+            loadWarnings.append("\(name)은 원본을 보관하지 못해 저장하지 않았습니다")
+            return false
+        }
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try encode().write(to: directory.appendingPathComponent(name), options: .atomic)
+            return true
+        } catch {
+            loadWarnings.append("\(name)을 저장하지 못했습니다: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    /// 파일 내용. 없으면 nil. 있는데 읽지 못하면 빈 규칙으로 덮어쓰지 않도록 옮겨 두고 nil.
+    private func read(_ name: String) -> Data? {
+        let url = directory.appendingPathComponent(name)
+        do {
+            return try Data(contentsOf: url)
+        } catch CocoaError.fileReadNoSuchFile {
+            return nil
+        } catch {
+            aside(url, name: name, suffix: "broken", move: true)
+            return nil
+        }
+    }
+
     private func load<R: ToolRule>(_ file: RuleFile<R>) -> RuleTree<R> {
         let url = directory.appendingPathComponent(file.name)
-        guard let data = try? Data(contentsOf: url) else { return RuleTree() }
+        guard let data = read(file.name) else { return RuleTree() }
         do {
             let (tree, skipped) = try RuleTree<R>.decodeLenient(data)
-            if skipped > 0 { loadWarnings.append("\(file.name)에서 읽지 못한 규칙 \(skipped)개를 건너뛰었습니다") }
+            // 다음 저장이 건너뛴 규칙을 지우므로 원본을 남겨 둔다.
+            if skipped > 0 { aside(url, name: file.name, suffix: "backup", move: false, skipped: skipped) }
             return tree
         } catch {
-            quarantine(url, name: file.name)
+            aside(url, name: file.name, suffix: "broken", move: true)
             return RuleTree()
         }
     }
 
-    /// 읽지 못한 파일을 `.broken-<시각>`으로 옮겨 두고 경고를 남긴다.
-    private func quarantine(_ url: URL, name: String) {
+    /// 원본을 `<이름>.<suffix>-<시각>`으로 옮기거나(읽지 못함) 복사하고(건너뜀) 경고를 남긴다.
+    /// 옮기지 못한 파일은 이번 실행에서 저장하지 않는다.
+    private func aside(_ url: URL, name: String, suffix: String, move: Bool, skipped: Int = 0) {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyyMMdd-HHmmss"
-        let moved = "\(name).broken-\(f.string(from: Date()))"
+        let target = "\(name).\(suffix)-\(f.string(from: Date()))"
+        let to = directory.appendingPathComponent(target)
         do {
-            try FileManager.default.moveItem(at: url, to: directory.appendingPathComponent(moved))
-            loadWarnings.append("\(name)을 읽지 못해 옮겨 두었습니다: \(moved)")
+            if move { try FileManager.default.moveItem(at: url, to: to) } else { try FileManager.default.copyItem(at: url, to: to) }
+            loadWarnings.append(move ? "\(name)을 읽지 못해 옮겨 두었습니다: \(target)"
+                                     : "\(name)에서 읽지 못한 규칙 \(skipped)개를 건너뛰었습니다. 원본: \(target)")
         } catch {
-            loadWarnings.append("\(name)을 읽지 못했고 옮기지도 못했습니다: \(error.localizedDescription)")
+            readOnly.insert(name)
+            loadWarnings.append("\(name)을 읽지 못했고 따로 보관하지도 못해 이번 실행에서는 저장하지 않습니다: \(error.localizedDescription)")
         }
     }
 
@@ -76,22 +110,18 @@ public final class RuleStore {
 
     private func array<T: Codable & Sendable>(_ name: String, as _: T.Type) -> [T] {
         if let cached = cache[name] as? [T] { return cached }
-        let url = directory.appendingPathComponent(name)
         var loaded: [T] = []
-        if let data = try? Data(contentsOf: url) {
-            do { loaded = try JSONDecoder().decode([T].self, from: data) } catch { quarantine(url, name: name) }
+        if let data = read(name) {
+            do { loaded = try JSONDecoder().decode([T].self, from: data) } catch {
+                aside(directory.appendingPathComponent(name), name: name, suffix: "broken", move: true)
+            }
         }
         cache[name] = loaded
         return loaded
     }
 
     private func setArray<T: Codable & Sendable>(_ value: [T], name: String) {
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try JSONEncoder().encode(value).write(to: directory.appendingPathComponent(name), options: .atomic)
-        } catch {
-            loadWarnings.append("\(name)을 저장하지 못했습니다: \(error.localizedDescription)")
-        }
+        guard write(name: name, { try JSONEncoder().encode(value) }) else { return }
         cache[name] = value
         revision += 1
     }
