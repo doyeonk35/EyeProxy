@@ -11,6 +11,6 @@ let package = Package(
             name: "EyeProxyKit",
             dependencies: [.product(name: "EyeProxyCore", package: "EyeProxyCore")]
         ),
-        .testTarget(name: "EyeProxyKitTests", dependencies: ["EyeProxyKit"]),
+        .testTarget(name: "EyeProxyKitTests", dependencies: ["EyeProxyKit"], resources: [.copy("Fixtures")]),
     ]
 )
