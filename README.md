@@ -80,7 +80,7 @@ Certificate
   - 에뮬레이터: Mac 주소는 `10.0.2.2`. adb가 있으면 `adb로 프록시 설정 + CA 복사`(`settings put global http_proxy` + `/sdcard/Download/Prog-CA.crt`로 push)·`adb로 프록시 해제` 버튼, 없으면 복사용 명령을 보여 준다. adb는 `$ANDROID_HOME/platform-tools`, `~/Library/Android/sdk/platform-tools`, PATH 순으로 찾고 **창을 만들 때 한 번만** 찾으므로 adb를 설치했으면 Prog를 다시 켠다.
   - Android TV: 개발자 옵션 ▸ 네트워크 디버깅 → `adb connect` 버튼(TV IP 입력, `:5555`) → 에뮬레이터와 같은 프록시·CA 복사(호스트는 Mac LAN IP) → `인증서 설치 화면 열기`(CA 설치 인텐트, 리모컨으로 진행).
   - 아래 주의: Android 7 이상 앱은 사용자 CA를 기본으로 신뢰하지 않으므로 디버그 빌드에 `network_security_config`(XML 복사 버튼)가 필요하다.
-- **개발 환경 섹션**: HTTP Clients·NodeJS·Python·Ruby·Java·Docker·Electron·React Native·Flutter·NextJS·Firefox별 절차와 복사 버튼 달린 스니펫. CA 경로는 `~/Library/Application Support/com.tv.eyeproxy/ca/ca.pem`의 절대 경로, 프록시는 `http://127.0.0.1:<포트>`(Docker는 `host.docker.internal`)로 채워진다.
+- **개발 환경 섹션**: HTTP Clients·NodeJS·Python·Ruby·Java·Docker·Electron·React Native·Flutter·NextJS·Firefox별 절차와 복사 버튼 달린 스니펫. CA 경로는 `~/Library/Application Support/com.tv.eyeproxy/ca/ca.pem`의 절대 경로, 프록시는 `http://127.0.0.1:<포트>`(Docker는 `host.docker.internal`)로 채워진다. 환경변수만으로는 복호화되지 않는다: 복호화할 호스트를 Tools ▸ SSL Proxying List…에 먼저 넣어야 하고(도구 규칙이 가리키는 호스트는 자동), 목록 밖 HTTPS는 원래 인증서로 지나간다. `SSL_CERT_FILE`·`REQUESTS_CA_BUNDLE`·`--cacert`는 시스템 신뢰 저장소를 대체하므로 스니펫은 `/etc/ssl/cert.pem`과 Prog CA를 합친 `~/prog-bundle.pem`을 가리킨다.
 - **`/ssl` 주소**: 기기가 Prog를 프록시로 쓸 때 호스트 `prog`로 응답한다(이전 주소 `http://eyeproxy/ssl`도 계속 동작).
   - `/ssl`: iOS·macOS는 `Prog-CA.mobileconfig`, User-Agent에 Android가 있으면 PEM `Prog-CA.crt`.
   - `/ssl.crt`·`/ssl.pem`: 항상 PEM. `/ssl.cer`: DER.

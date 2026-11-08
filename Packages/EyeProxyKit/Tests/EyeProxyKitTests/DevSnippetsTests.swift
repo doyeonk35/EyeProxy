@@ -32,3 +32,25 @@ private let pem = "/tmp/eyeproxy/ca.pem"
     let docker = DevSnippets.guide(for: .docker, pemPath: pem, proxyHost: "127.0.0.1", proxyPort: 9090)
     #expect(docker.snippet.contains("/usr/local/share/ca-certificates/prog.crt"))
 }
+
+@Test func javaImportsWithoutPrompt() {
+    let java = DevSnippets.guide(for: .java, pemPath: pem, proxyHost: "127.0.0.1", proxyPort: 9090)
+    #expect(java.snippet.contains("-noprompt"))
+    #expect(java.snippet.contains("-cacerts"))
+}
+
+@Test func trustStoreReplacingPlatformsUseCombinedBundle() {
+    for platform in [DevPlatform.httpClients, .python, .ruby] {
+        let guide = DevSnippets.guide(for: platform, pemPath: pem, proxyHost: "127.0.0.1", proxyPort: 9090)
+        #expect(guide.snippet.contains("/etc/ssl/cert.pem"), "\(platform.rawValue)")
+        #expect(guide.snippet.contains("prog-bundle.pem"), "\(platform.rawValue)")
+        #expect(!guide.snippet.contains("SSL_CERT_FILE=\"\(pem)\""), "\(platform.rawValue)")
+    }
+}
+
+@Test func everyGuideStartsWithSSLProxyingStep() {
+    for platform in DevPlatform.allCases {
+        let guide = DevSnippets.guide(for: platform, pemPath: pem, proxyHost: "127.0.0.1", proxyPort: 9090)
+        #expect(guide.steps.first?.contains("SSL Proxying") == true, "\(platform.rawValue)")
+    }
+}
