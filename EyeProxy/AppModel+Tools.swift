@@ -10,7 +10,7 @@ extension AppModel {
     func toolChain() -> InterceptorChain {
         let resolver = self.resolver
         return ToolPipeline.chain(
-            rules: rules.ruleSet, switches: settings.toolSwitches, breakpoints: breakpoints,
+            rules: rules.ruleSet, switches: settings.toolSwitches, sslPolicy: settings.sslPolicy, breakpoints: breakpoints,
             appPath: { [weak self] address, clientPort in
                 // Mac 앱 판별은 루프백 클라이언트만 가능하다(lsof).
                 guard FlowFilter.isLoopback(address), let clientPort, let proxyPort = await self?.runningPort else { return nil }

@@ -182,6 +182,8 @@ final class AppModel {
         let update = Task {
             await previous?.value
             await server?.update(sslPolicy: settings.sslPolicy)
+            // 자동 복호화가 SSL Proxying 설정을 보므로 체인도 다시 만든다.
+            await applyTools()
         }
         settingsUpdate = update
         await update.value
