@@ -15,7 +15,10 @@ struct MainToolbar: ToolbarContent {
                 .help("목록 지우기 (⌘K)")
         }
         ToolbarItem(placement: .status) {
-            status
+            HStack(spacing: 8) {
+                status
+                PendingBreakpointsButton(count: model.breakpoints.pending.count)
+            }
                 .font(.caption)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
@@ -36,6 +39,11 @@ struct MainToolbar: ToolbarContent {
             }
             .pickerStyle(.segmented)
             .help("레이아웃 전환")
+            // 검색 칸(.searchable) 바로 앞에 놓인다.
+            @Bindable var model = model
+            Toggle("숨김 포함", isOn: $model.filter.includeHidden)
+                .toggleStyle(.checkbox)
+                .help("Block List로 숨긴 요청도 목록에 보이기")
         }
     }
 
@@ -54,6 +62,21 @@ struct MainToolbar: ToolbarContent {
                 Label(message, systemImage: "exclamationmark.triangle.fill").labelStyle(.titleAndIcon).foregroundStyle(.red)
                 Button("다시 시도") { Task { await model.startServer() } }
             }
+        }
+    }
+}
+
+/// 멈춘 Breakpoint가 있으면 "⏸ N건 대기". 누르면 Breakpoint 창을 연다.
+private struct PendingBreakpointsButton: View {
+    let count: Int
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        if count > 0 {
+            Button("⏸ \(count)건 대기") { openWindow(id: "breakpoints") }
+                .buttonStyle(.link)
+                .foregroundStyle(.orange)
+                .help("Breakpoint 창 열기")
         }
     }
 }

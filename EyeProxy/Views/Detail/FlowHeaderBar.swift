@@ -1,5 +1,6 @@
 import AppKit
 import EyeProxyCore
+import EyeProxyKit
 import SwiftUI
 
 struct FlowHeaderBar: View {
@@ -11,6 +12,9 @@ struct FlowHeaderBar: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 MethodTag(method: flow.request.method)
                 StatusTag(flow: flow)
+                ForEach(Array(flow.annotationLabels.enumerated()), id: \.offset) { _, label in
+                    Text(label).modifier(Capsuled(color: .secondary, selected: false))
+                }
                 Text(urlText)
                     .font(.system(.body, design: .monospaced))
                     .textSelection(.enabled)

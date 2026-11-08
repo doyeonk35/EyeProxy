@@ -25,6 +25,8 @@ final class AppModel {
     let settings = AppSettings()
     let session = SessionStore()
     let processes = ProcessRegistry()
+    let rules = RuleStore(directory: AppModel.rulesDirectory)
+    let breakpoints = BreakpointCenter()
     @ObservationIgnored let resolver = ProcessResolver()
     let devices: DeviceRegistry
     let certificateAuthority: CertificateAuthority
@@ -58,7 +60,8 @@ final class AppModel {
 
     /// 종료 중이면 시스템 프록시를 다시 켜지 않는다(종료 경로가 끈 뒤에 켜지는 경쟁 방지).
     @ObservationIgnored var quitting = false
-    @ObservationIgnored private var server: ProxyServer?
+    @ObservationIgnored private(set) var server: ProxyServer?
+    @ObservationIgnored var toolsUpdate: Task<Void, Never>?
     @ObservationIgnored private var consumer: Task<Void, Never>?
     @ObservationIgnored private var settingsUpdate: Task<Void, Never>?
     @ObservationIgnored private var captureUpdate: Task<Void, Never>?
@@ -73,6 +76,11 @@ final class AppModel {
         // 이 실행은 아직 캡처를 켜지 않았으므로 백업이 있으면 이전 실행이 복원하지 못한 것이다.
         pendingProxyRestore = systemProxy.pendingRestore()
         systemProxyBackupExists = pendingProxyRestore != nil
+        // 지연 로드가 뷰 렌더링 중에 관찰 상태(loadWarnings)를 바꾸지 않도록 미리 모두 읽는다.
+        _ = rules.ruleSet
+        _ = rules.customNetworkProfiles
+        _ = rules.breakpointTemplates
+        observeTools()
         // 백업 없이 VPN 복사본만 남은 경우(종료 때 관리자 인증 취소 등)도 시작 시 알린다.
         Task { await refreshEffectiveProxyWarning() }
     }
@@ -104,7 +112,7 @@ final class AppModel {
         let server = ProxyServer(
             configuration: .init(port: settings.port, sslPolicy: settings.sslPolicy),
             certificateAuthority: certificateAuthority,
-            interceptors: .init(request: [CAProfileResponder(certificateAuthority: certificateAuthority)]))
+            interceptors: toolChain())
         self.server = server
         // events는 단일 소비자이고 끝나지 않는다 → stopServer에서 취소한다.
         consumer = Task { [weak self] in
@@ -184,12 +192,14 @@ final class AppModel {
         // 기록 중지 상태에서도 이미 보이는 요청의 응답·실패는 반영한다.
         if settings.isRecording || !isNewFlow { session.apply(event) }
         devices.observe(event)
+        if case .annotated(let id, .unrecorded) = event { processes.remove(id) }
         // 소켓 조회는 비동기로 하고, 결과가 오면 귀속만 기록한다. 실제로 세션에 반영된 흐름만.
         if case .requestStarted(let flow) = event, session.number(flow.id) != nil,
            FlowFilter.sameDevice(flow.clientAddress, "127.0.0.1"), let port = flow.clientPort, let proxyPort = runningPort {
             let id = flow.id
             Task { [resolver, processes] in
-                guard let identity = await resolver.resolve(port: port, proxyPort: proxyPort) else { return }
+                // 조회 중에 미기록(Allow List)으로 빠진 흐름은 귀속하지 않는다.
+                guard let identity = await resolver.resolve(port: port, proxyPort: proxyPort), session.number(id) != nil else { return }
                 processes.set(identity, for: id)
                 // 기기 창을 열지 않아도 시뮬레이터 런타임(플랫폼 표기)을 알 수 있게 처음 보는 udid면 목록을 갱신한다.
                 if let sim = identity.simulator, !bootedSimulators.contains(where: { $0.udid == sim.udid }) { await refreshSimulators() }

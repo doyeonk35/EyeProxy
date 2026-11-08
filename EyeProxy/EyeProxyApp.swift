@@ -57,6 +57,11 @@ import SwiftUI
             SettingsView()
                 .environment(model)
         }
+        // ponytail: 자리표시자. Task 16에서 Breakpoint 창으로 바꾼다.
+        Window("Breakpoints", id: "breakpoints") {
+            Text("Breakpoint 창은 다음 작업에서 추가됩니다")
+                .frame(minWidth: 400, minHeight: 200)
+        }
         Window("기기", id: "devices") {
             DevicesView()
                 .environment(model)
@@ -101,6 +106,8 @@ private struct OpenDevicesButton: View {
     /// 시스템 프록시가 EyeProxy를 가리킬 수 있으면(캡처 중·변경 중·백업 잔여) 진행 중인 변경을 기다려 되돌린 뒤 종료한다.
     /// 실패해도 오류를 기록하고 종료 — 백업이 남아 다음 실행에서 복원을 제안한다. 두 번째 ⌘Q는 같은 작업을 기다린다.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // 멈춘 Breakpoint는 모두 원본대로 보낸다(§5.1).
+        model.breakpoints.releaseAll()
         if quitTask != nil { return .terminateLater }
         guard model.needsProxyCleanupOnQuit else { return .terminateNow }
         model.quitting = true

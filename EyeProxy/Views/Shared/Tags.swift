@@ -22,7 +22,7 @@ enum FlowColors {
 
 /// 칩 스타일. 선택된 행 위에서는 시스템 강조색(파랑)과 칩 색(GET 파랑 등)이 겹쳐 안 보이므로
 /// 흰 글자 + 반투명 흰 배경으로 바꿔 어떤 강조색 위에서도 읽히게 한다.
-private struct Capsuled: ViewModifier {
+struct Capsuled: ViewModifier {
     let color: Color
     let selected: Bool
 
