@@ -57,6 +57,8 @@ struct CertificateWindow: View {
         .onAppear { model.devicesWindowOpen = true }
         .onDisappear { model.devicesWindowOpen = false }
         .systemErrorAlert(model, presenting: true)
+        // 초기화로 CA가 바뀌면 시뮬레이터에 다시 설치해야 한다.
+        .onChange(of: model.certificateAuthority.sha256Fingerprint) { installedSimulators = [] }
         .task {
             await model.refreshMacCAInstalled()
             await model.refreshEffectiveProxyWarning()
