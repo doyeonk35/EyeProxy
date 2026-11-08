@@ -10,8 +10,10 @@ struct ShortCircuit: RequestInterceptor {
 @Test func requestInterceptorsRunInOrderAndStopAtRespond() async {
     let chain = InterceptorChain(request: [AddHeader(v: "1"), ShortCircuit(), AddHeader(v: "2")])
     let ctx = FlowContext(id: FlowID(), clientAddress: "127.0.0.1")
-    guard case .respond(let res) = await chain.runRequest(.get("http://a/x"), context: ctx) else { Issue.record("expected respond"); return }
+    let (decision, last) = await chain.runRequest(.get("http://a/x"), context: ctx)
+    guard case .respond(let res) = decision else { Issue.record("expected respond"); return }
     #expect(res.status == 418)
+    #expect(last.header("X-T") == "1")   // 응답 직전까지 고친 요청을 돌려준다
 }
 @Test func requestURLOmitsDefaultPort() {
     #expect(FlowRequest(method: "GET", scheme: "https", host: "a", port: 443, path: "/p?q=1", headers: [], body: Data()).url == "https://a/p?q=1")
@@ -24,7 +26,7 @@ struct ShortCircuit: RequestInterceptor {
     struct Drop: RequestInterceptor { func intercept(_ r: FlowRequest, context: FlowContext) async -> RequestDecision { .drop } }
     struct Fail: RequestInterceptor { func intercept(_ r: FlowRequest, context: FlowContext) async -> RequestDecision { Issue.record("ran"); return .continue(r) } }
     let chain = InterceptorChain(request: [Drop(), Fail()])
-    guard case .drop = await chain.runRequest(.get("http://a.example/"), context: .init(id: FlowID(), clientAddress: "1.2.3.4")) else { Issue.record("not drop"); return }
+    guard case .drop = await chain.runRequest(.get("http://a.example/"), context: .init(id: FlowID(), clientAddress: "1.2.3.4")).decision else { Issue.record("not drop"); return }
 }
 @Test func responseDropStopsResponseChain() async {
     struct Drop: ResponseInterceptor { func intercept(_ r: FlowResponse, for req: FlowRequest, context: FlowContext) async -> ResponseDecision { .drop } }

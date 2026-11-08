@@ -47,16 +47,17 @@ public struct InterceptorChain: Sendable {
     }
 
     /// 순서대로 실행하고 첫 `.respond`·`.drop`에서 중단한다.
-    public func runRequest(_ r: FlowRequest, context: FlowContext) async -> RequestDecision {
+    /// `request`는 중단 시점까지 앞 단계들이 고친 요청이다(`.respond` 응답이 응답 체인에 갈 때 이것과 짝지어진다).
+    public func runRequest(_ r: FlowRequest, context: FlowContext) async -> (decision: RequestDecision, request: FlowRequest) {
         var current = r
         for interceptor in request {
             switch await interceptor.intercept(current, context: context) {
             case .continue(let next): current = next
-            case .respond(let res): return .respond(res)
-            case .drop: return .drop
+            case .respond(let res): return (.respond(res), current)
+            case .drop: return (.drop, current)
             }
         }
-        return .continue(current)
+        return (.continue(current), current)
     }
 
     /// 순서대로 실행하고 첫 `.drop`에서 중단한다.

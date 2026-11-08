@@ -127,11 +127,12 @@ public actor ProxyServer {
         eventSink.yield(.requestStarted(Flow(id: id, clientAddress: clientAddress, clientPort: clientPort, startedAt: Date(), request: request, isDecrypted: isDecrypted)))
         let chain = interceptors
         let response: FlowResponse, sent: FlowRequest
-        switch await chain.runRequest(request, context: context) {
+        let (decision, last) = await chain.runRequest(request, context: context)
+        switch decision {
         case .drop:
             return dropped(id)
         case .respond(let local):
-            (response, sent) = (local, request)
+            (response, sent) = (local, last)
         case .continue(let outgoing):
             do {
                 response = try await upstream.send(outgoing, tls: outgoing.scheme == "https", clientAddress: clientAddress)

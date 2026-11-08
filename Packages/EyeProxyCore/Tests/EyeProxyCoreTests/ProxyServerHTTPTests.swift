@@ -113,6 +113,27 @@ struct ProxyServerHTTPTests {
         #expect(status == 200); #expect(headers["X-Seen"] == "1"); #expect(body == Data("local".utf8))
     }
 
+    @Test func respondedResponseChainSeesRewrittenRequest() async throws {
+        struct Rewrite: RequestInterceptor {
+            func intercept(_ r: FlowRequest, context: FlowContext) async -> RequestDecision { var r = r; r.host = "b.example"; return .continue(r) }
+        }
+        struct Local: RequestInterceptor {
+            func intercept(_ r: FlowRequest, context: FlowContext) async -> RequestDecision {
+                .respond(FlowResponse(status: 200, reason: "OK", headers: [], body: Data()))
+            }
+        }
+        struct RecordHost: ResponseInterceptor {
+            func intercept(_ r: FlowResponse, for req: FlowRequest, context: FlowContext) async -> ResponseDecision {
+                var r = r; r.headers.append(.init(name: "X-For-Host", value: req.host)); return .continue(r)
+            }
+        }
+        let server = try makeServer(.init(request: [Rewrite(), Local()], response: [RecordHost()]))
+        let port = try await server.start()
+        defer { await server.stop() }
+        let (_, headers, _) = try await fetchViaProxy("http://127.0.0.1:1/x", proxyPort: port)
+        #expect(headers["X-For-Host"] == "b.example")
+    }
+
     @Test func dropClosesClientWithoutResponse() async throws {
         struct Drop: RequestInterceptor { func intercept(_ r: FlowRequest, context: FlowContext) async -> RequestDecision { .drop } }
         let server = try makeServer(.init(request: [Drop()]))
