@@ -16,7 +16,10 @@ public struct BreakpointInterceptor: RequestInterceptor, ResponseInterceptor {
         let item = PausedItem(flowID: context.id, phase: .request, ruleName: rule.name, request: request)
         switch await center.pause(item) {
         case .continueOriginal, .executeResponse: return .continue(request)
-        case .executeRequest(let edited):
+        case .executeRequest(var edited):
+            // 목적지만 고치고 Host 헤더는 그대로 뒀으면 새 목적지에 맞춘다(사용자가 고친 Host 헤더는 둔다).
+            if (edited.scheme, edited.host, edited.port) != (request.scheme, request.host, request.port),
+               edited.header("Host") == request.header("Host") { edited.syncHostHeader() }
             context.annotate(ToolMark.annotation(.breakpoint, detail: "편집됨"))
             return .continue(edited)
         case .drop:

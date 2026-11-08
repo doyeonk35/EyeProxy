@@ -100,7 +100,7 @@ public struct BlockInterceptor: RequestInterceptor, ConnectInterceptor {
     }
 }
 
-/// 어떤 규칙에도 안 맞는 트래픽을 기록하지 않는다. 켜진 규칙이 없으면 아무 영향 없음.
+/// 어떤 규칙에도 안 맞는 트래픽은 기록·조작 없이 통과시킨다(§4.5 1단계). 켜진 규칙이 없으면 아무 영향 없음.
 public struct AllowInterceptor: RequestInterceptor, ConnectInterceptor {
     let rules: RuleTree<AllowRule>
 
@@ -108,8 +108,9 @@ public struct AllowInterceptor: RequestInterceptor, ConnectInterceptor {
 
     public func intercept(_ request: FlowRequest, context: FlowContext) async -> RequestDecision {
         let enabled = rules.enabledRules
-        if !enabled.isEmpty, !enabled.contains(where: { $0.match.matches(request) }) { context.annotate(.unrecorded) }
-        return .continue(request)
+        guard !enabled.isEmpty, !enabled.contains(where: { $0.match.matches(request) }) else { return .continue(request) }
+        context.annotate(.unrecorded)
+        return .passthrough(request)
     }
 
     public func intercept(host: String, port: Int, context: ConnectContext) async -> ConnectVerdict {

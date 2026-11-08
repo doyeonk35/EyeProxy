@@ -35,3 +35,10 @@ struct ShortCircuit: RequestInterceptor {
     let res = FlowResponse(status: 200, reason: "OK", headers: [], body: Data())
     guard case .drop = await chain.runResponse(res, for: .get("http://a.example/"), context: .init(id: FlowID(), clientAddress: "1.2.3.4")) else { Issue.record("not drop"); return }
 }
+@Test func passthroughStopsRequestChainWithItsRequest() async {
+    struct Pass: RequestInterceptor { func intercept(_ r: FlowRequest, context: FlowContext) async -> RequestDecision { .passthrough(r) } }
+    let chain = InterceptorChain(request: [Pass(), AddHeader(v: "late")])
+    let (decision, last) = await chain.runRequest(.get("http://a/x"), context: .init(id: FlowID(), clientAddress: "127.0.0.1"))
+    guard case .passthrough(let r) = decision else { Issue.record("not passthrough"); return }
+    #expect(r.header("X-T") == nil && last == r)
+}

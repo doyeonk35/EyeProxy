@@ -165,6 +165,81 @@ struct ProxyServerHTTPTests {
         #expect(rid == flow.id)
     }
 
+    /// `.passthrough`: 이후 요청 단계·응답 체인을 건너뛰고, 그 흐름에는 이벤트를 더 내지 않는다.
+    @Test func passthroughSkipsRestAndEmitsNoFurtherEvents() async throws {
+        struct Pass: RequestInterceptor {
+            func intercept(_ r: FlowRequest, context: FlowContext) async -> RequestDecision { r.path == "/pass" ? .passthrough(r) : .continue(r) }
+        }
+        struct MarkRequest: RequestInterceptor {
+            func intercept(_ r: FlowRequest, context: FlowContext) async -> RequestDecision {
+                .continue(r.with(headers: r.headers + [.init(name: "X-Touched", value: "1")]))
+            }
+        }
+        struct MarkResponse: ResponseInterceptor {
+            func intercept(_ r: FlowResponse, for req: FlowRequest, context: FlowContext) async -> ResponseDecision {
+                var r = r; r.headers.append(.init(name: "X-Touched", value: "1")); return .continue(r)
+            }
+        }
+        let origin = TestOrigin { req in
+            FlowResponse(status: 200, reason: "OK", headers: [.init(name: "X-Saw", value: req.header("X-Touched") ?? "-")], body: Data())
+        }
+        let originPort = try await origin.start()
+        defer { await origin.stop() }
+        let server = try makeServer(.init(request: [Pass(), MarkRequest()], response: [MarkResponse()]))
+        let port = try await server.start()
+        defer { await server.stop() }
+        var iterator = server.events.makeAsyncIterator()
+        let (status, headers, _) = try await fetchViaProxy("http://127.0.0.1:\(originPort)/pass", proxyPort: port)
+        #expect(status == 200 && headers["X-Saw"] == "-" && headers["X-Touched"] == nil)
+        _ = try await fetchViaProxy("http://127.0.0.1:\(originPort)/other", proxyPort: port)
+        guard case .requestStarted(let passed) = await iterator.next() else { Issue.record("no requestStarted"); return }
+        #expect(passed.request.path == "/pass")
+        // 통과한 흐름의 응답 이벤트 없이 다음 흐름이 온다.
+        guard case .requestStarted(let other) = await iterator.next() else { Issue.record("passthrough emitted more events"); return }
+        #expect(other.request.path == "/other")
+    }
+
+    /// 요청 체인이 요청을 바꾸면 보낸 요청을 `.requestSent`로 알린다.
+    @Test func changedRequestEmitsRequestSent() async throws {
+        struct Rewrite: RequestInterceptor {
+            func intercept(_ r: FlowRequest, context: FlowContext) async -> RequestDecision {
+                .continue(r.with(headers: r.headers + [.init(name: "X-T", value: "1")]))
+            }
+        }
+        let origin = TestOrigin { _ in FlowResponse(status: 200, reason: "OK", headers: [], body: Data()) }
+        let originPort = try await origin.start()
+        defer { await origin.stop() }
+        let server = try makeServer(.init(request: [Rewrite()]))
+        let port = try await server.start()
+        defer { await server.stop() }
+        var iterator = server.events.makeAsyncIterator()
+        _ = try await fetchViaProxy("http://127.0.0.1:\(originPort)/", proxyPort: port)
+        guard case .requestStarted(let flow) = await iterator.next() else { Issue.record("no requestStarted"); return }
+        #expect(flow.request.header("X-T") == nil)
+        guard case .requestSent(let id, let sent) = await iterator.next() else { Issue.record("no requestSent"); return }
+        #expect(id == flow.id && sent.header("X-T") == "1")
+    }
+
+    /// 요청의 Host 헤더가 있으면 그대로 보내고(Map Remote Preserve Host Header), 없으면 host:port로 만든다.
+    @Test func upstreamHostHeaderKeptOrSynthesized() async throws {
+        struct SetHost: RequestInterceptor {
+            func intercept(_ r: FlowRequest, context: FlowContext) async -> RequestDecision {
+                let rest = r.headers.filter { $0.name.lowercased() != "host" }
+                return .continue(r.with(headers: r.path == "/keep" ? rest + [.init(name: "Host", value: "kept.example.com")] : rest))
+            }
+        }
+        let origin = TestOrigin { req in FlowResponse(status: 200, reason: "OK", headers: [.init(name: "X-Host", value: req.header("Host") ?? "-")], body: Data()) }
+        let originPort = try await origin.start()
+        defer { await origin.stop() }
+        let server = try makeServer(.init(request: [SetHost()]))
+        let port = try await server.start()
+        defer { await server.stop() }
+        let (_, kept, _) = try await fetchViaProxy("http://127.0.0.1:\(originPort)/keep", proxyPort: port)
+        #expect(kept["X-Host"] == "kept.example.com")
+        let (_, made, _) = try await fetchViaProxy("http://127.0.0.1:\(originPort)/make", proxyPort: port)
+        #expect(made["X-Host"] == "127.0.0.1:\(originPort)")
+    }
+
     @Test func upstreamFailureYields502AndFailedEvent() async throws {
         let closed = TestOrigin { _ in FlowResponse(status: 200, reason: "OK", headers: [], body: Data()) }
         let closedPort = try await closed.start()

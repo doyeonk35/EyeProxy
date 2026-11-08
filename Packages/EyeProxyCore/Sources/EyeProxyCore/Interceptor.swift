@@ -22,6 +22,8 @@ public enum RequestDecision: Sendable {
     case respond(FlowResponse)
     /// 응답 없이 클라이언트 연결을 끊는다.
     case drop
+    /// 기록·조작 없이 업스트림에 그대로 보낸다: 이후 요청 단계와 응답 체인을 모두 건너뛰고 이벤트도 더 내지 않는다.
+    case passthrough(FlowRequest)
 }
 
 public enum ResponseDecision: Sendable {
@@ -115,7 +117,7 @@ public struct InterceptorChain: Sendable {
         return merged
     }
 
-    /// 순서대로 실행하고 첫 `.respond`·`.drop`에서 중단한다.
+    /// 순서대로 실행하고 첫 `.respond`·`.drop`·`.passthrough`에서 중단한다.
     /// `request`는 중단 시점까지 앞 단계들이 고친 요청이다(`.respond` 응답이 응답 체인에 갈 때 이것과 짝지어진다).
     public func runRequest(_ r: FlowRequest, context: FlowContext) async -> (decision: RequestDecision, request: FlowRequest) {
         var current = r
@@ -124,6 +126,7 @@ public struct InterceptorChain: Sendable {
             case .continue(let next): current = next
             case .respond(let res): return (.respond(res), current)
             case .drop: return (.drop, current)
+            case .passthrough(let r): return (.passthrough(r), r)
             }
         }
         return (.continue(current), current)

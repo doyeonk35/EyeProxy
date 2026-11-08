@@ -68,6 +68,7 @@ extension Flow {
             switch $0 {
             case .tool(let label): label
             case .originalURL(let url): "원래 URL: \(url)"
+            case .sentURL(let url): "실제 전송 URL: \(url)"
             case .hidden, .unrecorded: nil
             }
         }

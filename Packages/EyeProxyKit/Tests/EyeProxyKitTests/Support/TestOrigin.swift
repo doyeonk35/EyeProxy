@@ -105,3 +105,17 @@ func fetch(_ url: String, proxyHost: String, proxyPort: Int) async throws -> (In
     let (data, response) = try await session.data(from: URL(string: url)!)
     return ((response as! HTTPURLResponse).statusCode, data)
 }
+
+/// 평문 HTTP 프록시(127.0.0.1:proxyPort)를 거친 GET. 상태·응답 헤더(이름 소문자)·본문(UTF-8).
+func fetchWithHeaders(_ url: String, proxyPort: Int) async throws -> (Int, [String: String], String) {
+    let config = URLSessionConfiguration.ephemeral
+    config.connectionProxyDictionary = [
+        kCFNetworkProxiesHTTPEnable: 1, kCFNetworkProxiesHTTPProxy: "127.0.0.1", kCFNetworkProxiesHTTPPort: proxyPort,
+    ]
+    let session = URLSession(configuration: config)
+    defer { session.finishTasksAndInvalidate() }
+    let (data, response) = try await session.data(from: URL(string: url)!)
+    let http = response as! HTTPURLResponse
+    let headers = Dictionary(http.allHeaderFields.map { ("\($0.key)".lowercased(), "\($0.value)") }, uniquingKeysWith: { a, _ in a })
+    return (http.statusCode, headers, String(decoding: data, as: UTF8.self))
+}

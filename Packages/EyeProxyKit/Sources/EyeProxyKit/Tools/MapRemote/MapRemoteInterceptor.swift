@@ -42,19 +42,25 @@ public struct MapRemoteInterceptor: RequestInterceptor {
         if let q = to.query, !q.isEmpty { query = q }
         out.path = path + (query.map { "?" + $0 } ?? "")
 
-        if !rule.preserveHostHeader {
-            let isDefault = (out.scheme == "http" && out.port == 80) || (out.scheme == "https" && out.port == 443)
-            let host = out.host.contains(":") ? "[\(out.host)]" : out.host
-            let value = isDefault ? host : "\(host):\(out.port)"
-            if let i = out.headers.firstIndex(where: { $0.name.caseInsensitiveCompare("Host") == .orderedSame }) {
-                out.headers[i].value = value
-            } else {
-                out.headers.append(HTTPHeader(name: "Host", value: value))
-            }
-        }
+        if !rule.preserveHostHeader { out.syncHostHeader() }
 
         context.annotate(ToolMark.annotation(.mapRemote, detail: rule.name))
-        if rule.preserveOriginalURL { context.annotate(.originalURL(request.url)) }
+        // 끔: 기록은 보낸 요청으로 바뀌고(`requestSent`) 원래 URL을 남긴다. 켬: 표시 URL은 그대로, 실제 전송 URL을 남긴다.
+        context.annotate(rule.preserveOriginalURL ? .sentURL(out.url) : .originalURL(request.url))
         return .continue(out)
+    }
+}
+
+extension FlowRequest {
+    /// Host 헤더를 host[:port](기본 포트 생략)로 맞춘다. 없으면 더한다. Core는 요청의 Host 헤더를 그대로 보낸다.
+    mutating func syncHostHeader() {
+        let isDefault = (scheme == "http" && port == 80) || (scheme == "https" && port == 443)
+        let name = host.contains(":") ? "[\(host)]" : host
+        let value = isDefault ? name : "\(name):\(port)"
+        if let i = headers.firstIndex(where: { $0.name.caseInsensitiveCompare("Host") == .orderedSame }) {
+            headers[i].value = value
+        } else {
+            headers.append(HTTPHeader(name: "Host", value: value))
+        }
     }
 }

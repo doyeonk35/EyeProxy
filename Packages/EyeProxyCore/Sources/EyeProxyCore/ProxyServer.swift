@@ -120,6 +120,7 @@ public actor ProxyServer {
 
     /// 요청 하나의 수명: 이벤트 → 요청 인터셉터 → (업스트림) → 응답 인터셉터 → 이벤트. 실패는 502로 바꿔 돌려준다.
     /// 요청 체인의 `.respond`도 응답 체인을 거친다. 어느 체인이든 `.drop`이면 `.failed`를 내고 `.drop`을 돌려준다.
+    /// 요청 체인이 요청을 바꿨으면 `.requestSent`를 낸다. `.passthrough`는 응답 체인·이후 이벤트 없이 그대로 보낸다.
     /// `note`가 있으면 흐름에 `.tool(note)` 주석을 단다(CONNECT 판정이 복호화를 강제한 연결).
     func exchange(_ request: FlowRequest, clientAddress: String, clientPort: Int? = nil, upstream: UpstreamClient, isDecrypted: Bool = false,
                   note: String? = nil) async -> ExchangeOutcome {
@@ -131,7 +132,16 @@ public actor ProxyServer {
         let chain = interceptors
         let response: FlowResponse, sent: FlowRequest
         let (decision, last) = await chain.runRequest(request, context: context)
+        if case .passthrough = decision {} else if last != request { eventSink.yield(.requestSent(id: id, request: last)) }
         switch decision {
+        case .passthrough(let outgoing):
+            do {
+                return .respond(try await upstream.send(outgoing, tls: outgoing.scheme == "https", clientAddress: clientAddress))
+            } catch is LoopbackBlockedError {
+                return .respond(FlowResponse(status: 403, reason: "Forbidden", headers: [], body: Data()))
+            } catch {
+                return .respond(Self.badGateway(String(describing: error)))
+            }
         case .drop:
             return dropped(id)
         case .respond(let local):
@@ -147,8 +157,7 @@ public actor ProxyServer {
                 let message = Task.isCancelled ? "client disconnected"
                     : Self.upstreamTLSLabel(error).map { "\($0): \(error)" } ?? String(describing: error)
                 eventSink.yield(.failed(id: id, error: message, completedAt: Date()))
-                return .respond(FlowResponse(status: 502, reason: "Bad Gateway", headers: [.init(name: "Content-Type", value: "text/plain")],
-                                             body: Data("EyeProxy: upstream error: \(message)".utf8)))
+                return .respond(Self.badGateway(message))
             }
         }
         switch await chain.runResponse(response, for: sent, context: context) {
@@ -161,6 +170,11 @@ public actor ProxyServer {
     }
 
     static let droppedByRule = "규칙으로 연결 끊김"
+
+    private static func badGateway(_ message: String) -> FlowResponse {
+        FlowResponse(status: 502, reason: "Bad Gateway", headers: [.init(name: "Content-Type", value: "text/plain")],
+                     body: Data("EyeProxy: upstream error: \(message)".utf8))
+    }
 
     private func dropped(_ id: FlowID) -> ExchangeOutcome {
         eventSink.yield(.failed(id: id, error: Self.droppedByRule, completedAt: Date()))

@@ -86,6 +86,8 @@ public enum FlowAnnotation: Codable, Equatable, Sendable {
     case unrecorded
     case tool(String)
     case originalURL(String)
+    /// 표시 URL은 그대로 두고 실제로는 이 URL로 보냈다. SessionStore가 `requestSent`로 최종 URL로 고친다.
+    case sentURL(String)
 }
 
 public struct Flow: Equatable, Codable, Sendable, Identifiable {
@@ -145,4 +147,6 @@ public enum FlowEvent: Sendable {
     case failed(id: FlowID, error: String, completedAt: Date)
     case connectionLog(ConnectionLogEntry)
     case annotated(id: FlowID, FlowAnnotation)
+    /// 요청 체인이 요청을 바꿨을 때, 실제로 보낸(또는 로컬 응답과 짝지은) 요청. `requestStarted`의 요청은 받은 그대로다.
+    case requestSent(id: FlowID, request: FlowRequest)
 }

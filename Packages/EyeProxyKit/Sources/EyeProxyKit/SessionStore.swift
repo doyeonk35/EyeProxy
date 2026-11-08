@@ -32,6 +32,18 @@ public final class SessionStore {
         case .connectionLog(let entry):
             connectionLog.append(entry)
             if connectionLog.count > Self.logCap { connectionLog.removeFirst(connectionLog.count - Self.logCap) }
+        case .requestSent(let id, let request):
+            guard let i = index[id] else { return }
+            // `.sentURL`(Preserve the Original URL)이면 표시 URL은 두고 나머지만 바꾸며, 주석은 최종 URL로 고친다.
+            if let s = flows[i].annotations.firstIndex(where: { if case .sentURL = $0 { true } else { false } }) {
+                let shown = flows[i].request
+                flows[i].request = request
+                (flows[i].request.scheme, flows[i].request.host, flows[i].request.port, flows[i].request.path) =
+                    (shown.scheme, shown.host, shown.port, shown.path)
+                flows[i].annotations[s] = .sentURL(request.url)
+            } else {
+                flows[i].request = request
+            }
         case .annotated(let id, let annotation):
             guard let i = index[id] else { return }
             if annotation == .unrecorded {

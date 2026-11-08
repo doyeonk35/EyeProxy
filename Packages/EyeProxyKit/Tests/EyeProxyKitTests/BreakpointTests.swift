@@ -66,6 +66,24 @@ private func continued(_ d: ResponseDecision) -> FlowResponse? {
         #expect(a.all == [.tool("Breakpoint: 편집됨")] && a.all.compactMap(ToolMark.mark) == [.breakpoint])
     }
 
+    /// Core가 요청의 Host 헤더를 그대로 보내므로, host·port만 고친 Apply는 Host 헤더도 새 목적지로 맞춘다.
+    /// 사용자가 Host 헤더를 직접 고쳤으면 그 값을 둔다.
+    @Test func applyWithEditedHostSyncsHostHeader() async throws {
+        let center = BreakpointCenter()
+        let bp = interceptor([rule()], center)
+        var withHost = original
+        withHost.headers.append(HTTPHeader(name: "Host", value: "api.example.com"))
+        for (headerEdit, expected) in [(nil, "staging.example.com:8443"), ("custom.example.com", "custom.example.com")] {
+            let task = Task { await bp.intercept(withHost, context: Annotations().context) }
+            let item = try #require(await waitPending(center, 1).first)
+            var edited = withHost
+            (edited.host, edited.port) = ("staging.example.com", 8443)
+            if let headerEdit { edited.headers[1].value = headerEdit }
+            center.resolve(item.id, with: .executeRequest(edited))
+            #expect(continued(await task.value)?.header("Host") == expected)
+        }
+    }
+
     @Test func cancellationRemovesPending() async throws {
         let center = BreakpointCenter()
         let bp = interceptor([rule()], center)

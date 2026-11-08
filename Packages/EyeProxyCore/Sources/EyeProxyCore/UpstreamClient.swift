@@ -78,7 +78,9 @@ final class UpstreamClient: Sendable {
         }
         let isDefaultPort = (request.scheme == "http" && request.port == 80) || (request.scheme == "https" && request.port == 443)
         let hostName = host.contains(":") ? "[\(host)]" : host
-        var headers = HTTPHeaders([("Host", isDefaultPort ? hostName : "\(hostName):\(request.port)")]
+        // 요청에 Host가 있으면 그대로 쓴다(Map Remote의 Preserve Host Header). 없을 때만 host[:port]로 만든다.
+        let hostHeader = request.header("Host") ?? (isDefaultPort ? hostName : "\(hostName):\(request.port)")
+        var headers = HTTPHeaders([("Host", hostHeader)]
             + request.headers.filter { !Self.rewrittenHeaders.contains($0.name.lowercased()) }.map { ($0.name, $0.value) })
         let hadBody = !request.body.isEmpty || request.header("Content-Length") != nil || request.header("Transfer-Encoding") != nil
         if hadBody { headers.add(name: "Content-Length", value: String(request.body.count)) }
@@ -97,7 +99,7 @@ final class UpstreamClient: Sendable {
         }
     }
 
-    /// Host는 (인터셉터가 바꿨을 수 있는) host/port로, 프레이밍은 버퍼링한 본문으로 다시 쓴다.
+    /// Host는 맨 앞에 한 번만 쓰고(요청 값 우선), 프레이밍은 버퍼링한 본문으로 다시 쓴다.
     private static let rewrittenHeaders: Set<String> = ["host", "content-length", "transfer-encoding", "connection", "keep-alive"]
 }
 
