@@ -3,24 +3,35 @@ import Foundation
 import NIOCore
 import NIOHTTP1
 import NIOPosix
+import NIOSSL
 import Synchronization
 
-// EyeProxyCoreTests/Support/TestOrigin.swift의 HTTP 부분만 옮긴 것(TLS·chunked 없음).
+// EyeProxyCoreTests/Support/TestOrigin.swift를 옮긴 것(chunked 없음). `tls`를 주면 HTTPS.
 
 /// 로컬 HTTP 서버. 127.0.0.1의 OS 할당 포트에 뜬다.
 final class TestOrigin {
+    private let tls: LeafCertificate?
     private let handler: @Sendable (FlowRequest) -> FlowResponse
     private let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
     private var channel: Channel?
 
-    init(handler: @Sendable @escaping (FlowRequest) -> FlowResponse) { self.handler = handler }
+    init(tls: LeafCertificate? = nil, handler: @Sendable @escaping (FlowRequest) -> FlowResponse) {
+        self.tls = tls
+        self.handler = handler
+    }
 
     func start() async throws -> Int {
+        let sslContext = try tls.map { leaf in
+            try NIOSSLContext(configuration: .makeServerConfiguration(
+                certificateChain: [.certificate(NIOSSLCertificate(bytes: leaf.certificateDER, format: .der))],
+                privateKey: .privateKey(NIOSSLPrivateKey(bytes: leaf.privateKeyDER, format: .der))))
+        }
         let handler = self.handler
         let channel = try await ServerBootstrap(group: group)
             .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
             .childChannelInitializer { channel in
                 channel.eventLoop.makeCompletedFuture {
+                    if let sslContext { try channel.pipeline.syncOperations.addHandler(NIOSSLServerHandler(context: sslContext)) }
                     try channel.pipeline.syncOperations.configureHTTPServerPipeline()
                     try channel.pipeline.syncOperations.addHandler(OriginHandler(handler: handler))
                 }

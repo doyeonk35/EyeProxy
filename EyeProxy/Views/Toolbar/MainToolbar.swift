@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MainToolbar: ToolbarContent {
     let model: AppModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some ToolbarContent {
         @Bindable var settings = model.settings
@@ -13,6 +14,8 @@ struct MainToolbar: ToolbarContent {
             .help("기록 켜기/끄기 (⌘R)")
             Button("지우기", systemImage: "trash") { model.clear() }
                 .help("목록 지우기 (⌘K)")
+            Button("Compose", systemImage: "square.and.pencil") { openWindow(id: "compose") }
+                .help("Compose Request (⌥⌘C)")
         }
         ToolbarItem(placement: .status) {
             HStack(spacing: 8) {
