@@ -19,3 +19,16 @@ import Testing
     s.appearance = .dark
     #expect(AppSettings(defaults: d).appearance == .dark)
 }
+
+@Test @MainActor func toolSwitchesPersist() {
+    let d = UserDefaults(suiteName: UUID().uuidString)!
+    let s = AppSettings(defaults: d)
+    #expect(s.toolSwitches == ToolSwitches())
+    #expect(![s.toolSwitches.breakpoint, s.toolSwitches.mapLocal, s.toolSwitches.mapRemote, s.toolSwitches.blockList,
+              s.toolSwitches.allowList, s.toolSwitches.networkConditions, s.toolSwitches.noCaching, s.toolSwitches.repeatNoCache].contains(true))
+    s.toolSwitches.mapLocal = true
+    #expect(AppSettings(defaults: d).toolSwitches.mapLocal)
+    #expect(!AppSettings(defaults: d).toolSwitches.mapRemote)
+    d.set(Data("x".utf8), forKey: "eyeproxy.toolSwitches")
+    #expect(AppSettings(defaults: d).toolSwitches == ToolSwitches())
+}

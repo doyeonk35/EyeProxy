@@ -19,6 +19,9 @@ public final class AppSettings {
     public var pinnedHosts: [String] { didSet { defaults.set(pinnedHosts, forKey: "eyeproxy.pinnedHosts") } }
     public var wrapLongLines: Bool { didSet { defaults.set(wrapLongLines, forKey: "eyeproxy.wrapLongLines") } }
     public var appearance: Appearance { didSet { defaults.set(appearance.rawValue, forKey: "eyeproxy.appearance") } }
+    public var toolSwitches: ToolSwitches {
+        didSet { defaults.set(try? JSONEncoder().encode(toolSwitches), forKey: "eyeproxy.toolSwitches") }
+    }
     /// 저장하지 않는다 (실행할 때마다 기록 중으로 시작).
     public var isRecording = true
 
@@ -34,6 +37,7 @@ public final class AppSettings {
         pinnedHosts = defaults.stringArray(forKey: "eyeproxy.pinnedHosts") ?? []
         wrapLongLines = defaults.object(forKey: "eyeproxy.wrapLongLines") as? Bool ?? true
         appearance = defaults.string(forKey: "eyeproxy.appearance").flatMap(Appearance.init(rawValue:)) ?? .system
+        toolSwitches = defaults.data(forKey: "eyeproxy.toolSwitches").flatMap { try? JSONDecoder().decode(ToolSwitches.self, from: $0) } ?? ToolSwitches()
     }
 
     public func togglePin(_ host: String) {
