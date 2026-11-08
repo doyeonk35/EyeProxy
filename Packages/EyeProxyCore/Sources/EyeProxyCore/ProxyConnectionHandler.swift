@@ -148,6 +148,7 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
                 if d.verdict.record {
                     let id = FlowID()
                     server.emit(.requestStarted(Self.connectFlow(id: id, host: host, port: port, channel: context.channel)))
+                    if let note = d.verdict.note { server.emit(.annotated(id: id, .tool(note))) }
                     server.emit(.failed(id: id, error: ProxyServer.droppedByRule, completedAt: Date()))
                 }
                 context.close(promise: nil)

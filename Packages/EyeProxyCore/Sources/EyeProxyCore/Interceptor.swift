@@ -76,7 +76,7 @@ public struct ConnectVerdict: Sendable, Equatable {
     public var record: Bool
     /// 터널에만 적용된다.
     public var shaping: TunnelShaping?
-    /// 복호화한 연결 안의 모든 흐름에 `.tool(note)` 주석.
+    /// 복호화한 연결 안의 모든 흐름에 `.tool(note)` 주석. 기록하는 끊기(`.drop`)면 그 CONNECT 항목에 단다.
     public var note: String?
 
     public init(action: ConnectAction = .useDefault, record: Bool = true, shaping: TunnelShaping? = nil, note: String? = nil) {

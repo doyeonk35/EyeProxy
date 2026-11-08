@@ -87,6 +87,23 @@ struct ProxyServerTunnelTests {
         await server.stop(); await origin.stop()
     }
 
+    @Test func recordedDropCarriesNote() async throws {
+        let ca = try CertificateAuthority.generate()
+        let origin = TestOrigin(tls: try ca.leaf(for: "localhost")) { _ in FlowResponse(status: 200, reason: "OK", headers: [], body: Data()) }
+        let originPort = try await origin.start()
+        let server = ProxyServer(configuration: .init(port: 0, sslPolicy: .init(patterns: [])), certificateAuthority: ca,
+                                 interceptors: .init(connect: [FixedVerdict(verdict: .init(action: .drop, note: "Blocked: R"))]))
+        let port = try await server.start()
+        var it = server.events.makeAsyncIterator()
+        _ = try? await fetchViaProxy("https://localhost:\(originPort)/x", proxyPort: port, trustRootDER: ca.certificateDER)
+        guard case .requestStarted(let flow) = await it.next() else { Issue.record("no requestStarted"); return }
+        guard case .annotated(let id, let note) = await it.next() else { Issue.record("no annotated"); return }
+        #expect(id == flow.id && note == .tool("Blocked: R"))
+        guard case .failed(let fid, _, _) = await it.next() else { Issue.record("no failed"); return }
+        #expect(fid == flow.id)
+        await server.stop(); await origin.stop()
+    }
+
     @Test func unrecordedTunnelEmitsNoEvents() async throws {
         let ca = try CertificateAuthority.generate()
         let originCA = try CertificateAuthority.generate()   // 성공 = 패스스루(SSL 목록에 있어도 복호화 안 함)
