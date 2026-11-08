@@ -8,7 +8,7 @@ import EyeProxyCore
     r.observe(.requestStarted(.fixture(client: "192.168.0.21", decrypted: true)))
     r.observe(.requestStarted(.fixture(client: "192.168.0.21", decrypted: false)))
     r.observe(.requestStarted(.fixture(client: "127.0.0.1", decrypted: false)))
-    r.observe(.connectionLog(.init(id: .init(), date: .now, clientAddress: "192.168.0.21", host: "h", port: 443, message: "기기가 EyeProxy 인증서를 신뢰하지 않습니다")))
+    r.observe(.connectionLog(.init(id: .init(), date: .now, clientAddress: "192.168.0.21", host: "h", port: 443, message: "기기가 Prog 인증서를 신뢰하지 않습니다")))
     let tv = try #require(r.devices.first { $0.address == "192.168.0.21" })
     #expect(tv.flowCount == 2 && tv.decryptedCount == 1 && tv.tlsFailureCount == 1 && tv.kind == .unknown)
     #expect(r.devices.first { $0.address == "127.0.0.1" }?.kind == .thisMac)

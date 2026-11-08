@@ -27,14 +27,14 @@ struct MacSection: View {
                 }
             }
             if model.systemProxyBackupExists {
-                Label("시스템 프록시가 EyeProxy로 설정되어 있음", systemImage: "network.badge.shield.half.filled")
+                Label("시스템 프록시가 Prog로 설정되어 있음", systemImage: "network.badge.shield.half.filled")
                     .foregroundStyle(model.macCaptureEnabled ? Color.secondary : Color.orange)
             }
             if model.vpnPrimaryDetected {
                 Text("VPN 상태에서는 켜고 끌 때 관리자 인증이 필요합니다").font(.caption).foregroundStyle(.secondary)
             }
             if model.effectiveProxyLeftover {
-                Label("VPN 서비스에 EyeProxy 프록시가 남아 있습니다 — 캡처를 끄거나 VPN을 재연결하세요", systemImage: "exclamationmark.triangle.fill")
+                Label("VPN 서비스에 Prog 프록시가 남아 있습니다 — 캡처를 끄거나 VPN을 재연결하세요", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
             }
             LabeledContent {

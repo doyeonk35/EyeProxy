@@ -7,11 +7,11 @@ enum CertificateExportFormat {
 
     var defaultFileName: String {
         switch self {
-        case .pem: "EyeProxy-CA.pem"
-        case .der: "EyeProxy-CA.cer"
-        case .p12: "EyeProxy-CA.p12"
-        case .privateKey: "EyeProxy-CA-key.pem"
-        case .crt: "EyeProxy-CA.crt"
+        case .pem: "Prog-CA.pem"
+        case .der: "Prog-CA.cer"
+        case .p12: "Prog-CA.p12"
+        case .privateKey: "Prog-CA-key.pem"
+        case .crt: "Prog-CA.crt"
         }
     }
 }
@@ -20,7 +20,7 @@ enum CertificateExportFormat {
 extension AppModel {
     func installCAOnMacWithConfirmation() {
         guard confirm(String(localized: "이 Mac에 CA를 설치할까요?"),
-                      String(localized: "로그인 키체인에 EyeProxy CA를 추가하고 SSL 신뢰를 켭니다. 관리자 인증이 필요합니다."),
+                      String(localized: "로그인 키체인에 Prog CA를 추가하고 SSL 신뢰를 켭니다. 관리자 인증이 필요합니다."),
                       button: String(localized: "설치")) else { return }
         Task {
             do {
@@ -37,7 +37,7 @@ extension AppModel {
         switch format {
         case .privateKey:
             guard confirm(String(localized: "개인키를 내보낼까요?"),
-                          String(localized: "이 키로 누구나 EyeProxy CA를 신뢰하는 기기의 HTTPS를 가로챌 수 있습니다"),
+                          String(localized: "이 키로 누구나 Prog CA를 신뢰하는 기기의 HTTPS를 가로챌 수 있습니다"),
                           button: String(localized: "내보내기"), destructive: true) else { return }
         case .p12:
             guard let entered = askP12Password() else { return }
@@ -62,7 +62,7 @@ extension AppModel {
         }
     }
 
-    /// Android용 PEM을 `EyeProxy-CA.crt`로 저장.
+    /// Android용 PEM을 `Prog-CA.crt`로 저장.
     func exportCACrt() { exportCertificate(.crt) }
 
     /// 찾은 adb로 실행해 출력을 돌려준다. adb가 없거나 실패하면 그 사실을 문장으로 돌려준다.
@@ -78,10 +78,10 @@ extension AppModel {
         }
     }
 
-    /// 프록시를 host:현재 포트로 설정한 뒤, 현재 CA를 임시 `EyeProxy-CA.crt`로 써서 기기 다운로드 폴더로 push. 두 출력을 합친다.
+    /// 프록시를 host:현재 포트로 설정한 뒤, 현재 CA를 임시 `Prog-CA.crt`로 써서 기기 다운로드 폴더로 push. 두 출력을 합친다.
     func adbSetProxyAndPushCA(host: String) async -> String {
         let proxy = String(localized: "프록시: ") + (await runADB(AndroidSetup.proxyArguments(host: host, port: runningPort ?? settings.port)))
-        let crt = FileManager.default.temporaryDirectory.appending(path: "EyeProxy-CA.crt")
+        let crt = FileManager.default.temporaryDirectory.appending(path: "Prog-CA.crt")
         do {
             try CertificateExporter.writePEM(certificateAuthority, to: crt)
         } catch {
@@ -91,7 +91,7 @@ extension AppModel {
     }
 
     func resetCertificatesWithConfirmation() async {
-        guard confirm(String(localized: "모든 EyeProxy 인증서를 초기화할까요?"),
+        guard confirm(String(localized: "모든 Prog 인증서를 초기화할까요?"),
                       String(localized: "새 루트 CA를 만듭니다. Mac·시뮬레이터·기기에 설치한 CA는 모두 다시 설치해야 합니다."),
                       button: String(localized: "초기화"), destructive: true) else { return }
         await resetCertificateAuthority()

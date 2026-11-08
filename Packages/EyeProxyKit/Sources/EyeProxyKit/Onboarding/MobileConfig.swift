@@ -7,11 +7,11 @@ public enum WiFiSecurity: String, CaseIterable, Sendable {
 
 public enum MobileConfig {
     /// Wi-Fi(com.apple.wifi.managed) + 수동 프록시. 반환은 XML plist Data.
-    public static func wifiProxyProfile(ssid rawSSID: String, security: WiFiSecurity, password rawPassword: String?, proxyHost rawHost: String, proxyPort: Int, organization rawOrg: String = "EyeProxy") -> Data {
+    public static func wifiProxyProfile(ssid rawSSID: String, security: WiFiSecurity, password rawPassword: String?, proxyHost rawHost: String, proxyPort: Int, organization rawOrg: String = "Prog") -> Data {
         let proxyHost = xmlSafe(rawHost), organization = xmlSafe(rawOrg)
         let ssid = xmlSafe(rawSSID), password = rawPassword.map(xmlSafe)
         let id = "com.tv.eyeproxy.wifi.\(ssid)"
-        let name = "EyeProxy 프록시 (\(ssid))"
+        let name = "Prog 프록시 (\(ssid))"
         let seed = Data("\(id)|\(proxyHost):\(proxyPort)".utf8)
         var wifi = payload(type: "com.apple.wifi.managed", identifier: id + ".payload", name: name, seed: seed + Data("|payload".utf8))
         wifi["SSID_STR"] = ssid
@@ -24,17 +24,17 @@ public enum MobileConfig {
         return profile(identifier: id, name: name, organization: organization, seed: seed, content: wifi)
     }
 
-    /// 루트 CA(com.apple.security.root). displayName "EyeProxy CA (<commonName>)".
+    /// 루트 CA(com.apple.security.root). displayName "Prog CA (<commonName>)".
     public static func caProfile(certificateDER: [UInt8], commonName rawCN: String) -> Data {
         let commonName = xmlSafe(rawCN)
         // CA마다 다른 식별자: 공용 기기에서 팀원끼리 CA를 덮어쓰지 않고, 같은 CA 재설치는 제자리 갱신.
         let id = "com.tv.eyeproxy.ca." + SHA256.hash(data: certificateDER).prefix(4).map { String(format: "%02x", $0) }.joined()
-        let name = "EyeProxy CA (\(commonName))"
+        let name = "Prog CA (\(commonName))"
         let seed = Data((id + "|").utf8) + Data(certificateDER)
         var ca = payload(type: "com.apple.security.root", identifier: id + ".payload", name: name, seed: seed + Data("|payload".utf8))
         ca["PayloadContent"] = Data(certificateDER)
-        ca["PayloadCertificateFileName"] = "EyeProxy-CA.cer"
-        return profile(identifier: id, name: name, organization: "EyeProxy", seed: seed, content: ca)
+        ca["PayloadCertificateFileName"] = "Prog-CA.cer"
+        return profile(identifier: id, name: name, organization: "Prog", seed: seed, content: ca)
     }
 
     private static func payload(type: String, identifier: String, name: String, seed: Data) -> [String: Any] {

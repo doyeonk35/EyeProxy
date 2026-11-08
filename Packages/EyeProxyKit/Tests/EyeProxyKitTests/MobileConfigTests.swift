@@ -10,6 +10,8 @@ private func parse(_ data: Data) throws -> [String: Any] {
     let data = MobileConfig.wifiProxyProfile(ssid: "TVING-5G", security: .wpa2, password: "pw", proxyHost: "192.168.0.10", proxyPort: 9090)
     let plist = try parse(data)
     #expect(plist["PayloadType"] as? String == "Configuration")
+    #expect(plist["PayloadDisplayName"] as? String == "Prog 프록시 (TVING-5G)")
+    #expect(plist["PayloadOrganization"] as? String == "Prog")
     let wifi = try #require((plist["PayloadContent"] as? [[String: Any]])?.first)
     #expect(wifi["PayloadType"] as? String == "com.apple.wifi.managed")
     #expect(wifi["SSID_STR"] as? String == "TVING-5G")
@@ -32,9 +34,11 @@ private func parse(_ data: Data) throws -> [String: Any] {
     let der: [UInt8] = [1, 2, 3, 4]
     let data = MobileConfig.caProfile(certificateDER: der, commonName: "Test CA")
     let plist = try parse(data)
-    #expect(plist["PayloadDisplayName"] as? String == "EyeProxy CA (Test CA)")
+    #expect(plist["PayloadDisplayName"] as? String == "Prog CA (Test CA)")
+    #expect(plist["PayloadOrganization"] as? String == "Prog")
     let ca = try #require((plist["PayloadContent"] as? [[String: Any]])?.first)
     #expect(ca["PayloadType"] as? String == "com.apple.security.root")
+    #expect(ca["PayloadCertificateFileName"] as? String == "Prog-CA.cer")
     #expect(ca["PayloadContent"] as? Data == Data(der))
     #expect(data == MobileConfig.caProfile(certificateDER: der, commonName: "Test CA"))  // 결정적 UUID
     #expect(plist["PayloadIdentifier"] as? String == "com.tv.eyeproxy.ca.9f64a747")   // SHA256([1,2,3,4]) 앞 8 hex

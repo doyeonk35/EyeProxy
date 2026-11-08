@@ -25,3 +25,10 @@ private let pem = "/tmp/eyeproxy/ca.pem"
     #expect(guide.snippet.contains("REQUESTS_CA_BUNDLE="))
     #expect(guide.snippet.contains("SSL_CERT_FILE="))
 }
+
+@Test func snippetsUseProgNames() {
+    let java = DevSnippets.guide(for: .java, pemPath: pem, proxyHost: "127.0.0.1", proxyPort: 9090)
+    #expect(java.snippet.contains("-alias prog "))
+    let docker = DevSnippets.guide(for: .docker, pemPath: pem, proxyHost: "127.0.0.1", proxyPort: 9090)
+    #expect(docker.snippet.contains("/usr/local/share/ca-certificates/prog.crt"))
+}

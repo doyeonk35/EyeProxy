@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build EyeProxy for release distribution
+# Build Prog for release distribution
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 SCHEME="EyeProxy"
 BUILD_DIR="$(pwd)/build"
 DIST_DIR="$(pwd)/dist"
-APP_NAME="EyeProxy"
+APP_NAME="Prog"
 
 echo "=== Cleaning ==="
 rm -rf "${BUILD_DIR}" "${DIST_DIR}"

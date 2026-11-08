@@ -173,7 +173,7 @@ public actor ProxyServer {
 
     private static func badGateway(_ message: String) -> FlowResponse {
         FlowResponse(status: 502, reason: "Bad Gateway", headers: [.init(name: "Content-Type", value: "text/plain")],
-                     body: Data("EyeProxy: upstream error: \(message)".utf8))
+                     body: Data("Prog: upstream error: \(message)".utf8))
     }
 
     private func dropped(_ id: FlowID) -> ExchangeOutcome {

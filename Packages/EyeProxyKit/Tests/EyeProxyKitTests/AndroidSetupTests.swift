@@ -22,20 +22,20 @@ import Foundation
 @Test func proxyAndPushArgumentsAreExact() {
     #expect(AndroidSetup.proxyArguments(host: "10.0.2.2", port: 9090) == ["shell", "settings", "put", "global", "http_proxy", "10.0.2.2:9090"])
     #expect(AndroidSetup.clearProxyArguments == ["shell", "settings", "put", "global", "http_proxy", ":0"])
-    #expect(AndroidSetup.pushArguments(crt: URL(fileURLWithPath: "/tmp/EyeProxy-CA.crt")) == ["push", "/tmp/EyeProxy-CA.crt", "/sdcard/Download/EyeProxy-CA.crt"])
+    #expect(AndroidSetup.pushArguments(crt: URL(fileURLWithPath: "/tmp/Prog-CA.crt")) == ["push", "/tmp/Prog-CA.crt", "/sdcard/Download/Prog-CA.crt"])
     #expect(AndroidSetup.connectArguments("192.168.0.20") == ["connect", "192.168.0.20:5555"])
-    #expect(AndroidSetup.installIntentArguments == ["shell", "am", "start", "-a", "android.intent.action.VIEW", "-t", "application/x-x509-ca-cert", "-d", "file:///sdcard/Download/EyeProxy-CA.crt"])
+    #expect(AndroidSetup.installIntentArguments == ["shell", "am", "start", "-a", "android.intent.action.VIEW", "-t", "application/x-x509-ca-cert", "-d", "file:///sdcard/Download/Prog-CA.crt"])
 }
 
 @Test func commandLinesContainBoth() {
-    let text = AndroidSetup.commandLines(adb: "adb", host: "10.0.2.2", port: 9090, crt: URL(fileURLWithPath: "/tmp/EyeProxy-CA.crt"))
+    let text = AndroidSetup.commandLines(adb: "adb", host: "10.0.2.2", port: 9090, crt: URL(fileURLWithPath: "/tmp/Prog-CA.crt"))
     let lines = text.split(separator: "\n").map(String.init)
     #expect(lines == ["adb shell settings put global http_proxy 10.0.2.2:9090",
-                      "adb push /tmp/EyeProxy-CA.crt /sdcard/Download/EyeProxy-CA.crt"])
+                      "adb push /tmp/Prog-CA.crt /sdcard/Download/Prog-CA.crt"])
 }
 
 @Test func tvCommandLinesContainConnectAndIntent() {
-    let text = AndroidSetup.tvCommandLines(adb: "adb", tvIP: "192.168.0.20", host: "192.168.0.5", port: 9090, crt: URL(fileURLWithPath: "/tmp/EyeProxy-CA.crt"))
+    let text = AndroidSetup.tvCommandLines(adb: "adb", tvIP: "192.168.0.20", host: "192.168.0.5", port: 9090, crt: URL(fileURLWithPath: "/tmp/Prog-CA.crt"))
     let lines = text.split(separator: "\n").map(String.init)
     #expect(lines.count == 4)
     #expect(lines[0] == "adb connect 192.168.0.20:5555")

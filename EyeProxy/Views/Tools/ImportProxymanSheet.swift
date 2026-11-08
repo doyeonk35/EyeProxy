@@ -178,7 +178,7 @@ private func graphQLCount<R: ToolRule>(_ nodes: [RuleNode<R>]) -> Int {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.json, UTType(filenameExtension: "config") ?? .data]
-        panel.message = String(localized: "Proxyman 내보내기 파일(.config/.json)이나 EyeProxy 번들 폴더(.eyeproxyrules) 또는 그 안의 rules.config를 고르세요")
+        panel.message = String(localized: "Proxyman 내보내기 파일(.config/.json)이나 Prog 번들 폴더(.eyeproxyrules) 또는 그 안의 rules.config를 고르세요")
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
         return url
     }

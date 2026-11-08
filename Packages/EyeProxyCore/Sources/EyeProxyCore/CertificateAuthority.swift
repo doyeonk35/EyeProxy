@@ -22,9 +22,9 @@ public final class CertificateAuthority: Sendable {
         certificatePEM = try certificate.serializeAsPEM().pemString
     }
 
-    public static func generate(commonName: String = "EyeProxy Root CA", validYears: Int = 10) throws -> CertificateAuthority {
+    public static func generate(commonName: String = "Prog Root CA", validYears: Int = 10) throws -> CertificateAuthority {
         let key = P256.Signing.PrivateKey()
-        let name = try DistinguishedName { CommonName(commonName); OrganizationName("EyeProxy") }
+        let name = try DistinguishedName { CommonName(commonName); OrganizationName("Prog") }
         let now = Date()
         let cert = try Certificate(
             version: .v3, serialNumber: Certificate.SerialNumber(), publicKey: .init(key.publicKey),

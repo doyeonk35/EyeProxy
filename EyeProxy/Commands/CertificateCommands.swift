@@ -41,7 +41,7 @@ private struct CertificateMenu: View {
             Button("Private Key…") { model.exportCertificate(.privateKey) }
         }
         Divider()
-        Button("Reset all EyeProxy Certificates…") { Task { await model.resetCertificatesWithConfirmation() } }
+        Button("Reset all Prog Certificates…") { Task { await model.resetCertificatesWithConfirmation() } }
         Divider()
         Button("Certificate & Devices Window…") { openWindow(id: "devices") }
             .keyboardShortcut("d")

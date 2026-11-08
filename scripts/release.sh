@@ -1,5 +1,5 @@
 #!/bin/bash
-# EyeProxy 릴리즈 스크립트
+# Prog 릴리즈 스크립트
 # 사용법: ./scripts/release.sh <version>
 # 예시: ./scripts/release.sh 1.1.0
 
@@ -14,7 +14,7 @@ fi
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 RELEASE_DIR="${PROJECT_DIR}/releases/${VERSION}"
-APP_NAME="EyeProxy"
+APP_NAME="Prog"
 SCHEME="EyeProxy"
 SPARKLE_BIN="${HOME}/Library/Developer/Xcode/DerivedData/EyeProxy-*/SourcePackages/artifacts/sparkle/Sparkle/bin"
 REPO="doyeonk35/EyeProxy"
@@ -128,7 +128,7 @@ else
 <?xml version="1.0" standalone="yes"?>
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
     <channel>
-        <title>EyeProxy</title>
+        <title>Prog</title>
 ${NEW_ITEM}
     </channel>
 </rss>

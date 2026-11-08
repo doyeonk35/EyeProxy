@@ -46,13 +46,13 @@ targets:
         CODE_SIGN_ENTITLEMENTS: EyeProxy/EyeProxy.entitlements
         INFOPLIST_FILE: EyeProxy/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.tv.eyeproxy
-        PRODUCT_NAME: EyeProxy
+        PRODUCT_NAME: Prog
         PRODUCT_MODULE_NAME: EyeProxy
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: com.tv.eyeproxy.debug
-          PRODUCT_NAME: EyeProxy-Debug
+          PRODUCT_NAME: Prog-Debug
           CODE_SIGN_STYLE: Automatic
           DEVELOPMENT_TEAM: F64BRNFSBB

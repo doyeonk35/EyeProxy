@@ -1,4 +1,4 @@
-# EyeProxy — AI Agent Guide
+# Prog (구 EyeProxy) — AI Agent Guide
 
 macOS 15+ / Swift 6 MITM 디버깅 프록시 (Proxyman류). XcodeGen(`project.yml`) 사용.
 

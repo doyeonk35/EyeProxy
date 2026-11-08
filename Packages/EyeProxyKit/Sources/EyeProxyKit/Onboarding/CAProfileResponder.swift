@@ -23,14 +23,14 @@ public struct CAProfileResponder: RequestInterceptor {
         case "/ssl":
             return .respond(FlowResponse(status: 200, reason: "OK", headers: [
                 HTTPHeader(name: "Content-Type", value: "application/x-apple-aspen-config"),
-                HTTPHeader(name: "Content-Disposition", value: "attachment; filename=\"EyeProxy-CA.mobileconfig\""),
+                HTTPHeader(name: "Content-Disposition", value: "attachment; filename=\"Prog-CA.mobileconfig\""),
             ], body: profile))
         case "/ssl.cer":
             return derResponse()
         case "/":
             let html = """
-            <!doctype html><meta charset="utf-8"><title>EyeProxy</title>\
-            <p><a href="/ssl">EyeProxy CA 프로파일 설치</a> (iOS·macOS 프로파일)</p>\
+            <!doctype html><meta charset="utf-8"><title>Prog</title>\
+            <p><a href="/ssl">Prog CA 프로파일 설치</a> (iOS·macOS 프로파일)</p>\
             <p><a href="/ssl.crt">CA 인증서 PEM</a> (Android·기타)</p>\
             <p><a href="/ssl.cer">CA 인증서 DER</a></p>\
             <p>SHA-256: <code>\(fingerprint)</code></p>
@@ -44,14 +44,14 @@ public struct CAProfileResponder: RequestInterceptor {
     private func pemResponse() -> RequestDecision {
         .respond(FlowResponse(status: 200, reason: "OK", headers: [
             HTTPHeader(name: "Content-Type", value: "application/x-x509-ca-cert"),
-            HTTPHeader(name: "Content-Disposition", value: "attachment; filename=\"EyeProxy-CA.crt\""),
+            HTTPHeader(name: "Content-Disposition", value: "attachment; filename=\"Prog-CA.crt\""),
         ], body: pem))
     }
 
     private func derResponse() -> RequestDecision {
         .respond(FlowResponse(status: 200, reason: "OK", headers: [
             HTTPHeader(name: "Content-Type", value: "application/pkix-cert"),
-            HTTPHeader(name: "Content-Disposition", value: "attachment; filename=\"EyeProxy-CA.cer\""),
+            HTTPHeader(name: "Content-Disposition", value: "attachment; filename=\"Prog-CA.cer\""),
         ], body: der))
     }
 }

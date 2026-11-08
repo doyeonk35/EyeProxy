@@ -9,6 +9,7 @@ import Crypto
     let ca = try CertificateAuthority.generate()
     let cert = try Certificate(derEncoded: ca.certificateDER)
     #expect(cert.issuer == cert.subject)
+    #expect(cert.subject == (try DistinguishedName { CommonName("Prog Root CA"); OrganizationName("Prog") }))
     #expect(try cert.extensions.basicConstraints == .isCertificateAuthority(maxPathLength: nil))
 }
 @Test func leafIsSignedByCAAndHasSAN() throws {

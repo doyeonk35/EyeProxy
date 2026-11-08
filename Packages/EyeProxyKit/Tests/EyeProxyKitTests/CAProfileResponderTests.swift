@@ -13,7 +13,7 @@ private let ctx = FlowContext(id: .init(), clientAddress: "1.2.3.4")
     let r = CAProfileResponder(certificateAuthority: ca)
     guard case .respond(let res) = await r.intercept(req(host: "eyeproxy", path: "/ssl"), context: ctx) else { Issue.record("x"); return }
     #expect(res.status == 200 && res.header("Content-Type") == "application/x-apple-aspen-config")
-    #expect(res.header("Content-Disposition") == "attachment; filename=\"EyeProxy-CA.mobileconfig\"")
+    #expect(res.header("Content-Disposition") == "attachment; filename=\"Prog-CA.mobileconfig\"")
     #expect(res.body == MobileConfig.caProfile(certificateDER: ca.certificateDER, commonName: ca.commonName))
 }
 
@@ -51,12 +51,12 @@ private let ctx = FlowContext(id: .init(), clientAddress: "1.2.3.4")
     for path in ["/ssl.crt", "/ssl.pem"] {
         guard case .respond(let res) = await r.intercept(req(host: "eyeproxy", path: path), context: ctx) else { Issue.record("x"); return }
         #expect(res.status == 200 && res.header("Content-Type") == "application/x-x509-ca-cert")
-        #expect(res.header("Content-Disposition") == "attachment; filename=\"EyeProxy-CA.crt\"")
+        #expect(res.header("Content-Disposition") == "attachment; filename=\"Prog-CA.crt\"")
         #expect(res.body == Data(ca.certificatePEM.utf8))
     }
     guard case .respond(let der) = await r.intercept(req(host: "eyeproxy", path: "/ssl.cer"), context: ctx) else { Issue.record("x"); return }
     #expect(der.status == 200 && der.header("Content-Type") == "application/pkix-cert")
-    #expect(der.header("Content-Disposition") == "attachment; filename=\"EyeProxy-CA.cer\"")
+    #expect(der.header("Content-Disposition") == "attachment; filename=\"Prog-CA.cer\"")
     #expect(der.body == Data(ca.certificateDER))
 }
 
@@ -74,5 +74,5 @@ private let ctx = FlowContext(id: .init(), clientAddress: "1.2.3.4")
     let r = CAProfileResponder(certificateAuthority: ca)
     guard case .respond(let home) = await r.intercept(req(host: "eyeproxy", path: "/"), context: ctx) else { Issue.record("x"); return }
     let html = String(decoding: home.body, as: UTF8.self)
-    for s in ["\"/ssl\"", "\"/ssl.crt\"", "\"/ssl.cer\"", ca.sha256Fingerprint] { #expect(html.contains(s)) }
+    for s in ["\"/ssl\"", "\"/ssl.crt\"", "\"/ssl.cer\"", ca.sha256Fingerprint, "<title>Prog</title>"] { #expect(html.contains(s)) }
 }

@@ -2,7 +2,7 @@ import Foundation
 
 /// Android 실기기·에뮬레이터·TV에 프록시와 CA를 넣는 adb 명령 생성과 adb 탐색.
 public enum AndroidSetup {
-    static let deviceCRTPath = "/sdcard/Download/EyeProxy-CA.crt"
+    static let deviceCRTPath = "/sdcard/Download/Prog-CA.crt"
 
     /// 후보: $ANDROID_HOME/platform-tools/adb, $ANDROID_SDK_ROOT/platform-tools/adb, ~/Library/Android/sdk/platform-tools/adb, PATH의 adb. 처음 실행 가능한 것.
     public static func locateADB(environment: [String: String] = ProcessInfo.processInfo.environment,

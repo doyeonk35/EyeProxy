@@ -21,7 +21,7 @@ struct TVWatchSection: View {
             Checklist(title: "Apple TV") {
                 Text("1. Apple Configurator에서 Apple TV를 페어링하고 저장한 프로필을 TV로 드래그합니다.")
                 Text("2. TV의 설정 > 일반 > 프로필 > 프로필 추가에 http://prog/ssl 을 입력해 CA 프로필을 설치합니다.")
-                Text("3. 설정 > 일반 > 정보 > 인증서 신뢰 설정에서 EyeProxy CA를 신뢰로 켭니다.")
+                Text("3. 설정 > 일반 > 정보 > 인증서 신뢰 설정에서 Prog CA를 신뢰로 켭니다.")
             }
             Text("Apple Watch: 짝지은 iPhone에 프로필을 설치하면 Watch로 전달됩니다").font(.callout)
         }

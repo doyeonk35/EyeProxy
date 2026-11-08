@@ -9,7 +9,7 @@ import SwiftUI
     private let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     var body: some Scene {
-        Window("EyeProxy", id: "main") {
+        Window("Prog", id: "main") {
             MainWindow()
                 .environment(model)
                 .frame(minWidth: 1100, minHeight: 700)
@@ -107,7 +107,7 @@ import SwiftUI
         MenuBarExtra(isInserted: Bindable(model.settings).showStatusItem) {
             StatusMenu().environment(model)
         } label: {
-            Image(model.statusIconName).accessibilityLabel("EyeProxy")
+            Image(model.statusIconName).accessibilityLabel("Prog")
         }
         .menuBarExtraStyle(.menu)
     }

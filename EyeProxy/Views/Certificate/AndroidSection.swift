@@ -16,7 +16,7 @@ struct AndroidSection: View {
     private var macIP: String { model.lanAddresses.first ?? "127.0.0.1" }
     private var port: Int { model.runningPort ?? model.settings.port }
     /// adb가 없을 때 복사용 명령에 쓰는 CA 파일 이름(`CA 저장(.crt)…`로 저장한 폴더에서 실행).
-    private let savedCRT = URL(string: "EyeProxy-CA.crt")!
+    private let savedCRT = URL(string: "Prog-CA.crt")!
 
     var body: some View {
         @Bindable var model = model
@@ -42,7 +42,7 @@ struct AndroidSection: View {
             proxyRow(host: macIP)
             steps {
                 Text("1. Wi-Fi 설정 ▸ 프록시 수동 ▸ 위 Mac IP·포트를 입력합니다.")
-                Text("2. Chrome으로 http://prog/ssl 을 열어 EyeProxy-CA.crt를 내려받습니다.")
+                Text("2. Chrome으로 http://prog/ssl 을 열어 Prog-CA.crt를 내려받습니다.")
                 Text("3. 설정 ▸ 보안 ▸ 암호화 및 사용자 인증 정보 ▸ 인증서 설치 ▸ CA 인증서 → 내려받은 파일을 선택합니다.")
             }
             Button("CA 저장(.crt)…") { model.exportCACrt() }
@@ -55,7 +55,7 @@ struct AndroidSection: View {
             steps {
                 Text("에뮬레이터 안에서는 Mac IP 대신 10.0.2.2가 Mac을 가리킵니다.")
                 Text("1. adb로 프록시를 설정하고 CA를 기기 Download 폴더로 복사합니다.")
-                Text("2. 설정 ▸ 보안 ▸ 암호화 및 사용자 인증 정보 ▸ 인증서 설치 ▸ CA 인증서 → Download/EyeProxy-CA.crt를 선택합니다.")
+                Text("2. 설정 ▸ 보안 ▸ 암호화 및 사용자 인증 정보 ▸ 인증서 설치 ▸ CA 인증서 → Download/Prog-CA.crt를 선택합니다.")
             }
             if adb != nil {
                 adbButton("adb로 프록시 설정 + CA 복사") { await model.adbSetProxyAndPushCA(host: "10.0.2.2") }

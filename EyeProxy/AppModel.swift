@@ -141,7 +141,7 @@ final class AppModel {
     /// 새 루트 CA 이름. 팀원끼리 기기를 같이 쓸 때 구별되도록 호스트 이름을 넣는다.
     static func defaultCommonName() -> String {
         let host = ProcessInfo.processInfo.hostName.split(separator: ".").first.map(String.init) ?? "Mac"
-        return "EyeProxy Root CA (\(host))"
+        return "Prog Root CA (\(host))"
     }
 
     /// 옛 CA 폴더를 백업으로 옮기고 새 CA로 서버를 다시 띄운다. 결과는 `infoMessage`, 실패는 `systemError`.
@@ -195,8 +195,8 @@ final class AppModel {
     }
 
     private static func portInUseMessage(port p: Int, owners: [(name: String, pid: Int32)]) -> String {
-        if let old = owners.first(where: { $0.name.hasPrefix("EyeProxy") }) {
-            return String(localized: "이전 EyeProxy 인스턴스(\(String(old.pid)))가 아직 포트를 쓰고 있습니다 — 잠시 후 다시 시도하세요")
+        if let old = owners.first(where: { ["Prog", "EyeProxy"].contains(where: $0.name.hasPrefix) }) {
+            return String(localized: "이전 Prog 인스턴스(\(String(old.pid)))가 아직 포트를 쓰고 있습니다 — 잠시 후 다시 시도하세요")
         }
         guard !owners.isEmpty else { return String(localized: "포트 \(String(p)) 사용 중 — Proxyman을 끄거나 설정에서 포트를 바꾸세요") }
         let names = owners.map { "\($0.name)(\($0.pid))" }.joined(separator: ", ")
@@ -305,7 +305,7 @@ final class AppModel {
         let stamp = DateFormatter()
         stamp.locale = Locale(identifier: "en_US_POSIX")
         stamp.dateFormat = "yyyyMMdd-HHmm"
-        panel.nameFieldStringValue = "EyeProxy-\(stamp.string(from: .now)).\(SessionDocument.pathExtension)"
+        panel.nameFieldStringValue = "Prog-\(stamp.string(from: .now)).\(SessionDocument.pathExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let (flows, log, attribution, comments) = (session.flows, session.connectionLog, processes.attribution, session.comments)
         do {
@@ -464,9 +464,9 @@ final class AppModel {
         case CertificateExportError.openSSLMissing: String(localized: "/usr/bin/openssl을 실행할 수 없습니다")
         case SystemProxyError.noActiveService: String(localized: "활성 네트워크 서비스를 찾지 못했습니다")
         case SystemProxyError.vpnProxyLeftover(let service):
-            String(localized: "VPN 서비스(\(service))에 EyeProxy 프록시가 남아 있습니다 — VPN을 재연결하세요")
+            String(localized: "VPN 서비스(\(service))에 Prog 프록시가 남아 있습니다 — VPN을 재연결하세요")
         case SystemProxyError.vpnMirrorFailed(let service):
-            String(localized: "VPN 서비스(\(service))에 EyeProxy 프록시를 적용하지 못했습니다")
+            String(localized: "VPN 서비스(\(service))에 Prog 프록시를 적용하지 못했습니다")
         default: error.localizedDescription
         }
         if text.contains("-128") || text.localizedCaseInsensitiveContains("canceled") || text.localizedCaseInsensitiveContains("cancelled") {
@@ -507,7 +507,7 @@ final class AppModel {
     func saveWiFiProfile(ssid: String, security: WiFiSecurity, password: String?, proxyHost: String) async -> Bool {
         let panel = NSSavePanel()
         let safeName = ssid.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
-        panel.nameFieldStringValue = "EyeProxy-\(safeName).mobileconfig"
+        panel.nameFieldStringValue = "Prog-\(safeName).mobileconfig"
         panel.allowedContentTypes = [.init(filenameExtension: "mobileconfig") ?? .xml]
         guard panel.runModal() == .OK, let url = panel.url else { return false }
         let data = MobileConfig.wifiProxyProfile(ssid: ssid, security: security, password: security == .none ? nil : password,

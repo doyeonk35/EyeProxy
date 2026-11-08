@@ -89,7 +89,7 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
     static func trustHint(_ boringSSLText: String) -> String? {
         guard let alert = boringSSLText.firstMatch(of: /(?:SSLV3|TLSV1)_ALERT_([A-Z_]+)/).map({ $0.1.lowercased() }),
               certificateAlerts.contains(alert) else { return nil }
-        return "기기가 EyeProxy 인증서를 신뢰하지 않습니다 (\(alert)). 기기의 인증서 신뢰 설정을 확인하세요."
+        return "기기가 Prog 인증서를 신뢰하지 않습니다 (\(alert)). 기기의 인증서 신뢰 설정을 확인하세요."
     }
 
     private static let certificateAlerts: Set<String> = [

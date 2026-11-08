@@ -11,7 +11,7 @@ struct StatusMenu: View {
         @Bindable var settings = model.settings
         let port = model.runningPort.map(String.init)
         let ip = model.lanAddresses.first ?? "127.0.0.1"
-        Button("Show EyeProxy") {
+        Button("Show Prog") {
             NSApp.activate(ignoringOtherApps: true)
             openWindow(id: "main")
         }
@@ -49,7 +49,7 @@ struct StatusMenu: View {
             Toggle("SSL Proxying List", isOn: Binding(get: { settings.sslEnabled }, set: { model.setSSLEnabled($0) }))
         }
         Divider()
-        Button("Quit EyeProxy") { NSApp.terminate(nil) }
+        Button("Quit Prog") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
 

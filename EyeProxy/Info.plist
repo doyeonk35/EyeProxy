@@ -4,9 +4,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>EyeProxy</string>
+    <string>Prog</string>
     <key>CFBundleDisplayName</key>
-    <string>EyeProxy</string>
+    <string>Prog</string>
     <key>CFBundleIdentifier</key>
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleVersion</key>
@@ -35,7 +35,7 @@
             <key>UTTypeIdentifier</key>
             <string>com.tv.eyeproxy.session</string>
             <key>UTTypeDescription</key>
-            <string>EyeProxy Session</string>
+            <string>Prog Session</string>
             <key>UTTypeConformsTo</key>
             <array>
                 <string>com.apple.package</string>

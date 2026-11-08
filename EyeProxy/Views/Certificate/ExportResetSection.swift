@@ -22,7 +22,7 @@ struct ExportResetSection: View {
             Button("Private Key…") { model.exportCertificate(.privateKey) }
         }
         Section {
-            Button("Reset all EyeProxy Certificates…", role: .destructive) {
+            Button("Reset all Prog Certificates…", role: .destructive) {
                 resetting = true
                 Task {
                     await model.resetCertificatesWithConfirmation()
