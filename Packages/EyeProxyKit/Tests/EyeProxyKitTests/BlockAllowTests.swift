@@ -114,3 +114,13 @@ private func runBlock(_ i: BlockInterceptor, _ url: String) async -> (dropped: B
     #expect(try JSONDecoder().decode(AllowRule.self, from: JSONEncoder().encode(a)) == a)
     #expect(RuleFile<BlockRule>.blockList.name == "block-list.json" && RuleFile<AllowRule>.allowList.name == "allow-list.json")
 }
+
+@Test func allowRulesWithoutHostPatternStillDecryptAtConnect() async {
+    for url in ["https://api\\.example\\.com/.*", "*", "https://*/x"] {
+        let mode: MatchMode = url.contains("\\.") ? .regex : .wildcard
+        let i = AllowInterceptor(rules: RuleTree(nodes: [.rule(AllowRule(match: MatchRule(url: url, mode: mode)))]))
+        #expect(await i.intercept(host: "api.example.com", port: 443, context: connectCtx) == ConnectVerdict())
+    }
+    let http = AllowInterceptor(rules: RuleTree(nodes: [.rule(AllowRule(match: MatchRule(url: "http://api.example.com/*")))]))
+    #expect(await http.intercept(host: "api.example.com", port: 443, context: connectCtx) == ConnectVerdict(action: .tunnel, record: false))
+}

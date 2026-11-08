@@ -18,6 +18,14 @@ extension MatchRule {
         return Self.glob(Array(pattern), Array(host.lowercased()))
     }
 
+    /// Allow CONNECT용. 호스트 패턴이 없는 규칙(정규식, `*`뿐인 호스트)은 어떤 호스트와도 맞을 수 있다.
+    /// 명시적 `http://` 규칙은 CONNECT(HTTPS)와 맞지 않는다.
+    func couldMatchHost(_ host: String) -> Bool {
+        if mode == .regex { return true }
+        if url.range(of: "http://", options: [.anchored, .caseInsensitive]) != nil { return false }
+        return hostPattern == nil || hostGlobMatches(host)
+    }
+
     private static func glob(_ p: [Character], _ s: [Character]) -> Bool {
         var (i, j, star, mark) = (0, 0, -1, 0)
         while j < s.count {
@@ -102,7 +110,7 @@ public struct AllowInterceptor: RequestInterceptor, ConnectInterceptor {
 
     public func intercept(host: String, port: Int, context: ConnectContext) async -> ConnectVerdict {
         let enabled = rules.enabledRules
-        if enabled.isEmpty || enabled.contains(where: { $0.match.hostGlobMatches(host) }) { return ConnectVerdict() }
+        if enabled.isEmpty || enabled.contains(where: { $0.match.couldMatchHost(host) }) { return ConnectVerdict() }
         return ConnectVerdict(action: .tunnel, record: false)
     }
 }
