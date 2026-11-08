@@ -29,6 +29,7 @@ private func request(_ url: String, method: String = "GET") -> FlowRequest {
     ("http://127.0.0.1:8080/x", "w", false, false, "GET", "http://127.0.0.1:8080/x", true),
     ("http://[::1]:8080/x", "w", false, false, "GET", "http://[::1]:8080/x", true),
     ("HTTPS://API.EXAMPLE.COM/a", "w", false, false, "get", "https://api.example.com/a", true),
+    ("api.example.com/cb?u=https://x/*", "w", false, false, "GET", "https://api.example.com/cb?u=https://x/y", true),
 ] as [(String, String, Bool, Bool, String, String, Bool)])
 func matchTable(pattern: String, mode: String, subpaths: Bool, ignoreQuery: Bool, method: String, url: String, expected: Bool) {
     let rule = MatchRule(url: pattern, mode: mode == "r" ? .regex : .wildcard, includeSubpaths: subpaths, ignoreQuery: ignoreQuery)
@@ -57,6 +58,7 @@ func matchTable(pattern: String, mode: String, subpaths: Bool, ignoreQuery: Bool
     ("*", nil),
     ("https://*/x", nil),
     ("https://API.Example.com/x", "api.example.com"),
+    ("api.example.com/cb?u=https://x/*", "api.example.com"),
 ] as [(String, String?)])
 func hostPatternExtraction(pattern: String, expected: String?) {
     #expect(MatchRule(url: pattern).hostPattern == expected)

@@ -51,9 +51,9 @@ public struct MatchRule: Equatable, Sendable {
     public var hostPattern: String? {
         guard mode == .wildcard else { return nil }
         var rest = Substring(url)
-        if let r = rest.range(of: "://") {
-            if rest[..<r.lowerBound].lowercased() == "http" { return nil }
-            rest = rest[r.upperBound...]
+        if let (scheme, after) = Self.splitScheme(url) {
+            if scheme.lowercased() == "http" { return nil }
+            rest = after
         }
         var host = rest.prefix { $0 != "/" }
         if host.hasPrefix("["), let close = host.firstIndex(of: "]") {
@@ -93,8 +93,17 @@ public struct MatchRule: Equatable, Sendable {
         return Self.cache(pattern: "^(?:\(body))$", options: options, key: "\(mode.rawValue):\(body)")
     }
 
+    /// `://`는 앞 글자가 scheme 모양(`/`·`.` 없음)일 때만 구분자로 본다. 쿼리 안의 URL은 제외.
+    private static func splitScheme(_ url: String) -> (scheme: Substring, rest: Substring)? {
+        guard let r = url.range(of: "://") else { return nil }
+        let scheme = url[..<r.lowerBound]
+        guard scheme.range(of: #"^[A-Za-z*?][A-Za-z0-9+.*?-]*$"#, options: .regularExpression) != nil else { return nil }
+        return (scheme, url[r.upperBound...])
+    }
+
     private func wildcardBody() -> String {
-        var out = url.contains("://") ? "" : "[a-z][a-z0-9+.-]*://"
+        let split = Self.splitScheme(url)
+        var out = split != nil ? "" : "[a-z][a-z0-9+.-]*://"
         for ch in url {
             switch ch {
             case "*": out += ".*"
@@ -102,7 +111,7 @@ public struct MatchRule: Equatable, Sendable {
             default: out += NSRegularExpression.escapedPattern(for: String(ch))
             }
         }
-        let afterScheme = url.range(of: "://").map { url[$0.upperBound...] } ?? Substring(url)
+        let afterScheme = split?.rest ?? Substring(url)
         if !afterScheme.contains("/") || includeSubpaths { out += "(/.*)?" }
         return out
     }
