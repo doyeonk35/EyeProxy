@@ -46,11 +46,7 @@ struct StatusMenu: View {
             Divider()
             Toggle("No Caching", isOn: $settings.toolSwitches.noCaching)
             Divider()
-            // 툴바 자물쇠 토글과 같은 동작.
-            Toggle("SSL Proxying List", isOn: Binding(get: { settings.sslEnabled }, set: { enabled in
-                settings.sslEnabled = enabled
-                Task { await model.applySettingsToServer() }
-            }))
+            Toggle("SSL Proxying List", isOn: Binding(get: { settings.sslEnabled }, set: { model.setSSLEnabled($0) }))
         }
         Divider()
         Button("Quit EyeProxy") { NSApp.terminate(nil) }

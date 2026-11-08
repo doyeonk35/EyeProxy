@@ -39,10 +39,7 @@ struct MainToolbar: ToolbarContent {
                 .padding(.vertical, 4)
         }
         ToolbarItemGroup(placement: .primaryAction) {
-            Toggle(isOn: Binding(get: { settings.sslEnabled }, set: { enabled in
-                settings.sslEnabled = enabled
-                Task { await model.applySettingsToServer() }
-            })) {
+            Toggle(isOn: Binding(get: { settings.sslEnabled }, set: { model.setSSLEnabled($0) })) {
                 Label("SSL 프록싱", systemImage: settings.sslEnabled ? "lock.fill" : "lock.open")
             }
             .help("SSL 프록싱 켜기/끄기")

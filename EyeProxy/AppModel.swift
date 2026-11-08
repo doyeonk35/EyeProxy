@@ -234,6 +234,12 @@ final class AppModel {
     /// 실제로 떠 있는 서버의 포트. 설정값(settings.port)은 재시작 전까지 적용되지 않을 수 있다.
     var runningPort: Int? { if case .running(let p) = serverState { p } else { nil } }
 
+    /// SSL 프록싱 켜기/끄기. 툴바 자물쇠와 상태 막대 메뉴가 같이 쓴다.
+    func setSSLEnabled(_ on: Bool) {
+        settings.sslEnabled = on
+        Task { await applySettingsToServer() }
+    }
+
     /// 메뉴 막대 개구리: 실행 중이면 기록 여부로 눈을 뜨고 감고, 멈춤·실패면 물결만.
     var statusIconName: String {
         guard runningPort != nil else { return "MenuBarFrogSubmerged" }
