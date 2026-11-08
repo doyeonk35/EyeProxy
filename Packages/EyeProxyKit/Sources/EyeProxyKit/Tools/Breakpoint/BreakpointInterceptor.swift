@@ -19,8 +19,12 @@ public struct BreakpointInterceptor: RequestInterceptor, ResponseInterceptor {
         case .executeRequest(let edited):
             context.annotate(ToolMark.annotation(.breakpoint, detail: "편집됨"))
             return .continue(edited)
-        case .drop: return .drop
-        case .abort(let status): return .respond(Self.abortResponse(status))
+        case .drop:
+            context.annotate(ToolMark.annotation(.breakpoint, detail: "연결 끊김"))
+            return .drop
+        case .abort(let status):
+            context.annotate(ToolMark.annotation(.breakpoint, detail: "중단 \(status)"))
+            return .respond(Self.abortResponse(status))
         }
     }
 
@@ -32,8 +36,12 @@ public struct BreakpointInterceptor: RequestInterceptor, ResponseInterceptor {
         case .executeResponse(let edited):
             context.annotate(ToolMark.annotation(.breakpoint, detail: "편집됨"))
             return .continue(edited)
-        case .drop: return .drop
-        case .abort(let status): return .continue(Self.abortResponse(status))
+        case .drop:
+            context.annotate(ToolMark.annotation(.breakpoint, detail: "연결 끊김"))
+            return .drop
+        case .abort(let status):
+            context.annotate(ToolMark.annotation(.breakpoint, detail: "중단 \(status)"))
+            return .continue(Self.abortResponse(status))
         }
     }
 

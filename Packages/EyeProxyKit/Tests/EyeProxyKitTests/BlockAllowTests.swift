@@ -50,8 +50,10 @@ private func runBlock(_ i: BlockInterceptor, _ url: String) async -> (dropped: B
     let i = block([BlockRule(match: MatchRule(url: "ads.example.com"), action: .blockAndHide)])
     #expect(await i.intercept(host: "ads.example.com", port: 443, context: connectCtx) == ConnectVerdict(action: .drop, record: false))
     #expect(await i.intercept(host: "api.example.com", port: 443, context: connectCtx) == ConnectVerdict())
-    let display = block([BlockRule(match: MatchRule(url: "*.example.com/*"), action: .blockAndDisplay)])
-    #expect(await display.intercept(host: "ADS.example.com", port: 443, context: connectCtx) == ConnectVerdict(action: .drop))
+    let display = block([BlockRule(name: "Ads", match: MatchRule(url: "*.example.com/*"), action: .blockAndDisplay)])
+    let v = await display.intercept(host: "ADS.example.com", port: 443, context: connectCtx)
+    #expect(v == ConnectVerdict(action: .drop, note: "Blocked: Ads"))
+    #expect(ToolMark.mark(of: .tool(v.note ?? "")) == .blocked)
     let hide = block([BlockRule(match: MatchRule(url: "https://ads.example.com/"), action: .hideOnly)])
     #expect(await hide.intercept(host: "ads.example.com", port: 443, context: connectCtx) == ConnectVerdict(record: false))
 }
@@ -66,7 +68,7 @@ private func runBlock(_ i: BlockInterceptor, _ url: String) async -> (dropped: B
     #expect(await runBlock(block([rule], app: "/Applications/Foo.app"), "https://api.example.com/").dropped)
     #expect(await runBlock(block([rule], app: "/Applications/Bar.app"), "https://api.example.com/").dropped == false)
     let i = block([rule], app: "/Applications/Foo.app")
-    #expect(await i.intercept(host: "api.example.com", port: 443, context: connectCtx) == ConnectVerdict(action: .drop))
+    #expect(await i.intercept(host: "api.example.com", port: 443, context: connectCtx) == ConnectVerdict(action: .drop, note: "Blocked: Foo"))
     let both = BlockRule(match: MatchRule(url: "ads.example.com"), appPath: "/Applications/Foo.app")
     #expect(await runBlock(block([both], app: "/Applications/Foo.app"), "https://api.example.com/").dropped == false)
 }

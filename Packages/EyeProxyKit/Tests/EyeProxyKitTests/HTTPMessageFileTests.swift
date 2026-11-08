@@ -86,3 +86,19 @@ private func tempDir() throws -> URL {
         #expect(r.body == Data("x".utf8))
     }
 }
+
+@Test func requestRoundTripsThroughRaw() throws {
+    let base = FlowRequest(method: "GET", scheme: "https", host: "api.example.com", port: 443, path: "/v1/items?x=1",
+                           headers: [HTTPHeader(name: "Host", value: "api.example.com"), HTTPHeader(name: "A", value: "1")],
+                           body: Data("{\"a\":1}".utf8))
+    let raw = HTTPMessageFile.serialize(base)
+    #expect(String(decoding: raw, as: UTF8.self).hasPrefix("GET /v1/items?x=1 HTTP/1.1\nHost: api.example.com\nA: 1\n\n"))
+    #expect(try HTTPMessageFile.parseRequest(raw, base: base) == base)
+
+    let edited = try HTTPMessageFile.parseRequest(Data("post http://other.example.com:8080/p HTTP/1.1\r\nB: 2\r\n\r\nhi".utf8), base: base)
+    #expect(edited == FlowRequest(method: "POST", scheme: "http", host: "other.example.com", port: 8080, path: "/p",
+                                  headers: [HTTPHeader(name: "B", value: "2")], body: Data("hi".utf8)))
+    for bad in ["", "GET", "GET /x", "GET x HTTP/1.1", "GET /x FTP/1", "G T /x HTTP/1.1", "GET ftp://h/x HTTP/1.1"] {
+        #expect(throws: HTTPMessageFileError.badRequestLine) { try HTTPMessageFile.parseRequest(Data(bad.utf8), base: base) }
+    }
+}

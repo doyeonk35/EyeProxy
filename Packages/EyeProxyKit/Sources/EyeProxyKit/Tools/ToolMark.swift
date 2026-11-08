@@ -6,7 +6,12 @@ public enum ToolMark: String, CaseIterable, Sendable {
     case mapLocal = "Map Local", mapRemote = "Map Remote", breakpoint = "Breakpoint", blocked = "Blocked"
 
     public static func annotation(_ mark: ToolMark, detail: String?) -> FlowAnnotation {
-        .tool(detail.map { "\(mark.rawValue): \($0)" } ?? mark.rawValue)
+        .tool(label(mark, detail: detail))
+    }
+
+    /// `.tool` 주석 문자열(CONNECT 판정의 `note`에도 쓴다).
+    public static func label(_ mark: ToolMark, detail: String?) -> String {
+        detail.map { "\(mark.rawValue): \($0)" } ?? mark.rawValue
     }
 
     public static func mark(of annotation: FlowAnnotation) -> ToolMark? {

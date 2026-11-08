@@ -94,23 +94,27 @@ private func continued(_ d: ResponseDecision) -> FlowResponse? {
         for (status, reason) in [(429, "Too Many Requests"), (503, "Service Unavailable")] {
             let center = BreakpointCenter()
             let bp = interceptor([rule()], center)
-            let ctx = Annotations().context
+            let a = Annotations()
+            let ctx = a.context
             let task = Task { await bp.intercept(original, context: ctx) }
             let item = try #require(await waitPending(center, 1).first)
             center.resolve(item.id, with: .abort(status: status))
             let r = try #require(responded(await task.value))
             #expect(r == FlowResponse(status: status, reason: reason, headers: [HTTPHeader(name: "Content-Length", value: "0")], body: Data()))
+            #expect(a.all == [.tool("Breakpoint: 중단 \(status)")])
         }
     }
 
     @Test func dropAndContinueOriginal() async throws {
         let center = BreakpointCenter()
         let bp = interceptor([rule()], center)
-        let ctx = Annotations().context
+        let a = Annotations()
+        let ctx = a.context
         let t1 = Task { await bp.intercept(original, context: ctx) }
         let i1 = try #require(await waitPending(center, 1).first)
         center.resolve(i1.id, with: .drop)
         guard case .drop = await t1.value else { Issue.record("drop 아님"); return }
+        #expect(a.all == [.tool("Breakpoint: 연결 끊김")] && a.all.compactMap(ToolMark.mark) == [.breakpoint])
         // 응답 전용 규칙은 요청 단계에서 멈추지 않는다.
         let none = interceptor([rule(request: false, response: true)], center)
         #expect(continued(await none.intercept(original, context: ctx)) == original)
@@ -136,6 +140,13 @@ private func continued(_ d: ResponseDecision) -> FlowResponse? {
         let i2 = try #require(await waitPending(center, 1).first)
         center.resolve(i2.id, with: .abort(status: 503))
         #expect(continued(await t2.value)?.status == 503)
+        #expect(a.all.last == .tool("Breakpoint: 중단 503"))
+
+        let t3 = Task { await bp.intercept(originalResponse, for: original, context: ctx) }
+        let i3 = try #require(await waitPending(center, 1).first)
+        center.resolve(i3.id, with: .drop)
+        guard case .drop = await t3.value else { Issue.record("drop 아님"); return }
+        #expect(a.all.last == .tool("Breakpoint: 연결 끊김"))
     }
 
     @Test func releaseAllContinuesOriginal() async throws {

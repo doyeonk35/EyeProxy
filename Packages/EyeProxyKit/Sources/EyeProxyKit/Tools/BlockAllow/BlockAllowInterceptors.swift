@@ -12,6 +12,9 @@ extension MatchRule {
         return host
     }
 
+    /// Block·Allow가 CONNECT 단계에서 호스트만으로 판정하는 규칙(자동 복호화 대상 아님).
+    public var isDecidedAtConnect: Bool { connectHostPattern != nil }
+
     /// `*` 임의 길이, `?` 한 글자, 대소문자 무시.
     func hostGlobMatches(_ host: String) -> Bool {
         guard let pattern = connectHostPattern ?? hostPattern else { return false }
@@ -90,7 +93,8 @@ public struct BlockInterceptor: RequestInterceptor, ConnectInterceptor {
         }) else { return ConnectVerdict() }
         switch rule.action {
         case .blockAndHide: return ConnectVerdict(action: .drop, record: false)
-        case .blockAndDisplay: return ConnectVerdict(action: .drop)
+        // 기록되는 끊긴 CONNECT 항목에도 Blocked 표시(Core가 note를 주석으로 단다).
+        case .blockAndDisplay: return ConnectVerdict(action: .drop, note: ToolMark.label(.blocked, detail: rule.name))
         case .hideOnly: return ConnectVerdict(record: false)
         }
     }
