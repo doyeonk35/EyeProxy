@@ -58,11 +58,12 @@ struct BreakpointTemplatesWindow: View {
             .padding(8)
         }
         .frame(minWidth: 760, minHeight: 480)
+        // 풀다운 Menu 항목의 단축키는 동작하지 않아(실측) 창 크기만 한 투명 버튼에 건다.
+        // 0×0 프레임 버튼은 단축키가 동작하지 않으므로 프레임을 줄이지 않는다.
         .background {
             Group {
                 Button("New Request Template") { add(.request) }.keyboardShortcut("n")
                 Button("New Response Template") { add(.response) }.keyboardShortcut("n", modifiers: [.command, .shift])
-                Button("Save") { commit() }.keyboardShortcut("s")
             }
             .opacity(0)
             .allowsHitTesting(false)
@@ -121,8 +122,9 @@ struct BreakpointTemplatesWindow: View {
                     .padding(.horizontal)
                 HStack {
                     Spacer()
+                    // 바뀐 게 없어도 켜 둔다. 꺼져 있으면 ⌘S가 메뉴의 세션 저장…으로 넘어갈 수 있다.
                     Button("Save") { commit() }
-                        .disabled(draft == templates.first { $0.id == current.id })
+                        .keyboardShortcut("s")
                 }
                 .padding([.horizontal, .bottom])
             }

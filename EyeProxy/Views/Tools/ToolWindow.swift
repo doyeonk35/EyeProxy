@@ -234,6 +234,7 @@ where Columns.TableRowValue == ToolRow<Rule>, Columns.TableColumnSortComparator 
     }
 
     /// 버튼이 없는 단축키(⌘↩ 편집, ⌘D 복제). 창이 키 창일 때만 동작한다.
+    /// 창 안 버튼이어야 메뉴의 기기 ⌘D보다 먼저 받는다(onKeyPress·메뉴 명령은 진다). 프레임을 0×0으로 줄이면 동작하지 않는다(실측).
     private var shortcuts: some View {
         Group {
             Button("Edit") { edit(selection.first) }

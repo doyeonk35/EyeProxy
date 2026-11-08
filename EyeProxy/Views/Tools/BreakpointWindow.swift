@@ -301,12 +301,10 @@ struct BreakpointEditor: View {
             } primaryAction: {
                 resolve(.drop)
             }
+            // 단축키는 보이는 Menu에 건다(primaryAction이 받는다). 0×0 숨은 버튼의 단축키는 동작하지 않았다.
+            .keyboardShortcut("\\", modifiers: .command)
             .fixedSize()
             .help("연결을 끊습니다 (⌘\\). ▾에서 429/503 응답으로 중단")
-            // Menu의 primaryAction에는 단축키를 걸 수 없어 숨은 버튼으로 둔다.
-            Button("Drop Connection") { resolve(.drop) }
-                .keyboardShortcut("\\", modifiers: .command)
-                .frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
             Spacer()
             Button("Apply & Execute") { resolve(apply()) }
                 .keyboardShortcut(.return, modifiers: .command)

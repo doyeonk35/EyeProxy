@@ -59,6 +59,7 @@ struct NetworkConditionsWindow: View {
             }
         }
         .frame(minWidth: 800, minHeight: 420)
+        // 투명 버튼(0×0으로 줄이면 단축키가 동작하지 않는다). ToolWindow.shortcuts 참고.
         .background {
             Button("Edit") { edit(selection.first) }
                 .keyboardShortcut(.return)
