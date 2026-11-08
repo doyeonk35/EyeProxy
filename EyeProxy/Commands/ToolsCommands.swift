@@ -1,12 +1,24 @@
 import EyeProxyKit
 import SwiftUI
 
-/// Tools 메뉴(스펙 §6.1). 각 창은 해당 태스크가 채운다(아직 없는 창은 자리표시자).
+/// Flow·Tools 메뉴(스펙 §6.1). 각 창은 해당 태스크가 채운다(아직 없는 창은 자리표시자).
 struct ToolsCommands: Commands {
     let model: AppModel
 
     var body: some Commands {
+        CommandMenu("Flow") { FlowMenu(model: model) }
         CommandMenu("Tools") { ToolsMenu(model: model) }
+    }
+}
+
+/// 선택된 흐름 하나에 적용하는 항목. Repeat·Edit and Repeat는 Task 17에서 붙는다.
+private struct FlowMenu: View {
+    let model: AppModel
+
+    var body: some View {
+        let id = model.selectedFlowID
+        Button(id.flatMap { model.session.comments[$0] } == nil ? "Add Comment…" : "Edit Comment…") { model.commentingFlowID = id }
+            .disabled(id == nil)
     }
 }
 

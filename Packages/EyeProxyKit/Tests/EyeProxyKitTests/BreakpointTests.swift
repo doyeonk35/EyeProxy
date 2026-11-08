@@ -63,7 +63,7 @@ private func continued(_ d: ResponseDecision) -> FlowResponse? {
         center.resolve(item.id, with: .executeRequest(edited))
         #expect(continued(await task.value) == edited)
         #expect(center.pending.isEmpty)
-        #expect(a.all == [.tool("Breakpoint 편집됨")])
+        #expect(a.all == [.tool("Breakpoint: 편집됨")] && a.all.compactMap(ToolMark.mark) == [.breakpoint])
     }
 
     @Test func cancellationRemovesPending() async throws {
@@ -130,7 +130,7 @@ private func continued(_ d: ResponseDecision) -> FlowResponse? {
         edited.status = 418
         center.resolve(item.id, with: .executeResponse(edited))
         #expect(continued(await task.value)?.status == 418)
-        #expect(a.all == [.tool("Breakpoint 편집됨")])
+        #expect(a.all == [.tool("Breakpoint: 편집됨")] && a.all.compactMap(ToolMark.mark) == [.breakpoint])
 
         let t2 = Task { await bp.intercept(originalResponse, for: original, context: ctx) }
         let i2 = try #require(await waitPending(center, 1).first)

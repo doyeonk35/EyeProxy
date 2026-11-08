@@ -47,3 +47,14 @@ import Testing
     try SessionDocument.save(flows: [f], connectionLog: [], to: url)
     #expect(try SessionDocument.load(from: url).processes.isEmpty)
 }
+
+@Test func sessionDocumentRoundTripsComments() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).eyeproxy"); defer { try? FileManager.default.removeItem(at: url) }
+    let f = Flow.fixture(client: "1", decrypted: false)
+    try SessionDocument.save(flows: [f], connectionLog: [], comments: [f.id: "메모\n둘째 줄"], to: url)
+    #expect(try SessionDocument.load(from: url).comments == [f.id: "메모\n둘째 줄"])
+    try SessionDocument.save(flows: [f], connectionLog: [], to: url)
+    #expect(try SessionDocument.load(from: url).comments.isEmpty)
+    try Data(#"{"version":1,"flows":[],"connectionLog":[]}"#.utf8).write(to: url.appending(path: "index.json"))
+    #expect(try SessionDocument.load(from: url).comments.isEmpty)
+}

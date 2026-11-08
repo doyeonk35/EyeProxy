@@ -44,6 +44,8 @@ final class AppModel {
     /// 우클릭 ▸ Tools ▸ Map Local…로 미리 채운 HTTP 메시지. 키 = 규칙 id. Map Local 편집기가 꺼낸다.
     var editorMessages: [String: String] = [:]
     var settingsTab: SettingsTab = .general
+    /// Flow ▸ Add Comment…로 코멘트를 편집 중인 흐름. 메인 창이 시트를 띄운다.
+    var commentingFlowID: FlowID?
 
     // 온보딩(기기 윈도우)
     @ObservationIgnored let systemProxy = SystemProxy(backupURL: supportDirectory.appending(path: "system-proxy-backup.json"))
@@ -248,9 +250,11 @@ final class AppModel {
         stamp.dateFormat = "yyyyMMdd-HHmm"
         panel.nameFieldStringValue = "EyeProxy-\(stamp.string(from: .now)).\(SessionDocument.pathExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let (flows, log, attribution) = (session.flows, session.connectionLog, processes.attribution)
+        let (flows, log, attribution, comments) = (session.flows, session.connectionLog, processes.attribution, session.comments)
         do {
-            try await Task.detached { try SessionDocument.save(flows: flows, connectionLog: log, processes: attribution, to: url) }.value
+            try await Task.detached {
+                try SessionDocument.save(flows: flows, connectionLog: log, processes: attribution, comments: comments, to: url)
+            }.value
         } catch {
             systemError = String(localized: "세션을 저장하지 못했습니다: \(error.localizedDescription)")
         }
@@ -263,7 +267,7 @@ final class AppModel {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let loaded = try await Task.detached { try SessionDocument.load(from: url) }.value
-            session.replace(flows: loaded.flows, connectionLog: loaded.connectionLog)
+            session.replace(flows: loaded.flows, connectionLog: loaded.connectionLog, comments: loaded.comments)
             processes.replace(loaded.processes)
             filter = FlowFilter()
             selectedFlowID = nil

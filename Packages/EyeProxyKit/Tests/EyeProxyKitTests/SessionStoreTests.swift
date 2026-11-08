@@ -43,3 +43,18 @@ import Testing
     s.apply(.requestStarted(f)); s.apply(.annotated(id: f.id, .tool("Map Local")))
     #expect(s.flows[0].annotations == [.tool("Map Local")])
 }
+
+@Test @MainActor func commentsSetClearAndRemoval() {
+    let s = SessionStore(); let a = Flow.fixture(client: "1", decrypted: false), b = Flow.fixture(client: "2", decrypted: false)
+    s.apply(.requestStarted(a)); s.apply(.requestStarted(b))
+    s.setComment("hello", for: a.id); s.setComment("bye", for: b.id)
+    #expect(s.comments == [a.id: "hello", b.id: "bye"])
+    s.setComment("", for: a.id); #expect(s.comments[a.id] == nil)
+    s.setComment(nil, for: b.id); #expect(s.comments.isEmpty)
+    s.setComment("x", for: FlowID()); #expect(s.comments.isEmpty)   // 없는 흐름은 무시
+    s.setComment("b", for: b.id); s.apply(.annotated(id: b.id, .unrecorded))
+    #expect(s.comments.isEmpty)
+    s.setComment("a", for: a.id); s.clear(); #expect(s.comments.isEmpty)
+    s.replace(flows: [a], comments: [a.id: "c", FlowID(): "orphan"]); #expect(s.comments == [a.id: "c"])
+    s.replace(flows: []); #expect(s.comments.isEmpty)
+}

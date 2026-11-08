@@ -53,7 +53,7 @@ public struct MapRemoteInterceptor: RequestInterceptor {
             }
         }
 
-        context.annotate(.tool("Map Remote: \(rule.name)"))
+        context.annotate(ToolMark.annotation(.mapRemote, detail: rule.name))
         if rule.preserveOriginalURL { context.annotate(.originalURL(request.url)) }
         return .continue(out)
     }

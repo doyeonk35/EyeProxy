@@ -41,6 +41,7 @@ private func runBlock(_ i: BlockInterceptor, _ url: String) async -> (dropped: B
                                    (.hideOnly, false, [.hidden])] {
         let r = await runBlock(block([BlockRule(name: "R", match: m, action: action)]), "https://ads.example.com/x")
         #expect(r.dropped == dropped && r.ann == ann)
+        #expect(r.ann.compactMap(ToolMark.mark) == (action == .blockAndDisplay ? [.blocked] : []))
     }
     #expect(await runBlock(block([BlockRule(match: m)]), "https://api.example.com/x") == (false, []))
 }

@@ -1,3 +1,4 @@
+import EyeProxyCore
 import SwiftUI
 
 struct MainWindow: View {
@@ -23,5 +24,41 @@ struct MainWindow: View {
         }
         .toolbar { MainToolbar(model: model) }
         .searchable(text: $model.filter.text, placement: .toolbar, prompt: Text("URL·메서드·상태 검색"))
+        .sheet(isPresented: Binding(get: { model.commentingFlowID != nil }, set: { if !$0 { model.commentingFlowID = nil } })) {
+            if let id = model.commentingFlowID { CommentSheet(id: id) }
+        }
+    }
+}
+
+/// Flow ▸ Add/Edit Comment… 시트. 빈 문자열로 저장하면 코멘트를 지운다.
+private struct CommentSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let id: FlowID
+    @State private var text = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(model.session.comments[id] == nil ? "Add Comment" : "Edit Comment").font(.headline)
+            if let flow = model.session.flow(id) {
+                Text(flow.request.url).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+            }
+            TextField("코멘트", text: $text, axis: .vertical)
+                .lineLimit(4...10)
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button("취소", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("저장") {
+                    model.session.setComment(text.trimmingCharacters(in: .whitespacesAndNewlines), for: id)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 420)
+        .onAppear { text = model.session.comments[id] ?? "" }
     }
 }

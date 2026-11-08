@@ -76,7 +76,7 @@ private func rule(_ pattern: String, _ to: MapTarget, name: String = "R", hostHe
 @Test func annotations() async throws {
     let a = Annotations()
     _ = await run(rule("https://api.example.com/*", MapTarget(host: "staging.example.com")), "https://api.example.com/x", a)
-    #expect(a.all == [.tool("Map Remote: R")])
+    #expect(a.all == [.tool("Map Remote: R")] && a.all.compactMap(ToolMark.mark) == [.mapRemote])
     let b = Annotations()
     _ = await run(rule("https://api.example.com/*", MapTarget(host: "staging.example.com"), original: true), "https://api.example.com/x", b)
     #expect(b.all == [.tool("Map Remote: R"), .originalURL("https://api.example.com/x")])

@@ -70,7 +70,7 @@ public struct BlockInterceptor: RequestInterceptor, ConnectInterceptor {
             context.annotate(.hidden)
             return .drop
         case .blockAndDisplay:
-            context.annotate(.tool("Blocked: \(rule.name)"))
+            context.annotate(ToolMark.annotation(.blocked, detail: rule.name))
             return .drop
         case .hideOnly:
             context.annotate(.hidden)

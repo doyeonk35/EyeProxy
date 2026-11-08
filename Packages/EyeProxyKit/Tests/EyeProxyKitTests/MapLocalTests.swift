@@ -96,7 +96,7 @@ private func fileRule(_ path: String, delay: Int? = nil) -> RuleTree<MapLocalRul
     }
     #expect(res.status == 200 && res.body == Data(#"{"items":[]}"#.utf8))
     #expect(res.header("Content-Type") == "application/json; charset=utf-8")
-    #expect(a.all == [.tool("Map Local: search")])
+    #expect(a.all == [.tool("Map Local: search")] && a.all.compactMap(ToolMark.mark) == [.mapLocal])
 }
 
 @Test func nonMatchingRequestContinuesUntouched() async throws {
@@ -113,7 +113,7 @@ private func fileRule(_ path: String, delay: Int? = nil) -> RuleTree<MapLocalRul
     let q = request("https://api.example.com/a")
     guard case .continue(let out) = await i.intercept(q, context: a.context) else { Issue.record("not continue"); return }
     #expect(out == q)
-    #expect(a.all == [.tool("Map Local 파일 없음: R")])
+    #expect(a.all == [.tool("Map Local 파일 없음: R")] && a.all.compactMap(ToolMark.mark).isEmpty)
 }
 
 @Test func plainFileBecomesBody() async throws {

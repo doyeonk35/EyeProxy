@@ -1,4 +1,5 @@
 import EyeProxyCore
+import EyeProxyKit
 import SwiftUI
 
 enum FlowColors {
@@ -17,6 +18,15 @@ enum FlowColors {
             return status >= 400 ? Color("StatusError") : status >= 300 ? Color("StatusRedirect") : Color("StatusSuccess")
         }
         return flow.error != nil ? Color("StatusError") : Color("StatusPending")
+    }
+
+    /// 목록 상태 점: 완료 초록·진행 주황·실패 빨강.
+    static func state(_ state: FlowState) -> Color {
+        switch state {
+        case .completed: Color("StatusSuccess")
+        case .active: Color("StatusRedirect")
+        case .failed: Color("StatusError")
+        }
     }
 }
 
@@ -59,5 +69,15 @@ struct StatusTag: View {
             }
         }
         .modifier(Capsuled(color: FlowColors.status(flow), selected: selected))
+    }
+}
+
+/// Edited 열 칩(Map Local 등 요청·응답을 바꾼 도구).
+struct EditedTag: View {
+    let mark: ToolMark
+    var selected = false
+
+    var body: some View {
+        Text(mark.rawValue).modifier(Capsuled(color: Color("StatusRedirect"), selected: selected))
     }
 }

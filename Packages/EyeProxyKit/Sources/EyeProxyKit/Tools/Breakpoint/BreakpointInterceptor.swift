@@ -17,7 +17,7 @@ public struct BreakpointInterceptor: RequestInterceptor, ResponseInterceptor {
         switch await center.pause(item) {
         case .continueOriginal, .executeResponse: return .continue(request)
         case .executeRequest(let edited):
-            context.annotate(.tool("Breakpoint 편집됨"))
+            context.annotate(ToolMark.annotation(.breakpoint, detail: "편집됨"))
             return .continue(edited)
         case .drop: return .drop
         case .abort(let status): return .respond(Self.abortResponse(status))
@@ -30,7 +30,7 @@ public struct BreakpointInterceptor: RequestInterceptor, ResponseInterceptor {
         switch await center.pause(item) {
         case .continueOriginal, .executeRequest: return .continue(response)
         case .executeResponse(let edited):
-            context.annotate(.tool("Breakpoint 편집됨"))
+            context.annotate(ToolMark.annotation(.breakpoint, detail: "편집됨"))
             return .continue(edited)
         case .drop: return .drop
         case .abort(let status): return .continue(Self.abortResponse(status))

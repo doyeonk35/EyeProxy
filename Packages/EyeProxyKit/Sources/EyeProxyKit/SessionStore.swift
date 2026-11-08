@@ -6,6 +6,8 @@ import Observation
 public final class SessionStore {
     public private(set) var flows: [Flow] = []
     public private(set) var connectionLog: [ConnectionLogEntry] = []
+    /// 사용자 코멘트(Flow ▸ Add Comment…). 있는 흐름에만 붙는다.
+    public private(set) var comments: [FlowID: String] = [:]
     @ObservationIgnored private var index: [FlowID: Int] = [:]
     @ObservationIgnored private var numbers: [FlowID: Int] = [:]
     @ObservationIgnored private var next = 1
@@ -45,6 +47,7 @@ public final class SessionStore {
         let removed = flows.remove(at: i)
         index[removed.id] = nil
         numbers[removed.id] = nil
+        comments[removed.id] = nil
         next -= 1
         for k in i..<flows.count {
             index[flows[k].id] = k
@@ -52,15 +55,22 @@ public final class SessionStore {
         }
     }
 
-    public func replace(flows: [Flow], connectionLog: [ConnectionLogEntry] = []) {
+    public func replace(flows: [Flow], connectionLog: [ConnectionLogEntry] = [], comments: [FlowID: String] = [:]) {
         self.flows = flows
         index = Dictionary(flows.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { _, last in last })
         numbers = Dictionary(flows.enumerated().map { ($1.id, $0 + 1) }, uniquingKeysWith: { _, last in last })
         next = flows.count + 1
         self.connectionLog = connectionLog
+        self.comments = comments.filter { index[$0.key] != nil && !$0.value.isEmpty }
     }
 
     public func clear() { replace(flows: []) }
+
+    /// nil·빈 문자열 = 삭제. 목록에 없는 흐름은 무시한다.
+    public func setComment(_ text: String?, for id: FlowID) {
+        guard index[id] != nil else { return }
+        comments[id] = text?.isEmpty == false ? text : nil
+    }
 
     public func number(_ id: FlowID) -> Int? { numbers[id] }
 

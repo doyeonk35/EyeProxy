@@ -28,7 +28,7 @@ public struct MapLocalInterceptor: RequestInterceptor {
             }
             response = r
         }
-        context.annotate(.tool("Map Local: \(rule.name)"))
+        context.annotate(ToolMark.annotation(.mapLocal, detail: rule.name))
         if let s = rule.delaySeconds, s > 0 {
             try? await Task.sleep(for: .seconds(s))
             if Task.isCancelled { return .drop }
