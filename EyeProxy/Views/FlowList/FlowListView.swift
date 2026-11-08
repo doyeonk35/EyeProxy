@@ -5,6 +5,7 @@ import SwiftUI
 
 struct FlowListView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
     @AppStorage("eyeproxy.flowColumns") private var columnCustomization = TableColumnCustomization<FlowRow>()
 
     var body: some View {
@@ -73,9 +74,23 @@ struct FlowListView: View {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(CurlExport.command(for: flow.request), forType: .string)
                 }
+                Menu("Tools") {
+                    ForEach(Self.toolWindows, id: \.id) { tool in
+                        Button(tool.title) {
+                            model.pendingNewRule = PendingNewRule(windowID: tool.id, flow: flow)
+                            openWindow(id: tool.id)
+                        }
+                    }
+                }
             }
         }
     }
+
+    /// 우클릭 ▸ Tools ▸ … (스펙 §6.1). 선택 요청으로 미리 채운 새 규칙 편집기를 연다.
+    private static let toolWindows: [(title: LocalizedStringKey, id: String)] = [
+        ("Breakpoint…", "tool-breakpoint-rules"), ("Map Local…", "tool-map-local"), ("Map Remote…", "tool-map-remote"),
+        ("Block List…", "tool-block"), ("Allow List…", "tool-allow"), ("Network Conditions…", "tool-network"),
+    ]
 
     static func bytes(_ count: Int) -> String {
         Int64(count).formatted(.byteCount(style: .file, spellsOutZero: false))

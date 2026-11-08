@@ -37,6 +37,11 @@ final class AppModel {
     var selectedFlowID: FlowID?
     var sortOrder: [KeyPathComparator<FlowRow>] = [KeyPathComparator(\.number)]
     var sidebarSelection: SidebarItem? = .allFlows
+    /// 우클릭 ▸ Tools로 열 새 규칙. 해당 도구 창이 꺼내 편집기를 연다.
+    var pendingNewRule: PendingNewRule?
+    /// 별도 창 편집기(`ToolEditorStyle.window`)로 넘기는 규칙. 키 = 규칙 id.
+    var editorDrafts: [String: any ToolRule] = [:]
+    var settingsTab: SettingsTab = .general
 
     // 온보딩(기기 윈도우)
     @ObservationIgnored let systemProxy = SystemProxy(backupURL: supportDirectory.appending(path: "system-proxy-backup.json"))

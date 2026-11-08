@@ -41,6 +41,20 @@ public struct MatchRule: Equatable, Sendable {
         return regex.firstMatch(in: target, range: NSRange(target.startIndex..., in: target)) != nil
     }
 
+    /// Test your Rule용: 메서드는 보지 않고 URL 한 줄만 비교한다. scheme이 없으면 https로 본다.
+    public func matches(sampleURL: String) -> Bool {
+        let line = sampleURL.trimmingCharacters(in: .whitespaces)
+        guard let c = URLComponents(string: line.contains("://") ? line : "https://" + line),
+              let scheme = c.scheme?.lowercased(), let host = c.host, !host.isEmpty else { return false }
+        var path = c.percentEncodedPath.isEmpty ? "/" : c.percentEncodedPath
+        if let q = c.percentEncodedQuery { path += "?" + q }
+        var rule = self
+        rule.methods = .any
+        return rule.matches(FlowRequest(
+            method: "GET", scheme: scheme, host: host.trimmingCharacters(in: CharacterSet(charactersIn: "[]")),
+            port: c.port ?? (scheme == "http" ? 80 : 443), path: path, headers: [], body: Data()))
+    }
+
     /// 정규식 컴파일 실패 문구. 와일드카드 모드나 정상 정규식이면 nil.
     public var validationError: String? {
         guard mode == .regex else { return nil }

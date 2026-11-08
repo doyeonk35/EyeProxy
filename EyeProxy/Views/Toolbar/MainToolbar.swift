@@ -17,6 +17,9 @@ struct MainToolbar: ToolbarContent {
         ToolbarItem(placement: .status) {
             HStack(spacing: 8) {
                 status
+                if model.settings.toolSwitches.noCaching {
+                    Text("No Caching").modifier(Capsuled(color: .orange, selected: false))
+                }
                 PendingBreakpointsButton(count: model.breakpoints.pending.count)
             }
                 .font(.caption)

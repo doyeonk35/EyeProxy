@@ -52,6 +52,7 @@ import SwiftUI
             CommandGroup(after: .toolbar) {
                 LayoutPicker(model: model)
             }
+            ToolsCommands(model: model)
         }
         Settings {
             SettingsView()
@@ -62,6 +63,15 @@ import SwiftUI
             Text("Breakpoint 창은 다음 작업에서 추가됩니다")
                 .frame(minWidth: 400, minHeight: 200)
         }
+        Window("Block List", id: "tool-block") {
+            BlockListWindow().environment(model)
+        }
+        .defaultSize(width: 1200, height: 672)
+        Window("Allow List", id: "tool-allow") {
+            AllowListWindow().environment(model)
+        }
+        .defaultSize(width: 1200, height: 672)
+        PlaceholderToolScenes()
         Window("기기", id: "devices") {
             DevicesView()
                 .environment(model)

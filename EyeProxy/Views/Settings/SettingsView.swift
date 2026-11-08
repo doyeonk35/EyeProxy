@@ -1,12 +1,17 @@
 import EyeProxyKit
 import SwiftUI
 
+enum SettingsTab: Hashable { case general, ssl, bypass }
+
 struct SettingsView: View {
+    @Environment(AppModel.self) private var model
+
     var body: some View {
-        TabView {
-            GeneralSettings().tabItem { Label("일반", systemImage: "gearshape") }
-            SSLSettings().tabItem { Label("SSL Proxying", systemImage: "lock") }
-            BypassSettings().tabItem { Label("Bypass", systemImage: "arrow.uturn.right") }
+        @Bindable var model = model
+        TabView(selection: $model.settingsTab) {
+            GeneralSettings().tabItem { Label("일반", systemImage: "gearshape") }.tag(SettingsTab.general)
+            SSLSettings().tabItem { Label("SSL Proxying", systemImage: "lock") }.tag(SettingsTab.ssl)
+            BypassSettings().tabItem { Label("Bypass", systemImage: "arrow.uturn.right") }.tag(SettingsTab.bypass)
         }
         .frame(width: 480, height: 360)
     }

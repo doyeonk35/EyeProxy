@@ -4,7 +4,7 @@ import Foundation
 /// 도구 규칙(Map Local/Remote, Breakpoint, Block/Allow)이 따르는 공통 모양.
 /// 각 규칙은 Proxyman 노드의 `_0` 페이로드를 `ProxymanKey`로 직접 코딩한다.
 public protocol ToolRule: Codable, Equatable, Sendable, Identifiable where ID == String {
-    var id: String { get }
+    var id: String { get set }
     var name: String { get set }
     var isEnabled: Bool { get set }
     var match: MatchRule { get set }
