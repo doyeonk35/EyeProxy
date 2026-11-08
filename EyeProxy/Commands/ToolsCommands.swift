@@ -91,9 +91,7 @@ private struct ToolsMenu: View {
         Menu("Proxy Settings") {
             Toggle("Record Traffic", isOn: $settings.isRecording)
                 .keyboardShortcut("r")
-            Toggle("Override macOS Proxy", isOn: Binding(get: { model.macCaptureEnabled || model.effectiveProxyLeftover },
-                                                         set: { on in Task { await model.setMacCapture(on) } }))
-                .disabled(model.macCaptureBusy)
+            MacProxyOverrideToggle(title: "Override macOS Proxy", model: model)
             Divider()
             Button("Restart Server") { Task { await model.restartServer() } }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
@@ -102,5 +100,17 @@ private struct ToolsMenu: View {
                 openSettings()
             }
         }
+    }
+}
+
+/// Tools ▸ Proxy Settings와 상태 막대 메뉴의 macOS 프록시 토글(같은 바인딩).
+struct MacProxyOverrideToggle: View {
+    let title: String
+    let model: AppModel
+
+    var body: some View {
+        Toggle(title, isOn: Binding(get: { model.macCaptureEnabled || model.effectiveProxyLeftover },
+                                    set: { on in Task { await model.setMacCapture(on) } }))
+            .disabled(model.macCaptureBusy)
     }
 }

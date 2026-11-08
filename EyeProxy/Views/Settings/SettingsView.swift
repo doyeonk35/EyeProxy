@@ -34,6 +34,7 @@ private struct GeneralSettings: View {
                 Text("라이트").tag(Appearance.light)
                 Text("다크").tag(Appearance.dark)
             }
+            Toggle("상태 막대에 아이콘 표시", isOn: $settings.showStatusItem)
             TextField("포트", text: $draft)
                 .focused($focused)
                 .onSubmit(commit)

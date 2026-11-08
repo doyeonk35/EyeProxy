@@ -42,3 +42,11 @@ import Testing
     s.mapLocalDefaultFolder = nil
     #expect(AppSettings(defaults: d).mapLocalDefaultFolder == nil)
 }
+
+@Test @MainActor func showStatusItemPersists() {
+    let d = UserDefaults(suiteName: UUID().uuidString)!
+    let s = AppSettings(defaults: d)
+    #expect(s.showStatusItem)
+    s.showStatusItem = false
+    #expect(!AppSettings(defaults: d).showStatusItem)
+}

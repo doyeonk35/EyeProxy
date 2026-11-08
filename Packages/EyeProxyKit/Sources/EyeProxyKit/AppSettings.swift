@@ -24,6 +24,8 @@ public final class AppSettings {
     }
     /// Map Local 응답 파일 폴더(More ▸ Default Local File Folder). nil이면 기본 폴더.
     public var mapLocalDefaultFolder: String? { didSet { defaults.set(mapLocalDefaultFolder, forKey: "eyeproxy.mapLocalDefaultFolder") } }
+    /// 메뉴 막대 상태 아이콘 표시.
+    public var showStatusItem: Bool { didSet { defaults.set(showStatusItem, forKey: "eyeproxy.showStatusItem") } }
     /// 저장하지 않는다 (실행할 때마다 기록 중으로 시작).
     public var isRecording = true
 
@@ -40,6 +42,7 @@ public final class AppSettings {
         wrapLongLines = defaults.object(forKey: "eyeproxy.wrapLongLines") as? Bool ?? true
         appearance = defaults.string(forKey: "eyeproxy.appearance").flatMap(Appearance.init(rawValue:)) ?? .system
         mapLocalDefaultFolder = defaults.string(forKey: "eyeproxy.mapLocalDefaultFolder")
+        showStatusItem = defaults.object(forKey: "eyeproxy.showStatusItem") as? Bool ?? true
         toolSwitches = defaults.data(forKey: "eyeproxy.toolSwitches").flatMap { try? JSONDecoder().decode(ToolSwitches.self, from: $0) } ?? ToolSwitches()
     }
 

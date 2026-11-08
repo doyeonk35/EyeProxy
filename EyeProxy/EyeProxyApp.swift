@@ -104,6 +104,12 @@ import SwiftUI
                 .frame(minWidth: 640, minHeight: 480)
         }
         .defaultSize(width: 860, height: 600)
+        MenuBarExtra(isInserted: Bindable(model.settings).showStatusItem) {
+            StatusMenu().environment(model)
+        } label: {
+            Image(model.statusIconName).accessibilityLabel("EyeProxy")
+        }
+        .menuBarExtraStyle(.menu)
     }
 }
 
