@@ -72,14 +72,14 @@ struct FlowListView: View {
                 .width(min: 50, ideal: 72, max: 110)
                 .customizationID("duration")
                 TableColumn("Request", value: \.requestSize) { (row: FlowRow) in
-                    Text(row.requestSize > 0 ? Self.bytes(row.requestSize) : "-").frame(maxWidth: .infinity, alignment: .trailing)
+                    Text(row.requestSize > 0 ? ByteSize.format(row.requestSize) : "-").frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .width(min: 72, ideal: 80, max: 120)
                 .customizationID("requestSize")
             }
             Group {
                 TableColumn("Response", value: \.responseSize) { (row: FlowRow) in
-                    Text(row.responseSize > 0 ? Self.bytes(row.responseSize) : "-").frame(maxWidth: .infinity, alignment: .trailing)
+                    Text(row.responseSize > 0 ? ByteSize.format(row.responseSize) : "-").frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .width(min: 72, ideal: 80, max: 120)
                 .customizationID("responseSize")
@@ -140,10 +140,6 @@ struct FlowListView: View {
         ("Breakpoint…", "tool-breakpoint-rules"), ("Map Local…", "tool-map-local"), ("Map Remote…", "tool-map-remote"),
         ("Block List…", "tool-block"), ("Allow List…", "tool-allow"), ("Network Conditions…", "tool-network"),
     ]
-
-    static func bytes(_ count: Int) -> String {
-        Int64(count).formatted(.byteCount(style: .file, spellsOutZero: false))
-    }
 
     private static func stateText(_ state: FlowState) -> String {
         switch state {

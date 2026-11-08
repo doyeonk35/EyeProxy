@@ -114,8 +114,8 @@ extension AppModel {
         guard let size = (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? Int else {
             return String(localized: "(파일을 찾을 수 없습니다)")
         }
-        guard size <= 1_000_000, let data = try? Data(contentsOf: url) else { return String(localized: "(파일이 커서 미리보기를 생략합니다: \(size) bytes)") }
-        return String(data: data, encoding: .utf8) ?? String(localized: "(바이너리 파일: \(size) bytes)")
+        guard size <= 1_000_000, let data = try? Data(contentsOf: url) else { return String(localized: "(파일이 커서 미리보기를 생략합니다: \(ByteSize.format(size)))") }
+        return String(data: data, encoding: .utf8) ?? String(localized: "(바이너리 파일: \(ByteSize.format(size)))")
     }
 
     /// 고른 파일을 편집 가능한 HTTP 메시지로. HTTP 메시지 파일이면 원문, 아니면 200 응답으로 감싼다.

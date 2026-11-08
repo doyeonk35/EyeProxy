@@ -39,7 +39,7 @@ struct BodyView: View {
     }
 
     private var summary: String {
-        String(localized: "원본 \(data.count) bytes") + (encoding.map { String(localized: " · Content-Encoding: \($0)") } ?? "")
+        String(localized: "원본 \(ByteSize.format(data.count))") + (encoding.map { String(localized: " · Content-Encoding: \($0)") } ?? "")
     }
 
     var body: some View {
@@ -92,7 +92,7 @@ struct BodyView: View {
         case .text(let s), .html(let s):
             (p.display, p.truncated) = capped(s)
         case .image(let x), .binary(let x):
-            p.display = hex(x.prefix(hexLimit)) + (x.count > hexLimit ? "\n" + String(localized: "… (\(x.count - hexLimit) bytes 더)") : "")
+            p.display = hex(x.prefix(hexLimit)) + (x.count > hexLimit ? "\n" + String(localized: "… (\(ByteSize.format(x.count - hexLimit)) 더)") : "")
         }
         return p
     }

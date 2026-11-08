@@ -224,7 +224,7 @@ struct BreakpointEditor: View {
             .border(.separator)
         } else {
             ContentUnavailableView("바이너리 본문은 편집할 수 없습니다", systemImage: "doc",
-                                   description: Text(verbatim: ByteCountFormatter.string(fromByteCount: Int64(bodyData.count), countStyle: .file)))
+                                   description: Text(verbatim: ByteSize.format(bodyData.count)))
         }
     }
 
