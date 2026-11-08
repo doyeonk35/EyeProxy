@@ -99,13 +99,19 @@ extension AppModel {
 
     /// `<host>_<ruleID>.http`. 경로 문자가 섞이지 않게 영숫자·`.`·`-` 밖은 `_`로.
     static func fileName(_ r: MapLocalRule) -> String {
-        func clean(_ s: String) -> String {
-            String(s.map { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-") ? $0 : "_" })
-        }
         // hostPattern은 http:// 규칙에 nil이라 scheme을 바꿔 호스트만 뽑는다.
         var https = r.match
         if https.url.lowercased().hasPrefix("http://") { https.url = "https://" + https.url.dropFirst(7) }
         return "\(clean(https.hostPattern ?? "local"))_\(clean(r.id)).http"
+    }
+
+    private static func clean(_ s: String) -> String {
+        String(s.map { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-") ? $0 : "_" })
+    }
+
+    /// 이 규칙이 만든 응답 파일인가(`fileName`처럼 이름에 규칙 id). 아니면(복제한 규칙·가져온 파일) 제자리에 덮어쓰지 않는다.
+    static func owns(_ path: String, _ r: MapLocalRule) -> Bool {
+        URL(fileURLWithPath: path).lastPathComponent.hasSuffix("_\(clean(r.id)).http")
     }
 
     /// 고른 파일 미리보기(읽기 전용).
@@ -146,6 +152,8 @@ struct MapLocalEditor: View {
     @State private var missing = false
     /// Proxyman 폴더에 쓰려다 막힌 경로(알림).
     @State private var blocked: String?
+    /// 규칙이 트리에 있었다(열 때 있었거나 저장했다). 저장 때 없으면 그사이 삭제된 것.
+    @State private var inTree = false
 
     private var dir: URL { model.rules.mapLocalDirectory }
     private var isDirty: Bool { rule != baseline || messageDirty }
@@ -273,6 +281,7 @@ struct MapLocalEditor: View {
         }
         rule = r
         baseline = r
+        inTree = existing != nil
         if let prefilled = model.editorMessages.removeValue(forKey: ruleID) {
             message = prefilled
             messageDirty = true
@@ -314,6 +323,14 @@ struct MapLocalEditor: View {
     /// 응답 파일(파일 모드·편집 가능일 때)과 규칙을 저장한다. 실패하면 false.
     @discardableResult private func save() -> Bool {
         guard var r = rule else { return false }
+        // 지금 트리의 규칙에 합친다: 편집기에서 바꾸지 않은 Enabled·이름은 표에서 그사이 바꾼 값을 따른다(M3).
+        let live = model.rules.tree(.mapLocal).node(r.id)?.rule
+        if let live, let baseline {
+            if r.isEnabled == baseline.isEnabled { r.isEnabled = live.isEnabled }
+            if r.name == baseline.name { r.name = live.name }
+        } else if live == nil, inTree, !confirmReAdd(r.name) {
+            return false
+        }
         if r.match.url.isEmpty || r.match.validationError != nil {
             error = r.match.validationError ?? String(localized: "URL을 입력하세요")
             return false
@@ -324,9 +341,12 @@ struct MapLocalEditor: View {
         }
         if !r.useDirectory, external == nil {
             let current = r.localFile?.path
-            let inside = current.map { MapLocalMessage.isInside($0, dir) && ProxymanImporter.isSafeWriteTarget(URL(fileURLWithPath: $0)) } ?? false
+            // 이 규칙의 파일만 제자리에 덮어쓴다. 복제한 규칙은 원본 규칙의 파일을 가리키므로 새 파일을 만든다(I4).
+            let inside = current.map {
+                MapLocalMessage.isInside($0, dir) && MapLocalMessage.owns($0, r) && ProxymanImporter.isSafeWriteTarget(URL(fileURLWithPath: $0))
+            } ?? false
             if messageDirty || !inside {
-                // 안쪽 파일은 덮어쓰고, 없거나 바깥 파일이면 폴더 안에 새로 만들어 가리킨다.
+                // 내 파일은 덮어쓰고, 없거나 남의(바깥·다른 규칙) 파일이면 폴더 안에 새로 만들어 가리킨다.
                 let target = inside ? URL(fileURLWithPath: current!) : dir.appendingPathComponent(MapLocalMessage.fileName(r))
                 // 폴더 설정과 무관하게 Proxyman 폴더에는 절대 쓰지 않는다.
                 guard ProxymanImporter.isSafeWriteTarget(target) else {
@@ -345,12 +365,29 @@ struct MapLocalEditor: View {
         }
         var tree = model.rules.tree(.mapLocal)
         if tree.node(r.id) != nil { tree.update(r.id) { $0 = .rule(r) } } else { tree.insert([.rule(r)], into: nil) }
+        let before = model.rules.revision
         model.rules.set(tree, for: .mapLocal)
+        // 규칙 파일 저장 실패는 RuleStore가 경고로 알린다. 편집 상태는 저장 안 됨으로 남긴다.
+        guard model.rules.revision != before else {
+            error = String(localized: "규칙을 저장하지 못했습니다")
+            return false
+        }
         rule = r
         baseline = r
+        inTree = true
         error = nil
         messageDirty = false
         return true
+    }
+
+    /// 편집 중 표에서 지운 규칙을 저장하려 할 때 다시 추가할지 묻는다.
+    private func confirmReAdd(_ name: String) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = String(localized: "규칙 \"\(name)\"은 편집하는 동안 삭제되었습니다")
+        alert.informativeText = String(localized: "저장하면 규칙을 다시 추가합니다.")
+        alert.addButton(withTitle: String(localized: "다시 추가"))
+        alert.addButton(withTitle: String(localized: "취소"))
+        return alert.runModal() == .alertFirstButtonReturn
     }
 }
 
