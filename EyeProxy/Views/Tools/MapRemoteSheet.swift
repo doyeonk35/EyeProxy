@@ -106,10 +106,8 @@ struct MapRemoteSheet: View {
         guard let new, new.count - (old?.count ?? 0) > 1 else { return }
         let t = MapTarget.parse(pastedURL: new)
         guard t.scheme != nil || t.port != nil || t.path != nil || t.query != nil, let host = t.host else { return }
-        rule.mapTo.host = host
-        if let scheme = t.scheme, ["http", "https"].contains(scheme) { rule.mapTo.scheme = scheme }
-        if let port = t.port { rule.mapTo.port = port }
-        if let path = t.path { rule.mapTo.path = path }
-        if let query = t.query { rule.mapTo.query = query }
+        // 다섯 칸을 모두 붙여 넣은 URL로 바꾼다(URL에 없는 부분은 비운다). 이전 port·path가 남으면 엉뚱한 곳으로 간다.
+        rule.mapTo = MapTarget(scheme: t.scheme.flatMap { ["http", "https"].contains($0) ? $0 : nil },
+                               host: host, port: t.port, path: t.path, query: t.query)
     }
 }
