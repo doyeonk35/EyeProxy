@@ -132,7 +132,7 @@ Proxyman 기준: 기록은 메뉴 막대에 없고 툴바 ▶ 와 상태 막대 
 
 ### 4.5 Android 섹션
 
-탭 두 개: 실기기 / 에뮬레이터. 둘 다 세 단계 안내 + 버튼.
+탭 세 개: 실기기 / 에뮬레이터 / Android TV. 모두 단계별 안내 + 버튼. Android TV는 설정에 프록시·인증서 UI가 없으므로 adb(네트워크 디버깅, `adb connect <TV IP>:5555`)로 에뮬레이터와 같은 명령을 쓰고, 인증서 설치 화면은 `am start -a android.intent.action.VIEW -t application/x-x509-ca-cert -d file:///sdcard/Download/<crt>` 인텐트로 띄운다. Play 없는 Android TV 에뮬레이터는 `adb root; adb remount`로 시스템 CA 설치가 가능하다고 안내한다(2026-11-08 추가).
 
 실기기:
 1. Wi-Fi 설정 ▸ 프록시 수동 ▸ Mac IP·포트 입력(현재 LAN IP·포트를 그대로 보여 주고 복사 버튼).

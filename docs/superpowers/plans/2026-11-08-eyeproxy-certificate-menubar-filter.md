@@ -223,16 +223,20 @@
       public static let clearProxyArguments: [String]                         // [... "http_proxy", ":0"]
       public static func pushArguments(crt: URL) -> [String]                   // ["push", crt.path, "/sdcard/Download/EyeProxy-CA.crt"]
       public static func commandLines(adb: String, host: String, port: Int, crt: URL) -> String  // 복사용 두 줄
+      public static let connectArguments: (String) -> [String]                 // { ip in ["connect", "\(ip):5555"] }
+      public static let installIntentArguments: [String]                       // ["shell","am","start","-a","android.intent.action.VIEW","-t","application/x-x509-ca-cert","-d","file:///sdcard/Download/EyeProxy-CA.crt"]
+      public static func tvCommandLines(adb: String, tvIP: String, host: String, port: Int, crt: URL) -> String  // 복사용 네 줄: connect, 프록시, push, 설치 인텐트
       public static let networkSecurityConfigXML: String                       // 사용자 CA 허용 스니펫(§4.5)
   }
   ```
 - Produces (앱): `AppModel.runADB(_ args: [String]) async -> String`(`Shell.run` 결과 stdout+stderr 합쳐 반환; Shell은 Kit internal이므로 Kit에 `public static func runADB(_ adb: URL, _ args: [String]) async throws -> (status: Int32, output: String)`를 `AndroidSetup`에 둔다), `exportCACrt()`(NSSavePanel `EyeProxy-CA.crt`, `CertificateExporter.writePEM`).
-- 뷰: `Picker`(실기기 / 에뮬레이터, segmented). 세 단계 안내(§4.5 문구), 현재 `model.lanAddresses.first ?? "127.0.0.1"`·`model.runningPort ?? settings.port` 표시 + 복사 버튼. 주의 문구 + `networkSecurityConfigXML` 복사 버튼. 실기기 탭: `CA 저장(.crt)…`. 에뮬레이터 탭: 호스트는 `10.0.2.2`; `locateADB()`가 있으면 `adb로 프록시 설정 + CA 복사`·`adb로 프록시 해제` 버튼과 결과 텍스트, 없으면 `commandLines` 복사용 텍스트.
+- 뷰: `Picker`(실기기 / 에뮬레이터 / Android TV, segmented). 세 단계 안내(§4.5 문구), 현재 `model.lanAddresses.first ?? "127.0.0.1"`·`model.runningPort ?? settings.port` 표시 + 복사 버튼. 주의 문구 + `networkSecurityConfigXML` 복사 버튼. 실기기 탭: `CA 저장(.crt)…`. 에뮬레이터 탭: 호스트는 `10.0.2.2`; `locateADB()`가 있으면 `adb로 프록시 설정 + CA 복사`·`adb로 프록시 해제` 버튼과 결과 텍스트, 없으면 `commandLines` 복사용 텍스트.
+- Android TV 탭: 단계 — (1) TV 설정 ▸ 기기 환경설정 ▸ 정보 ▸ 빌드 7번 → 개발자 옵션 ▸ 네트워크 디버깅 켬, (2) `adb connect <TV IP>:5555` (TV IP 입력 칸), (3) 프록시 설정·CA 복사는 에뮬레이터와 같은 명령(호스트는 Mac LAN IP), (4) 설치 인텐트로 인증서 설치 화면을 띄워 리모컨으로 진행(없으면 설정 ▸ 보안 ▸ 저장소에서 설치). 주의 문구: "앱이 사용자 CA를 신뢰하려면 디버그 빌드에 network_security_config가 필요. Play가 없는 Android TV 에뮬레이터는 `adb root; adb remount` 뒤 /system/etc/security/cacerts/에 넣으면 시스템 CA로 모든 앱이 복호화된다(해시 파일명은 `openssl x509 -subject_hash_old`)". adb가 있으면 `adb connect` 버튼 + 에뮬레이터 탭과 같은 두 버튼 + `인증서 설치 화면 열기` 버튼, 없으면 `tvCommandLines` 복사용 텍스트.
 
-- [ ] **Step 1: 테스트 작성** — `locateADBPrefersEnvThenHomeThenPath`(fileExists 클로저로 가짜 파일 시스템: ANDROID_HOME 있으면 그것, 없으면 홈 경로, 없으면 PATH 탐색, 아무것도 없으면 nil), `proxyAndPushArgumentsAreExact`, `commandLinesContainBoth`.
+- [ ] **Step 1: 테스트 작성** — `locateADBPrefersEnvThenHomeThenPath`(fileExists 클로저로 가짜 파일 시스템: ANDROID_HOME 있으면 그것, 없으면 홈 경로, 없으면 PATH 탐색, 아무것도 없으면 nil), `proxyAndPushArgumentsAreExact`, `commandLinesContainBoth`, `tvCommandLinesContainConnectAndIntent`(`connect <ip>:5555`와 `android.intent.action.VIEW`가 들어 있고 호스트가 Mac IP).
 - [ ] **Step 2: 실패 확인.** **Step 3: 구현.** **Step 4: 통과 확인 + 빌드.**
-- [ ] **Step 5: 수동 확인** — adb 없는 Mac이면 명령 텍스트가 보이는지, 있으면 버튼이 보이는지(실행은 하지 않는다). 스크린샷.
-- [ ] **Step 6: 커밋** — `feat(certificate): Android 실기기·에뮬레이터 CA 설치 안내와 adb 도우미`
+- [ ] **Step 5: 수동 확인** — 세 탭 전환, adb 없는 Mac이면 명령 텍스트가 보이는지, 있으면 버튼이 보이는지(실행은 하지 않는다). 스크린샷.
+- [ ] **Step 6: 커밋** — `feat(certificate): Android 실기기·에뮬레이터·TV CA 설치 안내와 adb 도우미`
 
 ### Task 8: 개발 환경 섹션 (Kit 스니펫 + 뷰)
 
