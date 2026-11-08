@@ -32,7 +32,7 @@ private func request(_ url: String, method: String = "GET") -> FlowRequest {
     ("api.example.com/cb?u=https://x/*", "w", false, false, "GET", "https://api.example.com/cb?u=https://x/y", true),
 ] as [(String, String, Bool, Bool, String, String, Bool)])
 func matchTable(pattern: String, mode: String, subpaths: Bool, ignoreQuery: Bool, method: String, url: String, expected: Bool) {
-    let rule = MatchRule(url: pattern, mode: mode == "r" ? .regex : .wildcard, includeSubpaths: subpaths, ignoreQuery: ignoreQuery)
+    let rule = MatchRule(url: pattern, mode: mode == "r" ? .regex : .wildcard, includeSubpaths: subpaths, queryMode: ignoreQuery ? .ignore : .exact)
     #expect(rule.matches(request(url, method: method)) == expected)
 }
 
@@ -69,4 +69,83 @@ func hostPatternExtraction(pattern: String, expected: String?) {
     #expect(MatchRule(url: "https://api.example.com/v1/search?*").hasQueryLikePattern)
     #expect(!MatchRule(url: "https://api.example.com/v?/users").hasQueryLikePattern)
     #expect(MatchRule(url: "https://api.example.com/x?a=1").hasQueryLikePattern)
+}
+
+// MARK: - 쿼리 항목별 선택 매칭
+
+@Test(arguments: [
+    ([("screenCode", "CSSD1400", true)], "https://api.example.com/info?screenCode=CSSD1400&apiKey=x", true),
+    ([("screenCode", "CSSD1400", true)], "https://api.example.com/info?screenCode=CSSD0100", false),
+    ([("screenCode", "CSSD1400", true)], "https://api.example.com/info", false),
+    ([("apiKey", "*", true)], "https://api.example.com/info?apiKey=abc", true),
+    ([("apiKey", "*", true)], "https://api.example.com/info?other=1", false),
+    ([("page", "1", false)], "https://api.example.com/info?page=9", true),
+    ([("code", "CS??1400", true)], "https://api.example.com/info?code=CSSD1400", true),
+    ([("q", "a b", true)], "https://api.example.com/info?q=a%20b", true),
+    ([("k", "v", true)], "https://api.example.com/info?k=x&k=v", true),
+    ([], "https://api.example.com/info?x=1", true),
+] as [([(String, String, Bool)], String, Bool)])
+func selectedQueryMatching(conditions: [(String, String, Bool)], url: String, expected: Bool) {
+    let rule = MatchRule(
+        url: "https://api.example.com/info", queryMode: .selected,
+        queryConditions: conditions.map { QueryCondition(key: $0.0, value: $0.1, isEnabled: $0.2) })
+    #expect(rule.matches(request(url)) == expected)
+}
+
+@Test func selectedQueryIsCaseSensitiveAndSkipsEmptyKeys() {
+    let rule = MatchRule(url: "https://api.example.com/info", queryMode: .selected, queryConditions: [
+        QueryCondition(key: "Code", value: "abc", isEnabled: true),
+        QueryCondition(key: "", value: "zzz", isEnabled: true),
+    ])
+    #expect(rule.matches(request("https://api.example.com/info?Code=abc")))
+    #expect(!rule.matches(request("https://api.example.com/info?code=abc")))
+    #expect(!rule.matches(request("https://api.example.com/info?Code=ABC")))
+    #expect(!rule.matches(request("https://api.example.com/other?Code=abc")))
+}
+
+@Test func exactModeIsProxymanBehaviour() {
+    let any = MatchRule(url: "https://api.example.com/v1/search?*", queryMode: .exact)
+    #expect(any.matches(request("https://api.example.com/v1/search?q=1")))
+    #expect(!any.matches(request("https://api.example.com/v1/search")))
+    let bare = MatchRule(url: "https://api.example.com/v1/search", queryMode: .exact)
+    #expect(!bare.matches(request("https://api.example.com/v1/search?q=1")))
+    #expect(bare.matches(request("https://api.example.com/v1/search")))
+}
+
+@Test func prefilledHasUncheckedConditions() {
+    let req = request("https://api.example.com/info?a=1&b=2", method: "POST")
+    let rule = MatchRule(prefilledFrom: req)
+    #expect(rule.url == "https://api.example.com/info")
+    #expect(rule.queryMode == .ignore)
+    #expect(rule.queryConditions == [
+        QueryCondition(key: "a", value: "1", isEnabled: false),
+        QueryCondition(key: "b", value: "2", isEnabled: false),
+    ])
+    #expect(rule.matches(req))
+}
+
+@Test(arguments: [
+    ("https://api.example.com/info?a=1&b=*", "https://api.example.com/info", 2),
+    ("https://api.example.com/v?/users", "https://api.example.com/v?/users", 0),
+    ("api.example.com/search?*", "api.example.com/search?*", 0),
+] as [(String, String, Int)])
+func splitQueryFromPattern(pattern: String, url: String, count: Int) {
+    let split = MatchRule.splitQuery(fromPattern: pattern)
+    #expect(split.url == url)
+    #expect(split.conditions.count == count)
+    #expect(split.conditions.allSatisfy { $0.isEnabled })
+}
+
+@Test func splitQueryDecodesAndKeepsOrder() {
+    let split = MatchRule.splitQuery(fromPattern: "api.example.com/info?q=a%20b&k=")
+    #expect(split.conditions == [QueryCondition(key: "q", value: "a b", isEnabled: true), QueryCondition(key: "k", value: "", isEnabled: true)])
+}
+
+@Test func queryDescriptionText() {
+    let on = QueryCondition(key: "a", value: "1", isEnabled: true)
+    let off = QueryCondition(key: "b", value: "2", isEnabled: false)
+    #expect(MatchRule(queryMode: .selected, queryConditions: [on, off, on]).queryDescription == "쿼리 2개")
+    #expect(MatchRule(queryMode: .selected, queryConditions: [off]).queryDescription == nil)
+    #expect(MatchRule(queryMode: .exact).queryDescription == "쿼리 전체 일치")
+    #expect(MatchRule(queryMode: .ignore, queryConditions: [on]).queryDescription == nil)
 }

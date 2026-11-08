@@ -45,7 +45,7 @@ private func fileRule(_ path: String, delay: Int? = nil) -> RuleTree<MapLocalRul
     #expect(r.id == "19A8BA07" && r.name == "search")
     #expect(r.match.url == "https://api.example.com/v1/search?*")
     #expect(r.match.methods == .exact(["GET"]))
-    #expect(r.match.ignoreQuery == false)
+    #expect(r.match.queryMode == .exact)
     #expect(r.useLocalFile && !r.useDirectory && r.directoryPath == nil)
     #expect(r.delaySeconds == 10)
     #expect(r.localFile?.name == "default_message")
@@ -79,7 +79,7 @@ private func fileRule(_ path: String, delay: Int? = nil) -> RuleTree<MapLocalRul
 
 @Test func newRuleDefaults() {
     let r = MapLocalRule()
-    #expect(r.name == "Untitled" && r.isEnabled && r.match.ignoreQuery)
+    #expect(r.name == "Untitled" && r.isEnabled && r.match.queryMode == .ignore)
     #expect(r.id.count == 8 && r.id.allSatisfy { $0.isHexDigit && !$0.isLowercase })
     #expect(MapLocalRule.delayPresets == [nil, 1, 2, 3, 5, 10, 30])
     #expect(RuleFile<MapLocalRule>.mapLocal.name == "map-local.json")

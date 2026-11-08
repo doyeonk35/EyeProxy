@@ -7,6 +7,32 @@ public enum MatchMode: String, Codable, Sendable {
     case regex = "useRegex"
 }
 
+/// 쿼리 비교 방식. `.ignore` = 쿼리를 떼고 비교(새 규칙 기본), `.selected` = 경로는 `.ignore`처럼 + 체크된 조건만 비교,
+/// `.exact` = Proxyman과 같이 쿼리 포함 전체 URL 비교(가져온 규칙 기본).
+public enum QueryMode: String, Codable, Sendable {
+    case ignore, selected, exact
+}
+
+/// `.selected`의 쿼리 조건. 키는 정확히(대소문자 구분), 값은 `*`·`?` 와일드카드. `id`는 편집기용이라 저장하지 않는다.
+public struct QueryCondition: Codable, Equatable, Sendable, Identifiable {
+    public var id = UUID()
+    public var key: String
+    public var value: String
+    public var isEnabled: Bool
+
+    public init(key: String, value: String, isEnabled: Bool) {
+        self.key = key
+        self.value = value
+        self.isEnabled = isEnabled
+    }
+
+    private enum CodingKeys: String, CodingKey { case key, value, isEnabled }
+
+    public static func == (a: Self, b: Self) -> Bool {
+        a.key == b.key && a.value == b.value && a.isEnabled == b.isEnabled
+    }
+}
+
 public enum MethodMatch: Equatable, Sendable {
     case any
     case exact([String])
@@ -18,18 +44,21 @@ public struct MatchRule: Equatable, Sendable {
     public var mode: MatchMode
     public var methods: MethodMatch
     public var includeSubpaths: Bool
-    public var ignoreQuery: Bool
+    public var queryMode: QueryMode
+    public var queryConditions: [QueryCondition]
     public var graphQLQueryName: String?
 
     public init(
         url: String = "", mode: MatchMode = .wildcard, methods: MethodMatch = .any,
-        includeSubpaths: Bool = false, ignoreQuery: Bool = true, graphQLQueryName: String? = nil
+        includeSubpaths: Bool = false, queryMode: QueryMode = .ignore, queryConditions: [QueryCondition] = [],
+        graphQLQueryName: String? = nil
     ) {
         self.url = url
         self.mode = mode
         self.methods = methods
         self.includeSubpaths = includeSubpaths
-        self.ignoreQuery = ignoreQuery
+        self.queryMode = queryMode
+        self.queryConditions = queryConditions
         self.graphQLQueryName = graphQLQueryName
     }
 
@@ -37,13 +66,57 @@ public struct MatchRule: Equatable, Sendable {
         if case .exact(let list) = methods,
            !list.contains(where: { $0.caseInsensitiveCompare(request.method) == .orderedSame }) { return false }
         guard let regex = compiled() else { return false }
-        let target = Self.urlString(request, includeQuery: !ignoreQuery)
-        return regex.firstMatch(in: target, range: NSRange(target.startIndex..., in: target)) != nil
+        let target = Self.urlString(request, includeQuery: queryMode == .exact)
+        guard regex.firstMatch(in: target, range: NSRange(target.startIndex..., in: target)) != nil else { return false }
+        guard queryMode == .selected else { return true }
+        let items = Self.queryItems(request.path)
+        return activeConditions.allSatisfy { c in
+            guard let re = Self.cache(
+                pattern: "^(?:\(Self.wildcardRegex(c.value)))$", options: .dotMatchesLineSeparators, key: "q:\(c.value)"
+            ) else { return false }
+            return items.contains { $0.key == c.key && re.firstMatch(in: $0.value, range: NSRange($0.value.startIndex..., in: $0.value)) != nil }
+        }
     }
 
-    /// 우클릭 ▸ Tools로 만드는 새 규칙: 요청 URL(쿼리 제외) + 그 메서드. 쿼리 무시가 켜져 있어 쿼리가 달라도 같은 경로에 맞는다.
+    /// 우클릭 ▸ Tools로 만드는 새 규칙: 요청 URL(쿼리 제외) + 그 메서드 + 쿼리 무시.
+    /// 요청의 쿼리 항목은 체크 해제로 넣어 두어 사용자가 필요한 것만 체크해 `.selected`로 바꾸게 한다.
     public init(prefilledFrom request: FlowRequest) {
-        self.init(url: Self.urlString(request, includeQuery: false), methods: .exact([request.method]))
+        self.init(
+            url: Self.urlString(request, includeQuery: false), methods: .exact([request.method]),
+            queryConditions: Self.queryItems(request.path).map { QueryCondition(key: $0.key, value: $0.value, isEnabled: false) })
+    }
+
+    /// 체크됐고 키가 빈 칸이 아닌 조건(`.selected`에서 실제로 비교하는 것).
+    public var activeConditions: [QueryCondition] {
+        queryConditions.filter { $0.isEnabled && !$0.key.isEmpty }
+    }
+
+    /// 규칙 목록 Matching Rule 열 꼬리말.
+    public var queryDescription: String? {
+        switch queryMode {
+        case .selected: activeConditions.isEmpty ? nil : "쿼리 \(activeConditions.count)개"
+        case .exact: "쿼리 전체 일치"
+        case .ignore: nil
+        }
+    }
+
+    /// 편집기 URL 칸에 붙여 넣은 쿼리를 체크된 조건으로 떼어 낸다. 첫 `?` 뒤가 `k=v(&k=v)*` 꼴일 때만
+    /// (`/v?/users`·`?*` 같은 와일드카드 `?`는 그대로). 키·값은 퍼센트 디코딩해 보여 준다.
+    public static func splitQuery(fromPattern url: String) -> (url: String, conditions: [QueryCondition]) {
+        guard let q = url.firstIndex(of: "?") else { return (url, []) }
+        let query = String(url[url.index(after: q)...])
+        guard query.range(of: #"^[^&=/?]+=[^&]*(&[^&=/?]+=[^&]*)*$"#, options: .regularExpression) != nil else { return (url, []) }
+        return (String(url[..<q]), queryItems("?" + query).map { QueryCondition(key: $0.key, value: $0.value, isEnabled: true) })
+    }
+
+    /// 경로의 `?` 뒤 쿼리 항목(퍼센트 디코딩, `+`는 그대로 — URLComponents.queryItems와 같은 규칙). 값이 없으면 "".
+    private static func queryItems(_ path: String) -> [(key: String, value: String)] {
+        guard let q = path.firstIndex(of: "?") else { return [] }
+        return path[path.index(after: q)...].split(separator: "&").map { pair in
+            let kv = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            let decode = { (s: Substring) in s.removingPercentEncoding ?? String(s) }
+            return (decode(kv[0]), kv.count > 1 ? decode(kv[1]) : "")
+        }
     }
 
     /// Test your Rule용: 메서드는 보지 않고 URL 한 줄만 비교한다. scheme이 없으면 https로 본다.
@@ -122,17 +195,21 @@ public struct MatchRule: Equatable, Sendable {
 
     private func wildcardBody() -> String {
         let split = Self.splitScheme(url)
-        var out = split != nil ? "" : "[a-z][a-z0-9+.-]*://"
-        for ch in url {
-            switch ch {
-            case "*": out += ".*"
-            case "?": out += "."
-            default: out += NSRegularExpression.escapedPattern(for: String(ch))
-            }
-        }
+        var out = (split != nil ? "" : "[a-z][a-z0-9+.-]*://") + Self.wildcardRegex(url)
         let afterScheme = split?.rest ?? Substring(url)
         if !afterScheme.contains("/") || includeSubpaths { out += "(/.*)?" }
         return out
+    }
+
+    /// `*` = 0자 이상, `?` = 1자, 나머지는 리터럴.
+    private static func wildcardRegex(_ s: String) -> String {
+        s.map { ch in
+            switch ch {
+            case "*": ".*"
+            case "?": "."
+            default: NSRegularExpression.escapedPattern(for: String(ch))
+            }
+        }.joined()
     }
 
     private static let regexCache = Mutex<[String: NSRegularExpression]>([:])

@@ -64,7 +64,7 @@ private func request(_ url: String) -> FlowRequest {
     #expect(disk.skipped == 0 && export.skipped == 0)
     #expect(disk.tree.enabledRules.map(\.id) == ["19A8BA07", "B"])
     let first = try #require(disk.tree.enabledRules.first)
-    #expect(first.match == MatchRule(url: "https://api.example.com/v1/search?*", methods: .exact(["GET"]), ignoreQuery: false))
+    #expect(first.match == MatchRule(url: "https://api.example.com/v1/search?*", methods: .exact(["GET"]), queryMode: .exact))
 }
 
 @Test func skipsUnknownNodeKindsAndBrokenNodes() throws {
@@ -111,18 +111,49 @@ private func request(_ url: String) -> FlowRequest {
 
 @Test func ignoreQueryDefaultsFalseWhenAbsentAndRoundTrips() throws {
     var tree = try decode("[\(ruleNode("A"))]").tree
-    #expect(tree.enabledRules.first?.match.ignoreQuery == false)
+    #expect(tree.enabledRules.first?.match.queryMode == .exact)
 
     guard case .rule(var rule) = tree.nodes[0] else { Issue.record("not a rule"); return }
-    rule.match.ignoreQuery = true
+    rule.match.queryMode = .ignore
     rule.note = "hi"
     tree.nodes[0] = .rule(rule)
     let data = try tree.encoded()
-    #expect(String(decoding: data, as: UTF8.self).contains(#""eyeproxy":{"ignoreQuery":true}"#))
+    #expect(String(decoding: data, as: UTF8.self).contains(#""eyeproxy":{"ignoreQuery":true,"queryMode":"ignore"}"#))
     let again = try Tree.decodeLenient(data)
     #expect(again.tree == tree)
     #expect(again.skipped == 0)
-    #expect(again.tree.enabledRules.first?.match.ignoreQuery == true)
+    #expect(again.tree.enabledRules.first?.match.queryMode == .ignore)
+}
+
+@Test func codecRoundTripAndLegacy() throws {
+    var tree = try decode("[\(ruleNode("A"))]").tree
+    guard case .rule(var rule) = tree.nodes[0] else { Issue.record("not a rule"); return }
+    rule.match.queryMode = .selected
+    rule.match.queryConditions = [
+        QueryCondition(key: "screenCode", value: "CSSD1400", isEnabled: true),
+        QueryCondition(key: "page", value: "*", isEnabled: false),
+    ]
+    tree.nodes[0] = .rule(rule)
+    let data = try tree.encoded()
+    let text = String(decoding: data, as: UTF8.self)
+    #expect(text.contains(#""eyeproxy":{"ignoreQuery":false,"queryItems":[{"isEnabled":true,"key":"screenCode","value":"CSSD1400"},{"isEnabled":false,"key":"page","value":"*"}],"queryMode":"selected"}"#))
+    let again = try Tree.decodeLenient(data).tree
+    #expect(again == tree)
+    #expect(again.enabledRules.first?.match.queryConditions.map(\.key) == ["screenCode", "page"])
+
+    // .exact는 ignoreQuery false, 조건은 쓰지 않는다.
+    rule.match.queryMode = .exact
+    tree.nodes[0] = .rule(rule)
+    let exactText = String(decoding: try tree.encoded(), as: UTF8.self)
+    #expect(exactText.contains(#""eyeproxy":{"ignoreQuery":false,"queryMode":"exact"}"#))
+
+    // 구버전: ignoreQuery만 있는 파일, eyeproxy 없는 파일(Proxyman).
+    let legacyOn = try decode("[\(ruleNode("B", extra: #","eyeproxy":{"ignoreQuery":true}"#))]").tree
+    let legacyOff = try decode("[\(ruleNode("C", extra: #","eyeproxy":{"ignoreQuery":false}"#))]").tree
+    let proxyman = try decode("[\(ruleNode("D"))]").tree
+    #expect(legacyOn.enabledRules.first?.match.queryMode == .ignore)
+    #expect(legacyOff.enabledRules.first?.match.queryMode == .exact)
+    #expect(proxyman.enabledRules.first?.match.queryMode == .exact)
 }
 
 @Test func methodAndRegexFieldsRoundTrip() throws {

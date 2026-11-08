@@ -170,23 +170,29 @@ extension MatchRule {
     private struct MethodName: Codable { var name: String }
 
     /// Proxyman 규칙 페이로드에서 매칭 필드를 읽는다. `url`이 없으면 throw.
-    /// EyeProxy 전용 `eyeproxy.ignoreQuery`가 없으면 false(Proxyman 의미 유지).
+    /// EyeProxy 전용 `eyeproxy.queryMode`/`queryItems`. 구버전 `eyeproxy.ignoreQuery`만 있으면 true → `.ignore`, false → `.exact`.
+    /// `eyeproxy`가 없으면(Proxyman 규칙) `.exact`.
     public init(proxymanFields c: KeyedDecodingContainer<ProxymanKey>) throws {
         var methods = MethodMatch.any
         if c.contains("method") {
             let m = try c.nestedContainer(keyedBy: ProxymanKey.self, forKey: "method")
             if m.contains("exact") { methods = .exact(try m.decode([MethodName].self, forKey: "exact").map(\.name)) }
         }
-        var ignoreQuery = false
+        var queryMode = QueryMode.exact
+        var conditions: [QueryCondition] = []
         if c.contains("eyeproxy") {
-            ignoreQuery = try c.nestedContainer(keyedBy: ProxymanKey.self, forKey: "eyeproxy").decodeIfPresent(Bool.self, forKey: "ignoreQuery") ?? false
+            let e = try c.nestedContainer(keyedBy: ProxymanKey.self, forKey: "eyeproxy")
+            let legacy = try e.decodeIfPresent(Bool.self, forKey: "ignoreQuery") == true ? QueryMode.ignore : .exact
+            queryMode = try e.decodeIfPresent(String.self, forKey: "queryMode").flatMap(QueryMode.init(rawValue:)) ?? legacy
+            conditions = try e.decodeIfPresent([QueryCondition].self, forKey: "queryItems") ?? []
         }
         self.init(
             url: try c.decode(String.self, forKey: "url"),
             mode: try c.decodeIfPresent(String.self, forKey: "regex").flatMap(MatchMode.init(rawValue:)) ?? .wildcard,
             methods: methods,
             includeSubpaths: try c.decodeIfPresent(Bool.self, forKey: "isIncludingPaths") ?? false,
-            ignoreQuery: ignoreQuery,
+            queryMode: queryMode,
+            queryConditions: conditions,
             graphQLQueryName: try c.decodeIfPresent(String.self, forKey: "graphQLQueryName")
         )
     }
@@ -202,6 +208,9 @@ extension MatchRule {
         try c.encode(includeSubpaths, forKey: "isIncludingPaths")
         try c.encode(graphQLQueryName, forKey: "graphQLQueryName")
         var e = c.nestedContainer(keyedBy: ProxymanKey.self, forKey: "eyeproxy")
-        try e.encode(ignoreQuery, forKey: "ignoreQuery")
+        try e.encode(queryMode.rawValue, forKey: "queryMode")
+        // 이전 빌드가 읽어도 크게 어긋나지 않게 함께 쓴다.
+        try e.encode(queryMode == .ignore, forKey: "ignoreQuery")
+        if queryMode == .selected, !queryConditions.isEmpty { try e.encode(queryConditions, forKey: "queryItems") }
     }
 }

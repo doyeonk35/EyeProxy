@@ -44,7 +44,7 @@ public struct MapRemoteRule: ToolRule {
 
     public init(
         id: String = String(UUID().uuidString.prefix(8)), name: String = "Untitled", isEnabled: Bool = true,
-        match: MatchRule = MatchRule(includeSubpaths: true, ignoreQuery: true), mapTo: MapTarget = MapTarget(),
+        match: MatchRule = MatchRule(includeSubpaths: true), mapTo: MapTarget = MapTarget(),
         preserveHostHeader: Bool = false, preserveOriginalURL: Bool = false
     ) {
         self.id = id

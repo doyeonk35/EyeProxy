@@ -40,7 +40,7 @@ private func sample() -> RuleTree<AllowRule> { RuleTree(nodes: [rule("a"), folde
 
 /// 스펙 §4.2·Task 3 표의 두 줄(Proxyman `?*`)과 scheme 없는 샘플.
 @Test func sampleURLMatching() {
-    let r = MatchRule(url: "https://api.example.com/v1/search?*", methods: .exact(["POST"]), ignoreQuery: false)
+    let r = MatchRule(url: "https://api.example.com/v1/search?*", methods: .exact(["POST"]), queryMode: .exact)
     #expect(r.matches(sampleURL: "https://api.example.com/v1/search?q=1"))
     #expect(!r.matches(sampleURL: "https://api.example.com/v1/search"))
     #expect(MatchRule(url: "api.example.com").matches(sampleURL: "api.example.com"))
@@ -53,7 +53,7 @@ func prefilledRuleMatchesSourceFlow(path: String) {
     let request = FlowRequest(method: "POST", scheme: "https", host: "api.example.com", port: 443, path: path, headers: [], body: Data())
     let rule = MatchRule(prefilledFrom: request)
     #expect(rule.url == "https://api.example.com/v1/search")
-    #expect(rule.ignoreQuery)
+    #expect(rule.queryMode == .ignore)
     #expect(rule.methods == .exact(["POST"]))
     #expect(rule.matches(request))
 }

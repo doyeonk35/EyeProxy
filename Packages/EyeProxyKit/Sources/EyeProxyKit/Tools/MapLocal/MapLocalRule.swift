@@ -84,7 +84,7 @@ public struct MapLocalRule: ToolRule {
         var raw: Substring
         switch match.mode {
         case .regex:
-            let target = MatchRule.urlString(request, includeQuery: !match.ignoreQuery)
+            let target = MatchRule.urlString(request, includeQuery: match.queryMode == .exact)
             // ponytail: 요청마다 컴파일. 디렉터리 정규식 규칙이 많아지면 캐시.
             guard let re = try? NSRegularExpression(pattern: "^(?:\(match.url))$"),
                   let m = re.firstMatch(in: target, range: NSRange(target.startIndex..., in: target)),
