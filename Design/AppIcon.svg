@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Prog 앱 아이콘 원본. 패킷을 물고 있는 개구리. scripts/make-icons.sh가 PNG로 변환한다. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2fd36f"/><stop offset="1" stop-color="#149a4a"/>
+    </linearGradient>
+    <clipPath id="squircle"><rect width="1024" height="1024" rx="230"/></clipPath>
+  </defs>
+  <g clip-path="url(#squircle)">
+    <rect width="1024" height="1024" fill="url(#bg)"/>
+    <!-- 머리 -->
+    <path d="M150 640 C150 420, 874 420, 874 640 C874 820, 700 900, 512 900 C324 900, 150 820, 150 640 Z" fill="#9bf0b5"/>
+    <!-- 눈 -->
+    <circle cx="340" cy="470" r="150" fill="#9bf0b5"/>
+    <circle cx="684" cy="470" r="150" fill="#9bf0b5"/>
+    <circle cx="340" cy="470" r="96" fill="#ffffff"/>
+    <circle cx="684" cy="470" r="96" fill="#ffffff"/>
+    <circle cx="364" cy="480" r="46" fill="#0b2a16"/>
+    <circle cx="708" cy="480" r="46" fill="#0b2a16"/>
+    <!-- 입 -->
+    <path d="M330 700 C420 760, 604 760, 694 700" stroke="#0b2a16" stroke-width="30" fill="none" stroke-linecap="round"/>
+    <!-- 혀 + 패킷 -->
+    <path d="M512 720 L512 820 Q512 870 560 870 L820 870" stroke="#ff5e7a" stroke-width="40" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="800" y="830" width="90" height="80" rx="16" fill="#ffffff"/>
+    <path d="M820 855 H870 M820 885 H858" stroke="#149a4a" stroke-width="12" stroke-linecap="round"/>
+  </g>
+</svg>
