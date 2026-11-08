@@ -1,0 +1,5 @@
+[{"id":"6D0E2C6A-3A0B-4B8E-9C1D-0F5B7A1E2D11","name":"Slow images","url":"img.example.com","isEnabled":true,"isSystemWide":false,
+  "networkProfile":{"name":"Very Bad Network","profileType":1,
+    "downloadBandwidth":125000,"uploadBandwidth":125000,
+    "downloadBandwidthTitle":"<1 mbps","uploadBandwidthTitle":"<1 mbps",
+    "delay":1400,"minimumWaitTime":500000,"packageDrop":10,"isAllLostConnection":false}}]

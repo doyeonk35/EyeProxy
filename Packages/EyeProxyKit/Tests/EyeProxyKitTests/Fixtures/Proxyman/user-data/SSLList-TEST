@@ -1,0 +1,1 @@
+{"nodes":[{"id":"S1","kind":{"domain":[{"url":"img.example.com"}]}},{"id":"S2","kind":{"domain":[{"url":"api.example.com"}]}}],"excludeNodes":[{"id":"S3","kind":{"domain":[{"url":"skip.example.com"}]}}]}
