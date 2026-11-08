@@ -22,6 +22,28 @@ macOS용 MITM 디버깅 프록시 (Proxyman류). Mac·시뮬레이터·Apple TV�
 
 자세한 내용은 `docs/superpowers/specs/2026-11-05-eyeproxy-design.md` §7.
 
+## Tools
+
+메뉴 **Tools**와 요청 우클릭 ▸ Tools에서 연다. 도구마다 창 맨 위 `Enable <Tool> Tool` 체크가 전체 스위치이고(메뉴 Tools ▸ Enable/Disable Tools에도 있음), 규칙은 위에서 아래로 검사해 처음 맞는 하나만 적용한다.
+
+- **Breakpoint**: 맞는 요청·응답을 멈추고 Breakpoints 창에서 고쳐 보낸다(Continue Original ⌘. / Drop Connection ⌘\ / Apply & Execute ⌘↩). 자주 쓰는 헤더는 Breakpoint Templates로 저장한다.
+- **Map Local**: 응답을 로컬 파일(HTTP 메시지 원문, `.http`) 또는 폴더로 바꾼다. 서버에 요청을 보내지 않는다.
+- **Map Remote**: 요청을 다른 scheme·host·port·path·query로 보낸다(Host 헤더 유지 선택 가능).
+- **Block List**: 요청을 막거나(목록에 표시/숨김) 숨기기만 한다. 앱 단위 차단도 된다.
+- **Allow List**: 켜면 규칙에 맞는 요청만 기록·조작하고 나머지는 기록 없이 그대로 통과시킨다.
+- **No Caching**: 복호화되는 요청에서 캐시 헤더를 지우고 `no-cache`를 붙인다.
+- **Network Conditions**: 호스트(또는 전체)에 3G 같은 느린 네트워크 프로필을 씌운다. 한 번에 규칙 하나만 켜진다.
+- **Compose / Repeat**: 요청을 새로 만들거나(⌥⌘C, `curl …` 붙여 넣기 가능) 목록의 요청을 다시 보낸다(Flow ▸ Repeat ⌘↩, Edit and Repeat… ⌥⌘↩).
+
+**쿼리 무시**: Map Local·Map Remote 등 새 규칙은 기본으로 "쿼리 무시"가 켜져 있다. 요청 URL에서 `?` 뒤를 떼고 비교하므로 `https://host/path` 하나가 쿼리가 다른 요청에 모두 맞는다(Proxyman에서 붙이던 `?*`가 필요 없다). Proxyman에서 가져온 규칙은 꺼진 채로 들어와 Proxyman과 똑같이 동작한다.
+
+**자동 복호화**: 켜진 도구의 켜진 규칙이 가리키는 HTTPS 호스트는 SSL Proxying 목록에 없어도 자동으로 복호화한다(Proxyman은 이런 규칙을 조용히 무시한다). 정규식 규칙과 host가 `*`뿐인 규칙은 모든 HTTPS를 복호화하게 되므로 제외되며, 규칙 옆 주황 경고대로 SSL Proxying 목록에 호스트를 직접 넣어야 한다.
+
+**Proxyman에서 가져오기**: **Tools ▸ Import Settings ▸ From Proxyman…** 은 `~/Library/Application Support/com.proxyman.NSProxy/user-data/`를 읽기만 하고(쓰지 않음) 도구별 개수를 보여 준다. 고른 도구의 규칙은 기존 EyeProxy 규칙 **끝에** 추가되고, 같은 규칙(id)은 다시 가져와도 건너뛴다. Map Local 응답 파일은 EyeProxy 폴더로 복사한다. 가져온 도구는 꺼진 상태로 두므로 각 도구 창에서 켠다. SSL Proxying 목록도 함께 가져올 수 있다.
+각 도구 창 **More ▸ Export…** 는 `<도구 이름>.eyeproxyrules` 폴더(Proxyman 내보내기와 같은 `rules.config` + 응답 파일 `map-local/`)를 만든다. 다른 Mac에서는 그 도구 창의 **More ▸ Import…** 로 이 폴더(또는 안의 `rules.config`)나 Proxyman 내보내기 `.config`·`.json`을 고른다.
+
+**저장 위치**: `~/Library/Application Support/com.tv.eyeproxy/rules/`(도구별 JSON, Proxyman과 같은 모양) · Map Local 응답 파일은 `…/com.tv.eyeproxy/map-local/`(Map Local More ▸ Default Local File Folder로 변경 가능) · 도구 스위치는 앱 설정(UserDefaults).
+
 ## 문제 해결
 
 ### 네트워크 복구(긴급)
@@ -71,6 +93,16 @@ GitHub 레포가 private이면 Sparkle 업데이트와 Release 다운로드가 �
 
 - HTTP/1.1만 지원하고 응답 전체를 버퍼링한다. `*`를 SSL 목록에 넣으면 WebSocket·SSE 스트림이 끊길 수 있다.
 - 복호화하는 호스트의 CONNECT 행은 목록에 표시되지 않고, 기기 쪽 TLS 핸드셰이크 실패는 기기 창의 연결 로그에만 보인다.
+
+## 알려진 제한(Tools 1차)
+
+- Compose·Repeat로 `https://localhost`·`https://127.0.0.1`에 보내면 EyeProxy를 거치지 않는다(URLSession이 루프백 HTTPS는 프록시를 쓰지 않음). 기록·도구 적용이 없다. 루프백 `http://`는 정상.
+- Repeat는 URLSession으로 보내므로 Accept-Language·Accept-Encoding 등이 붙어 원래 요청과 바이트 단위로 같지 않다.
+- Network Conditions는 패킷 단위가 아니라 요청 단위(버퍼링 후 지연)로 속도를 늦춘다.
+- GraphQL QueryName 규칙은 꺼진 채로 가져온다(2차 묶음에서 지원).
+- Proxyman의 폴더 노드와 Map Remote·Breakpoint·Block·Allow 규칙의 디스크 JSON 모양은 실제 파일로 확인 전까지 추정이다. 모르는 노드·키는 건너뛰고 개수를 보여 준다.
+- Flow 목록 열 배치 저장 키가 `eyeproxy.flowColumns.v2`로 바뀌어 저장된 열 너비가 한 번 초기화된다.
+- Compose로 임의의 `http://` 주소에 보내기 위해 앱 전체에 `NSAllowsArbitraryLoads`가 켜져 있다.
 
 ## 빌드·테스트
 
