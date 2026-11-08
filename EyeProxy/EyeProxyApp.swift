@@ -24,17 +24,9 @@ import SwiftUI
                 }
                 .pendingProxyRestoreAlert(model)
                 .systemErrorAlert(model, presenting: !model.devicesWindowOpen)
+                .infoMessageAlert(model, presenting: !model.devicesWindowOpen)
         }
         .commands {
-            // 툴바 버튼의 keyboardShortcut은 동작하지 않아 메뉴 막대에 둔다.
-            CommandMenu("프록시") {
-                Toggle("기록", isOn: Bindable(model.settings).isRecording)
-                    .keyboardShortcut("r")
-                Button("서버 다시 시작") { Task { await model.restartServer() } }
-                    .keyboardShortcut("r", modifiers: [.command, .shift])
-                Divider()
-                OpenDevicesButton()
-            }
             CommandGroup(after: .appInfo) {
                 Button("업데이트 확인…") { updaterController.checkForUpdates(nil) }
             }
@@ -53,6 +45,7 @@ import SwiftUI
                 LayoutPicker(model: model)
             }
             ToolsCommands(model: model)
+            CertificateCommands(model: model)
         }
         Settings {
             SettingsView()
@@ -134,14 +127,6 @@ private struct LayoutPicker: View {
     }
 }
 
-private struct OpenDevicesButton: View {
-    @Environment(\.openWindow) private var openWindow
-    var body: some View {
-        Button("기기…") { openWindow(id: "devices") }
-            .keyboardShortcut("d")
-    }
-}
-
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     private var quitTask: Task<Void, Never>?
@@ -176,6 +161,16 @@ extension View {
             Button("확인", role: .cancel) { model.systemError = nil }
         } message: {
             Text(model.systemError ?? "")
+        }
+    }
+
+    /// 안내는 `systemErrorAlert`와 같은 창에서, 오류를 닫은 뒤에 뜬다.
+    func infoMessageAlert(_ model: AppModel, presenting: Bool) -> some View {
+        alert("안내", isPresented: Binding(get: { presenting && model.systemError == nil && model.infoMessage != nil },
+                                         set: { if !$0 { model.infoMessage = nil } })) {
+            Button("확인", role: .cancel) { model.infoMessage = nil }
+        } message: {
+            Text(model.infoMessage ?? "")
         }
     }
 

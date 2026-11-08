@@ -87,5 +87,20 @@ private struct ToolsMenu: View {
         Menu("Import Settings") {
             Button("From Proxyman…") { openWindow(id: "import-proxyman") }
         }
+        Divider()
+        Menu("Proxy Settings") {
+            Toggle("Record Traffic", isOn: $settings.isRecording)
+                .keyboardShortcut("r")
+            Toggle("Override macOS Proxy", isOn: Binding(get: { model.macCaptureEnabled || model.effectiveProxyLeftover },
+                                                         set: { on in Task { await model.setMacCapture(on) } }))
+                .disabled(model.macCaptureBusy)
+            Divider()
+            Button("Restart Server") { Task { await model.restartServer() } }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+            Button("Bypass Proxy Settings…") {
+                model.settingsTab = .bypass
+                openSettings()
+            }
+        }
     }
 }

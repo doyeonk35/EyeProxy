@@ -2,12 +2,12 @@ import AppKit
 import EyeProxyKit
 import SwiftUI
 
+/// Android 섹션의 탭. Certificate 메뉴가 고른 뒤 창을 연다.
+enum AndroidTab: String, CaseIterable { case device, emulator, tv }
+
 /// Android: 실기기 / 에뮬레이터 / Android TV 탭별 프록시·CA 설치 안내와 adb 도우미.
 struct AndroidSection: View {
-    private enum Tab: Hashable { case device, emulator, tv }
-
     @Environment(AppModel.self) private var model
-    @State private var tab = Tab.device
     @State private var tvIP = ""
     @State private var adbOutput = ""
     @State private var running = false
@@ -19,16 +19,17 @@ struct AndroidSection: View {
     private let savedCRT = URL(string: "EyeProxy-CA.crt")!
 
     var body: some View {
+        @Bindable var model = model
         Section {
-            Picker("기기", selection: $tab) {
-                Text("실기기").tag(Tab.device)
-                Text("에뮬레이터").tag(Tab.emulator)
-                Text("Android TV").tag(Tab.tv)
+            Picker("기기", selection: $model.androidTab) {
+                Text("실기기").tag(AndroidTab.device)
+                Text("에뮬레이터").tag(AndroidTab.emulator)
+                Text("Android TV").tag(AndroidTab.tv)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
         }
-        switch tab {
+        switch model.androidTab {
         case .device: deviceSection
         case .emulator: emulatorSection
         case .tv: tvSection
@@ -92,7 +93,7 @@ struct AndroidSection: View {
 
     private var caveatSection: some View {
         Section("주의") {
-            if tab == .tv {
+            if model.androidTab == .tv {
                 Text("앱이 사용자 CA를 신뢰하려면 디버그 빌드에 network_security_config가 필요합니다. Play가 없는 Android TV 에뮬레이터는 adb root; adb remount 뒤 /system/etc/security/cacerts/에 넣으면 시스템 CA로 모든 앱이 복호화됩니다(해시 파일명은 openssl x509 -subject_hash_old).")
             } else {
                 Text("Android 7 이상 앱은 사용자 CA를 기본으로 신뢰하지 않습니다. 디버그 빌드에 network_security_config로 사용자 CA를 허용해야 합니다.")

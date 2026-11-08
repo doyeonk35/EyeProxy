@@ -46,13 +46,7 @@ struct CertificateWindow: View {
             .navigationSplitViewColumnWidth(200)
         } detail: {
             detail
-                // 오류가 먼저, 안내는 오류를 닫은 뒤에 뜬다.
-                .alert("안내", isPresented: Binding(get: { model.systemError == nil && model.infoMessage != nil },
-                                                  set: { if !$0 { model.infoMessage = nil } })) {
-                    Button("확인", role: .cancel) { model.infoMessage = nil }
-                } message: {
-                    Text(model.infoMessage ?? "")
-                }
+                .infoMessageAlert(model, presenting: true)
         }
         .onAppear { model.devicesWindowOpen = true }
         .onDisappear { model.devicesWindowOpen = false }
