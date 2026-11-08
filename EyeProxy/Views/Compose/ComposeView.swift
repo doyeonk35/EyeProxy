@@ -194,7 +194,8 @@ struct ComposeView: View {
                     Button {
                         load(h.request)
                     } label: {
-                        Text(verbatim: "\(h.request.method) \(h.request.url) — \(h.status.map { "\($0)" } ?? "실패") · \(h.date.formatted(date: .omitted, time: .standard))")
+                        Text(verbatim: "\(h.request.method) \(h.request.url) — \(h.status.map { "\($0)" } ?? "실패") · \(h.date.formatted(date: .omitted, time: .standard))"
+                             + (h.bodyTruncated == true ? " · 본문 256 KB까지만 저장됨" : ""))
                     }
                 }
             }
@@ -352,25 +353,33 @@ private struct CurlImportSheet: View {
 
 // MARK: - History
 
-/// 보낸 요청 기록(응답 본문은 저장하지 않는다). 최신이 앞, 최대 100개.
+/// 보낸 요청 기록(응답 본문은 저장하지 않는다). 최신이 앞, 최대 100개. 요청 본문은 `bodyCap`까지만 저장한다.
 struct ComposeHistoryEntry: Codable, Identifiable {
     var id = UUID()
     let date: Date
     let request: FlowRequest
     /// nil = 실패·취소
     let status: Int?
+    /// 본문을 `ComposeHistory.bodyCap`에서 잘랐다. 이전 기록에는 없다.
+    var bodyTruncated: Bool? = nil
 }
 
 @MainActor enum ComposeHistory {
     static let url = AppModel.supportDirectory.appending(path: "compose-history.json")
     static let limit = 100
+    /// 파일을 메인 스레드에서 읽고 쓰므로 큰 본문은 잘라 저장한다.
+    static let bodyCap = 256 * 1024
 
     static func load() -> [ComposeHistoryEntry] {
         (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode([ComposeHistoryEntry].self, from: $0) } ?? []
     }
 
     static func record(_ request: FlowRequest, status: Int?, into history: [ComposeHistoryEntry]) -> [ComposeHistoryEntry] {
-        let updated = Array(([ComposeHistoryEntry(date: Date(), request: request, status: status)] + history).prefix(limit))
+        var stored = request
+        let truncated = stored.body.count > bodyCap
+        if truncated { stored.body = stored.body.prefix(bodyCap) }
+        let entry = ComposeHistoryEntry(date: Date(), request: stored, status: status, bodyTruncated: truncated ? true : nil)
+        let updated = Array(([entry] + history).prefix(limit))
         try? JSONEncoder().encode(updated).write(to: url, options: .atomic)
         return updated
     }
