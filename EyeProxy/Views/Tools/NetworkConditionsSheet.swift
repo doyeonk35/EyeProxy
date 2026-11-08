@@ -8,6 +8,8 @@ struct NetworkConditionsWindow: View {
     @State private var selection = Set<String>()
     @State private var draft: NetworkConditionRule?
     @State private var confirmDelete = false
+    @State private var importing: URL?
+    @State private var exportError: String?
 
     private var rules: [NetworkConditionRule] { model.rules.networkConditions }
 
@@ -41,12 +43,20 @@ struct NetworkConditionsWindow: View {
                 if let url = URL(string: "https://docs.proxyman.com/advanced-features/network-conditions") { HelpLink(destination: url) }
                 Spacer()
                 Menu("More") {
-                    Button("Import…") {}.disabled(true)
-                    Button("Export…") {}.disabled(true)
+                    Button("Import…") { importing = RuleBundlePanel.chooseImport() }
+                    Button("Export…", action: export).disabled(rules.isEmpty)
                 }
                 .fixedSize()
             }
             .padding(8)
+            .sheet(isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } })) {
+                ImportProxymanSheet(file: importing, tool: .networkConditions)
+            }
+            .alert("내보내지 못했습니다", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+                Button("확인") { exportError = nil }
+            } message: {
+                Text(verbatim: exportError ?? "")
+            }
         }
         .frame(minWidth: 800, minHeight: 420)
         .background {
@@ -123,6 +133,15 @@ struct NetworkConditionsWindow: View {
             model.rules.activateNetworkCondition(id: id)
         } else {
             model.rules.networkConditions = rules.map { var r = $0; if r.id == id { r.isEnabled = false }; return r }
+        }
+    }
+
+    private func export() {
+        do {
+            guard let url = try RuleBundlePanel.chooseExport(name: "Network Conditions") else { return }
+            try RuleBundle.export(rules, to: url)
+        } catch {
+            exportError = error.localizedDescription
         }
     }
 

@@ -99,7 +99,12 @@ import SwiftUI
             ComposeView().environment(model)
         }
         .defaultSize(width: 1200, height: 732)
-        PlaceholderToolScenes()
+        // 복원으로 열리면 실행할 때마다 Proxyman 폴더를 읽게 되므로 복원하지 않는다.
+        Window("Import from Proxyman", id: "import-proxyman") {
+            ImportProxymanSheet().environment(model)
+        }
+        .windowResizability(.contentSize)
+        .restorationBehavior(.disabled)
         Window("기기", id: "devices") {
             DevicesView()
                 .environment(model)

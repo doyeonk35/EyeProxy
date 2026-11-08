@@ -47,6 +47,8 @@ where Columns.TableRowValue == ToolRow<Rule>, Columns.TableColumnSortComparator 
     @State private var renameText = ""
     @State private var confirmDelete = false
     @State private var filter = ""
+    @State private var importing: URL?
+    @State private var exportError: String?
 
     init(windowID: String, title: String, description: String, toolSwitch: WritableKeyPath<ToolSwitches, Bool>,
          file: RuleFile<Rule>, newRule: @escaping () -> Rule, editorStyle: ToolEditorStyle = .sheet, helpURL: URL? = nil,
@@ -195,14 +197,40 @@ where Columns.TableRowValue == ToolRow<Rule>, Columns.TableColumnSortComparator 
                 .frame(width: 200)
             accessory
             Menu("More") {
-                // ponytail: Import…/Export…는 Task 18에서 연결한다.
-                Button("Import…") {}.disabled(true)
-                Button("Export…") {}.disabled(true)
+                Button("Import…") { importing = RuleBundlePanel.chooseImport() }
+                Button("Export…", action: export).disabled(tree.nodes.isEmpty)
                 moreItems
             }
             .fixedSize()
         }
         .padding(8)
+        .sheet(isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } })) {
+            ImportProxymanSheet(file: importing, tool: importTool)
+        }
+        .alert("내보내지 못했습니다", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+            Button("확인") { exportError = nil }
+        } message: {
+            Text(verbatim: exportError ?? "")
+        }
+    }
+
+    private var importTool: ImportTool {
+        switch Rule.self {
+        case is MapLocalRule.Type: .mapLocal
+        case is MapRemoteRule.Type: .mapRemote
+        case is BreakpointRule.Type: .breakpoint
+        case is BlockRule.Type: .block
+        default: .allow
+        }
+    }
+
+    private func export() {
+        do {
+            guard let url = try RuleBundlePanel.chooseExport(name: title) else { return }
+            try RuleBundle.export(tree, toolName: title, mapLocalDirectory: model.rules.mapLocalDirectory, to: url)
+        } catch {
+            exportError = error.localizedDescription
+        }
     }
 
     /// 버튼이 없는 단축키(⌘↩ 편집, ⌘D 복제). 창이 키 창일 때만 동작한다.

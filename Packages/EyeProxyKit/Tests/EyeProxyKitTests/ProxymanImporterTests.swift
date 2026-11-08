@@ -199,6 +199,9 @@ private func snapshot(_ dir: URL) -> [String] {
     #expect(path.hasSuffix("out.eyeproxyrules/map-local/api.example.com_19A8BA07.json"))
     #expect(a.id == b.id && a.match == b.match && a.name == b.name && a.delaySeconds == b.delaySeconds)
     #expect(p.missingFiles.isEmpty)
+    // 번들 안의 rules.config를 직접 골라도 번들 기준 경로로 읽는다.
+    let viaFile = try ProxymanImporter.previewFile(bundle.appendingPathComponent("rules.config"), as: .mapLocal)
+    #expect(viaFile.sourceDirectory?.path == bundle.path && viaFile.missingFiles.isEmpty)
 }
 
 @Test func bundleOfOtherToolCopiesNoFiles() throws {
@@ -275,4 +278,27 @@ private func snapshot(_ dir: URL) -> [String] {
     #expect(safe(FileManager.default.temporaryDirectory.appendingPathComponent("plain-\(UUID().uuidString)")))
     #expect(ProxymanImporter.isSafeWriteTarget(FileManager.default.temporaryDirectory))  // 기본 Proxyman 폴더 기준
     #expect(!ProxymanImporter.isSafeWriteTarget(ProxymanImporter.defaultDirectory.appendingPathComponent("x.http")))
+}
+
+@Test func previewFileAsToolDecodesOnlyThatTool() throws {
+    let root = try tempDir(); defer { try? fm.removeItem(at: root) }
+    let tree = RuleTree(nodes: [RuleNode.rule(AllowRule(id: "A1", name: "a", match: MatchRule(url: "https://x.example.com/*")))])
+    let bundle = root.appendingPathComponent("allow.eyeproxyrules")
+    try RuleBundle.export(tree, toolName: "Allow List", mapLocalDirectory: nil, to: bundle)
+    let asBP = try ProxymanImporter.previewFile(bundle, as: .breakpoint)
+    #expect(asBP.breakpoint.map(\.id) == ["A1"] && asBP.allow.isEmpty)
+    let asAllow = try ProxymanImporter.previewFile(bundle, as: .allow)
+    #expect(asAllow.allow.map(\.id) == ["A1"] && asAllow.breakpoint.isEmpty)
+    // 다른 모양(Network Conditions)으로는 읽히지 않고 건너뜀으로 센다.
+    let asNC = try ProxymanImporter.previewFile(bundle, as: .networkConditions)
+    #expect(asNC.networkConditions.isEmpty && asNC.skipped == 1)
+}
+
+@Test func networkConditionsBundleRoundTrip() throws {
+    let root = try tempDir(); defer { try? fm.removeItem(at: root) }
+    let rules = try ProxymanImporter.previewFile(try fixtureRoot().appendingPathComponent("NetworkThrottlingService.json")).networkConditions
+    let bundle = root.appendingPathComponent("nc.eyeproxyrules")
+    try RuleBundle.export(rules, to: bundle)
+    #expect(try ProxymanImporter.previewFile(bundle, as: .networkConditions).networkConditions == rules)
+    #expect(try ProxymanImporter.previewFile(bundle).networkConditions == rules)
 }

@@ -27,4 +27,10 @@ public enum RuleBundle {
         }
         try out.encodedAsProxymanExport().write(to: folder.appendingPathComponent("rules.config"), options: .atomic)
     }
+
+    /// Network Conditions는 트리가 아니라 Proxyman `NetworkThrottlingService`와 같은 배열로 `rules.config`에 쓴다.
+    public static func export(_ rules: [NetworkConditionRule], to folder: URL) throws {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try JSONEncoder().encode(rules).write(to: folder.appendingPathComponent("rules.config"), options: .atomic)
+    }
 }

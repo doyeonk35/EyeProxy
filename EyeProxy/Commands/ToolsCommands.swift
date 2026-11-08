@@ -2,7 +2,7 @@ import EyeProxyCore
 import EyeProxyKit
 import SwiftUI
 
-/// Flow·Tools 메뉴(스펙 §6.1). 각 창은 해당 태스크가 채운다(아직 없는 창은 자리표시자).
+/// Flow·Tools 메뉴(스펙 §6.1).
 struct ToolsCommands: Commands {
     let model: AppModel
 
@@ -86,19 +86,6 @@ private struct ToolsMenu: View {
         Divider()
         Menu("Import Settings") {
             Button("From Proxyman…") { openWindow(id: "import-proxyman") }
-        }
-    }
-}
-
-/// 다음 태스크가 채울 창 자리. 메뉴·우클릭에서 열리는지만 보장한다.
-struct PlaceholderToolScenes: Scene {
-    var body: some Scene {
-        placeholder("Import from Proxyman", id: "import-proxyman")
-    }
-
-    private func placeholder(_ title: String, id: String) -> some Scene {
-        Window(title, id: id) {
-            Text("다음 작업에서 추가됩니다").frame(minWidth: 400, minHeight: 200)
         }
     }
 }

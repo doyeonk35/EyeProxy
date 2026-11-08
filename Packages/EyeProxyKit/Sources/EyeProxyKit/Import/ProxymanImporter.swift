@@ -18,6 +18,11 @@ public struct ProxymanImportPreview: Sendable {
     public init() {}
 }
 
+/// 도구 창 More ▸ Import…가 겨냥하는 도구.
+public enum ImportTool: String, CaseIterable, Sendable {
+    case mapLocal, mapRemote, breakpoint, block, allow, networkConditions
+}
+
 public struct ImportSelection: Sendable {
     public var mapLocal = true, mapRemote = true, breakpoint = true, block = true, allow = true
     public var networkConditions = true, sslHosts = true
@@ -132,51 +137,71 @@ public enum ProxymanImporter {
     }
 
     /// 한 도구의 내보내기 파일(규칙 모양이 서로 겹쳐서 필수 키로 도구를 가른다: toURL→Remote, blockAction→Block, isLocalFileEnable→Local, isRequest/isResponse→Breakpoint, 나머지→Allow).
-    /// (`.config` 배열 또는 `{"nodes":…}`) 또는 `rules.config`가 든 번들 폴더.
+    /// (`.config` 배열 또는 `{"nodes":…}`) 또는 `rules.config`가 든 번들 폴더. 도구를 아는 호출부는 `previewFile(_:as:)`를 쓴다.
     public static func previewFile(_ url: URL) throws -> ProxymanImportPreview {
-        var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else { throw ProxymanImportError.notFound(url) }
-        let bundle = isDir.boolValue ? url : nil
-        let data = try Data(contentsOf: bundle?.appendingPathComponent("rules.config") ?? url)
+        let (data, _) = try readFile(url)
+        if let list = try? JSONDecoder().decode([NetworkConditionRule].self, from: data), !list.isEmpty {
+            return try previewFile(url, as: .networkConditions)
+        }
         let text = String(decoding: data, as: UTF8.self)
-        var p = ProxymanImportPreview()
-        p.sourceDirectory = bundle
-        func pick<R: ToolRule>(_ t: R.Type, if guardOK: Bool) -> (nodes: [RuleNode<R>], skipped: Int)? {
+        func count<R: ToolRule>(_ t: R.Type, if guardOK: Bool) -> Int? {
             guard guardOK, let r = try? RuleTree<R>.decodeLenient(data), !r.tree.nodes.isEmpty else { return nil }
-            return (r.tree.nodes, r.skipped)
+            return r.tree.nodes.count
         }
         let has = { (key: String) in text.contains("\"\(key)\"") }
         let isBP = has("isRequest") || has("isResponse")
         // 규칙 모양이 겹치므로(MapLocal/Allow는 거의 아무 페이로드나 읽는다) 필수 키가 있는 도구만 후보로 두고,
         // 읽힌 노드가 가장 많은 도구가 이긴다(동률이면 앞선 도구). 깨진 노드는 skipped로 센다.
-        let remote = pick(MapRemoteRule.self, if: has("toURL"))
-        let block = pick(BlockRule.self, if: has("blockAction"))
-        let local = pick(MapLocalRule.self, if: has("isLocalFileEnable"))
-        let bp = pick(BreakpointRule.self, if: isBP)
-        let allow = pick(AllowRule.self, if: !(has("toURL") || has("blockAction") || has("isLocalFileEnable") || isBP))
-        let best = [remote?.nodes.count, block?.nodes.count, local?.nodes.count, bp?.nodes.count, allow?.nodes.count].enumerated()
-            .compactMap { i, n in n.map { (i, $0) } }.max { $0.1 < $1.1 }?.0
-        if let list = try? JSONDecoder().decode([NetworkConditionRule].self, from: data), !list.isEmpty {
-            p.networkConditions = list
-        } else if let best {
-            switch best {
-            case 0: p.mapRemote = remote!.nodes; p.skipped = remote!.skipped
-            case 1: p.block = block!.nodes; p.skipped = block!.skipped
-            case 2:
-                // 번들의 상대 경로는 번들 폴더 기준 절대 경로로 되돌린다.
-                p.mapLocal = mapRules(local!.nodes) { r in
-                    if let b = bundle, let path = r.localFile?.path, !path.hasPrefix("/") { r.localFile?.path = b.appendingPathComponent(path).path }
-                }
-                p.skipped = local!.skipped
-            case 3: p.breakpoint = bp!.nodes; p.skipped = bp!.skipped
-            default: p.allow = allow!.nodes; p.skipped = allow!.skipped
+        let candidates: [(ImportTool, Int?)] = [
+            (.mapRemote, count(MapRemoteRule.self, if: has("toURL"))),
+            (.block, count(BlockRule.self, if: has("blockAction"))),
+            (.mapLocal, count(MapLocalRule.self, if: has("isLocalFileEnable"))),
+            (.breakpoint, count(BreakpointRule.self, if: isBP)),
+            (.allow, count(AllowRule.self, if: !(has("toURL") || has("blockAction") || has("isLocalFileEnable") || isBP))),
+        ]
+        let best = candidates.compactMap { t, n in n.map { (t, $0) } }.max { $0.1 < $1.1 }?.0
+        // 어느 도구로도 읽히지 않으면 Network Conditions로도 못 읽으므로(위에서 확인) 노드 수가 건너뜀으로 잡힌다.
+        return try previewFile(url, as: best ?? .networkConditions)
+    }
+
+    /// 파일을 `tool` 규칙으로만 읽는다(추측하지 않음). 그 도구로 읽지 못한 노드는 skipped로 센다.
+    public static func previewFile(_ url: URL, as tool: ImportTool) throws -> ProxymanImportPreview {
+        let (data, bundle) = try readFile(url)
+        guard let obj = try? JSONSerialization.jsonObject(with: data) else { throw ProxymanImportError.notFound(url) }
+        let total = (obj as? [Any])?.count ?? ((obj as? [String: Any])?["nodes"] as? [Any])?.count ?? 0
+        var p = ProxymanImportPreview()
+        p.sourceDirectory = bundle
+        func take<R: ToolRule>(_: R.Type) -> [RuleNode<R>] {
+            guard let r = try? RuleTree<R>.decodeLenient(data) else { p.skipped = total; return [] }
+            p.skipped = r.skipped
+            return r.tree.nodes
+        }
+        switch tool {
+        case .mapLocal:
+            // 번들의 상대 경로는 번들 폴더 기준 절대 경로로 되돌린다.
+            p.mapLocal = mapRules(take(MapLocalRule.self)) { r in
+                if let b = bundle, let path = r.localFile?.path, !path.hasPrefix("/") { r.localFile?.path = b.appendingPathComponent(path).path }
             }
-        } else {
-            guard let obj = try? JSONSerialization.jsonObject(with: data) else { throw ProxymanImportError.notFound(url) }
-            p.skipped = (obj as? [Any])?.count ?? ((obj as? [String: Any])?["nodes"] as? [Any])?.count ?? 0
+        case .mapRemote: p.mapRemote = take(MapRemoteRule.self)
+        case .breakpoint: p.breakpoint = take(BreakpointRule.self)
+        case .block: p.block = take(BlockRule.self)
+        case .allow: p.allow = take(AllowRule.self)
+        case .networkConditions:
+            if let list = try? JSONDecoder().decode([NetworkConditionRule].self, from: data) { p.networkConditions = list } else { p.skipped = total }
         }
         p.missingFiles = missing(p.mapLocal)
         return p
+    }
+
+    /// 파일이면 그 내용, 폴더면 번들로 보고 `rules.config`. 번들 안의 `rules.config`를 직접 고른 경우도 번들로 본다
+    /// (열기 패널은 폴더에서 Open을 누르면 고르지 않고 들어가 버린다).
+    private static func readFile(_ url: URL) throws -> (Data, bundle: URL?) {
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else { throw ProxymanImportError.notFound(url) }
+        let parent = url.deletingLastPathComponent()
+        let bundle = isDir.boolValue ? url
+            : url.lastPathComponent == "rules.config" && parent.pathExtension == "eyeproxyrules" ? parent : nil
+        return (try Data(contentsOf: bundle?.appendingPathComponent("rules.config") ?? url), bundle)
     }
 
     private static func missing(_ nodes: [RuleNode<MapLocalRule>]) -> [String] {
