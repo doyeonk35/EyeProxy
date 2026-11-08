@@ -41,6 +41,11 @@ public struct MatchRule: Equatable, Sendable {
         return regex.firstMatch(in: target, range: NSRange(target.startIndex..., in: target)) != nil
     }
 
+    /// 우클릭 ▸ Tools로 만드는 새 규칙: 요청 URL(쿼리 제외) + 그 메서드. 쿼리 무시가 켜져 있어 쿼리가 달라도 같은 경로에 맞는다.
+    public init(prefilledFrom request: FlowRequest) {
+        self.init(url: Self.urlString(request, includeQuery: false), methods: .exact([request.method]))
+    }
+
     /// Test your Rule용: 메서드는 보지 않고 URL 한 줄만 비교한다. scheme이 없으면 https로 본다.
     public func matches(sampleURL: String) -> Bool {
         let line = sampleURL.trimmingCharacters(in: .whitespaces)

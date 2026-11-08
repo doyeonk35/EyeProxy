@@ -45,7 +45,7 @@ extension AppModel {
     }
 }
 
-/// 우클릭 ▸ Tools ▸ … 로 연 새 규칙의 매칭 칸. URL은 쿼리까지 넣는다(새 규칙은 쿼리 무시가 켜져 같은 경로에 맞는다).
+/// 우클릭 ▸ Tools ▸ … 로 연 새 규칙의 매칭 칸(`MatchRule(prefilledFrom:)` — 쿼리 뺀 URL + 쿼리 무시).
 struct PendingNewRule: Equatable {
     let windowID: String
     let flowID: FlowID
@@ -54,6 +54,6 @@ struct PendingNewRule: Equatable {
     init(windowID: String, flow: Flow) {
         self.windowID = windowID
         flowID = flow.id
-        match = MatchRule(url: MatchRule.urlString(flow.request, includeQuery: true), methods: .exact([flow.request.method]))
+        match = MatchRule(prefilledFrom: flow.request)
     }
 }

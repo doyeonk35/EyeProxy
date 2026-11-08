@@ -1,3 +1,4 @@
+import EyeProxyCore
 import Foundation
 import Testing
 @testable import EyeProxyKit
@@ -44,4 +45,15 @@ private func sample() -> RuleTree<AllowRule> { RuleTree(nodes: [rule("a"), folde
     #expect(!r.matches(sampleURL: "https://api.example.com/v1/search"))
     #expect(MatchRule(url: "api.example.com").matches(sampleURL: "api.example.com"))
     #expect(!MatchRule(url: "api.example.com").matches(sampleURL: ""))
+}
+
+/// 우클릭 ▸ Tools로 미리 채운 규칙은 원래 요청(쿼리 있든 없든)에 맞고 메서드는 그 요청 것 하나.
+@Test(arguments: ["/v1/search?q=1&p=2", "/v1/search"])
+func prefilledRuleMatchesSourceFlow(path: String) {
+    let request = FlowRequest(method: "POST", scheme: "https", host: "api.example.com", port: 443, path: path, headers: [], body: Data())
+    let rule = MatchRule(prefilledFrom: request)
+    #expect(rule.url == "https://api.example.com/v1/search")
+    #expect(rule.ignoreQuery)
+    #expect(rule.methods == .exact(["POST"]))
+    #expect(rule.matches(request))
 }
