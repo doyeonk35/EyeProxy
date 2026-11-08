@@ -9,9 +9,10 @@ struct MainToolbar: ToolbarContent {
         @Bindable var settings = model.settings
         ToolbarItemGroup(placement: .navigation) {
             Toggle(isOn: $settings.isRecording) {
-                Label("기록", systemImage: settings.isRecording ? "record.circle.fill" : "record.circle")
+                // Proxyman처럼 기록 중 ▶, 멈춤 ⏸ (녹화 심볼은 작게 보면 구분이 어렵다).
+                Label("기록", systemImage: settings.isRecording ? "play.fill" : "pause.fill")
             }
-            .help("기록 켜기/끄기 (⌘R)")
+            .help(settings.isRecording ? "기록 중 — 눌러서 일시정지 (⌘R)" : "일시정지됨 — 눌러서 기록 (⌘R)")
             Button("지우기", systemImage: "trash") { model.clear() }
                 .help("목록 지우기 (⌘K)")
             Button("Compose", systemImage: "square.and.pencil") { openWindow(id: "compose") }
