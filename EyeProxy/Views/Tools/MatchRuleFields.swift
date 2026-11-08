@@ -70,10 +70,10 @@ struct MatchRuleFields: View {
         }
     }
 
-    /// URL 칸의 `k=v` 쿼리를 체크된 조건으로 옮기고 '선택한 항목만'으로. '전체 일치'면 그대로 둔다.
+    /// URL 칸의 `k=v` 쿼리를 체크된 조건으로 옮기고 '선택한 항목만'으로. '전체 일치'와 정규식 규칙은 그대로 둔다.
     private func moveQueryToTable() {
-        guard match.queryMode != .exact else { return }
-        let split = MatchRule.splitQuery(fromPattern: match.url)
+        guard match.queryMode != .exact, match.mode == .wildcard else { return }
+        let split = MatchRule.splitQuery(fromPattern: match.url, mode: match.mode)
         guard !split.conditions.isEmpty else { return }
         match.url = split.url
         match.queryConditions += split.conditions
@@ -111,7 +111,9 @@ struct QueryFields: View {
     @State private var selection: QueryCondition.ID?
     @State private var newKey = ""
     @State private var newValue = ""
-    @FocusState private var newRowFocused: Bool
+    @FocusState private var newField: NewField?
+
+    private enum NewField { case key, value }
 
     /// '선택한 항목만'이거나, 우클릭 ▸ Tools로 채운 체크 해제 조건이 있는 '무시'.
     private var showsTable: Bool {
@@ -135,26 +137,28 @@ struct QueryFields: View {
                 }
             }
         }
-        // 하나라도 체크하면 '선택한 항목만'으로.
-        .onChange(of: match.queryConditions) {
-            if match.queryMode == .ignore && match.queryConditions.contains(where: \.isEnabled) { match.queryMode = .selected }
-        }
+    }
+
+    /// 사용자가 '무시'에서 하나라도 체크하면 '선택한 항목만'으로. 저장된 규칙을 불러올 때는 바꾸지 않는다.
+    private func checked() {
+        if match.queryMode == .ignore { match.queryMode = .selected }
     }
 
     private var table: some View {
         VStack(spacing: 0) {
             List(selection: $selection) {
                 ForEach($match.queryConditions) { $c in
-                    row(Toggle("", isOn: $c.isEnabled), TextField("", text: $c.key), TextField("", text: $c.value, prompt: Text("값 또는 *")))
+                    row(Toggle("", isOn: Binding(get: { c.isEnabled }, set: { c.isEnabled = $0; if $0 { checked() } })), TextField("", text: $c.key), TextField("", text: $c.value, prompt: Text("값 또는 *")))
                 }
                 row(Toggle("", isOn: .constant(true)).disabled(true).hidden(),
-                    TextField("", text: $newKey, prompt: Text("New Key…")).focused($newRowFocused).onSubmit(addNewRow),
-                    TextField("", text: $newValue, prompt: Text("New Value…")).focused($newRowFocused).onSubmit(addNewRow))
+                    TextField("", text: $newKey, prompt: Text("New Key…")).focused($newField, equals: .key).onSubmit { newField = .value },
+                    TextField("", text: $newValue, prompt: Text("New Value…")).focused($newField, equals: .value).onSubmit(addNewRow))
                     .selectionDisabled()
             }
             .listStyle(.bordered(alternatesRowBackgrounds: true))
             .frame(height: 130)
-            .onChange(of: newRowFocused) { if !newRowFocused { addNewRow() } }
+            // Key → Value로 옮길 때는 더하지 않고, 새 행의 두 칸을 모두 벗어나면 더한다.
+            .onChange(of: newField) { old, new in if old != nil && new == nil { addNewRow() } }
             HStack {
                 Button {
                     match.queryConditions.removeAll { $0.id == selection }
@@ -183,6 +187,7 @@ struct QueryFields: View {
         let key = newKey.trimmingCharacters(in: .whitespaces)
         guard !key.isEmpty else { return }
         match.queryConditions.append(QueryCondition(key: key, value: newValue, isEnabled: true))
+        checked()
         newKey = ""
         newValue = ""
     }

@@ -136,6 +136,14 @@ func splitQueryFromPattern(pattern: String, url: String, count: Int) {
     #expect(split.conditions.allSatisfy { $0.isEnabled })
 }
 
+/// 정규식의 `?`는 수량자·이스케이프된 리터럴이라 쿼리로 떼지 않는다.
+@Test(arguments: [#"https:\/\/api\.example\.com\/x\?a=1"#, #".*/users?id=\d+"#, "api.example.com/info?a=1"])
+func splitQueryNeverSplitsRegex(pattern: String) {
+    let split = MatchRule.splitQuery(fromPattern: pattern, mode: .regex)
+    #expect(split.url == pattern)
+    #expect(split.conditions.isEmpty)
+}
+
 @Test func splitQueryDecodesAndKeepsOrder() {
     let split = MatchRule.splitQuery(fromPattern: "api.example.com/info?q=a%20b&k=")
     #expect(split.conditions == [QueryCondition(key: "q", value: "a b", isEnabled: true), QueryCondition(key: "k", value: "", isEnabled: true)])

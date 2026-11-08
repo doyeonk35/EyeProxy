@@ -109,7 +109,7 @@ MatchRule
   - **전체 일치(`exact`)**: Proxyman과 같다(쿼리 포함 전체 URL 비교). Proxyman에서 가져온 규칙은 이 값으로 들인다(그래야 `?*`나 쿼리 전체를 넣은 기존 규칙이 Proxyman과 똑같이 동작). **[사용자 결정의 귀결]**
   - 무시·선택한 항목만인데 패턴에 쿼리처럼 보이는 부분(`?` 뒤에 `=`나 `*`가 오는 형태)이 있으면 편집기에 "패턴의 쿼리 부분과는 비교하지 않습니다" 안내를 띄운다(저장은 막지 않음). **[내 판단]**
   - 편집기: "Include all subpaths" 바로 아래 `쿼리: [무시 | 선택한 항목만 | 전체 일치]`(segmented). 선택한 항목만이면 아래에 Proxyman Edit & Repeat의 Query 탭 같은 표(☑ · Key · Value, 마지막 "New Key… / New Value…" 입력 행은 입력하면 체크된 새 행, 선택 행 − 삭제, 값 placeholder `값 또는 *`)와 회색 안내 "체크한 항목만 비교합니다. 값을 *로 두면 키만 있으면 됩니다."를 둔다. **[사용자]**
-  - URL 칸에 `k=v(&k=v)*` 꼴 쿼리가 든 URL을 붙여 넣거나 입력을 마치면 쿼리를 체크된 조건으로 표에 옮기고 선택한 항목만으로 바꾼다(전체 일치면 그대로). `?` 뒤가 그 꼴이 아니면(`/v?/users`, `?*`) 건드리지 않는다. **[사용자]**
+  - URL 칸에 `k=v(&k=v)*` 꼴 쿼리가 든 URL을 붙여 넣거나 입력을 마치면 쿼리를 체크된 조건으로 표에 옮기고 선택한 항목만으로 바꾼다(전체 일치·Use Regex면 그대로 — 정규식의 `?`는 수량자나 이스케이프된 리터럴이다). `?` 뒤가 그 꼴이 아니면(`/v?/users`, `?*`) 건드리지 않는다. **[사용자]**
   - 우클릭 ▸ Tools 미리 채우기: URL은 쿼리 없이, 모드는 무시, 요청의 쿼리 항목은 **체크 해제**로 표에 넣는다. 하나라도 체크하면 선택한 항목만으로 바뀐다. **[사용자]**
   - 도구 창 Matching Rule 열: `Wildcard: <url>` 뒤에 선택한 항목만이면 ` · 쿼리 n개`, 전체 일치면 ` · 쿼리 전체 일치`. **[사용자]**
 - **Method**: `ANY` 또는 하나 이상의 메서드. 대소문자 무시.
@@ -244,7 +244,7 @@ Map Local과 Breakpoint 조합, Repeat 요청에도 모든 도구가 적용된�
 
 - 위치: `~/Library/Application Support/com.tv.eyeproxy/rules/` 아래 도구별 파일.
 - 형식: **Proxyman과 같은 JSON 모양**을 쓰고, EyeProxy 전용 필드는 `eyeproxy` 하위 객체에 둔다(예: `"eyeproxy":{"queryMode":"selected","queryItems":[{"key":"a","value":"1","isEnabled":true}],"ignoreQuery":false}`). 그래야 Proxyman 파일을 그대로 넣어도 읽힌다. **[내 판단]**
-  - `queryItems`는 선택한 항목만일 때만 쓴다. `ignoreQuery`(무시 → true, 나머지 → false)도 함께 써서 이전 빌드가 읽어도 크게 어긋나지 않게 한다. 구버전 파일(`ignoreQuery`만)은 true → 무시, false → 전체 일치로 읽고, `eyeproxy`가 없으면(Proxyman 규칙) 전체 일치. **[사용자]**
+  - `queryItems`는 표가 비어 있지 않으면 **모드와 상관없이** 쓴다(모드는 조건을 쓸지만 정한다 — 선택한 항목만 → 무시/전체 일치로 바꿔 저장해도 표가 남는다). **[컨트롤러 판정]** `ignoreQuery`(무시 → true, 나머지 → false)도 함께 써서 이전 빌드가 읽어도 크게 어긋나지 않게 한다. 구버전 파일(`ignoreQuery`만)은 true → 무시, false → 전체 일치로 읽고, `eyeproxy`가 없으면(Proxyman 규칙) 전체 일치. **[사용자]**
 - Map Local 응답 파일 확장자는 `.http`(내용은 Proxyman과 같은 HTTP 메시지 원문). Proxyman에서 온 `.json` 이름도 그대로 읽는다.
 - More ▸ Export…는 §5.9의 폴더 형식으로 내보낸다.
 

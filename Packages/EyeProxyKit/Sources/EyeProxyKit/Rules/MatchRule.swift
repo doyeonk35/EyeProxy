@@ -102,8 +102,9 @@ public struct MatchRule: Equatable, Sendable {
 
     /// 편집기 URL 칸에 붙여 넣은 쿼리를 체크된 조건으로 떼어 낸다. 첫 `?` 뒤가 `k=v(&k=v)*` 꼴일 때만
     /// (`/v?/users`·`?*` 같은 와일드카드 `?`는 그대로). 키·값은 퍼센트 디코딩해 보여 준다.
-    public static func splitQuery(fromPattern url: String) -> (url: String, conditions: [QueryCondition]) {
-        guard let q = url.firstIndex(of: "?") else { return (url, []) }
+    /// 정규식 규칙은 `?`가 수량자·이스케이프된 리터럴이라 손대지 않는다.
+    public static func splitQuery(fromPattern url: String, mode: MatchMode = .wildcard) -> (url: String, conditions: [QueryCondition]) {
+        guard mode == .wildcard, let q = url.firstIndex(of: "?") else { return (url, []) }
         let query = String(url[url.index(after: q)...])
         guard query.range(of: #"^[^&=/?]+=[^&]*(&[^&=/?]+=[^&]*)*$"#, options: .regularExpression) != nil else { return (url, []) }
         return (String(url[..<q]), queryItems("?" + query).map { QueryCondition(key: $0.key, value: $0.value, isEnabled: true) })

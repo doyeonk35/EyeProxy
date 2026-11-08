@@ -141,8 +141,21 @@ private func request(_ url: String) -> FlowRequest {
     #expect(again == tree)
     #expect(again.enabledRules.first?.match.queryConditions.map(\.key) == ["screenCode", "page"])
 
-    // .exact는 ignoreQuery false, 조건은 쓰지 않는다.
-    rule.match.queryMode = .exact
+    // 모드를 바꿔도 표는 저장한다(모드는 쓸지 말지만 정한다).
+    for mode in [QueryMode.ignore, .exact] {
+        rule.match.queryMode = mode
+        tree.nodes[0] = .rule(rule)
+        let modeData = try tree.encoded()
+        #expect(String(decoding: modeData, as: UTF8.self).contains(
+            #""eyeproxy":{"ignoreQuery":\#(mode == .ignore),"queryItems":[{"isEnabled":true,"key":"screenCode","value":"CSSD1400"},{"isEnabled":false,"key":"page","value":"*"}],"queryMode":"\#(mode.rawValue)"}"#))
+        let back = try Tree.decodeLenient(modeData).tree
+        #expect(back == tree)
+        #expect(back.enabledRules.first?.match.queryMode == mode)
+        #expect(back.enabledRules.first?.match.queryConditions == rule.match.queryConditions)
+    }
+
+    // 표가 비면 queryItems를 쓰지 않는다.
+    rule.match.queryConditions = []
     tree.nodes[0] = .rule(rule)
     let exactText = String(decoding: try tree.encoded(), as: UTF8.self)
     #expect(exactText.contains(#""eyeproxy":{"ignoreQuery":false,"queryMode":"exact"}"#))

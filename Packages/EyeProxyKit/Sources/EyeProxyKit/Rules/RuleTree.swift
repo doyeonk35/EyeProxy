@@ -211,6 +211,7 @@ extension MatchRule {
         try e.encode(queryMode.rawValue, forKey: "queryMode")
         // 이전 빌드가 읽어도 크게 어긋나지 않게 함께 쓴다.
         try e.encode(queryMode == .ignore, forKey: "ignoreQuery")
-        if queryMode == .selected, !queryConditions.isEmpty { try e.encode(queryConditions, forKey: "queryItems") }
+        // 모드는 조건을 쓸지만 정한다. 표는 모드와 상관없이 남겨 모드를 바꿔 저장해도 잃지 않게 한다.
+        if !queryConditions.isEmpty { try e.encode(queryConditions, forKey: "queryItems") }
     }
 }
