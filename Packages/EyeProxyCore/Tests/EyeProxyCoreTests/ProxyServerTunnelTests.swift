@@ -1,6 +1,15 @@
 import Foundation
 import Testing
+import NIOCore
+import NIOEmbedded
 @testable import EyeProxyCore
+
+/// 지나간 read() 수를 센다(역압 확인용).
+private final class ReadCounter: ChannelOutboundHandler {
+    typealias OutboundIn = NIOAny
+    var reads = 0
+    func read(context: ChannelHandlerContext) { reads += 1; context.read() }
+}
 
 struct FixedVerdict: ConnectInterceptor {
     let verdict: ConnectVerdict
@@ -125,5 +134,33 @@ struct ProxyServerTunnelTests {
         let v = await chain.runConnect(host: "a.example", port: 443, context: .init(clientAddress: "127.0.0.1", clientPort: nil))
         #expect(v == ConnectVerdict(action: .decrypt, record: false, shaping: .init(latencyMS: 1), note: "a"))
         #expect(await InterceptorChain().runConnect(host: "a", port: 1, context: .init(clientAddress: "x", clientPort: nil)) == ConnectVerdict())
+    }
+
+    @Test func shapedTunnelPausesReadsAboveThreshold() throws {
+        let (local, remote) = TunnelGlueHandler.matchedPair(shaping: .init(downBytesPerSecond: 100_000))
+        let client = EmbeddedChannel(handler: local)
+        let counter = ReadCounter()
+        let upstream = EmbeddedChannel(handlers: [counter, remote])
+        try client.connect(to: SocketAddress(ipAddress: "127.0.0.1", port: 1)).wait()
+        try upstream.connect(to: SocketAddress(ipAddress: "127.0.0.1", port: 2)).wait()
+        let chunk = 256 * 1024
+        var pulled = 0
+        // 읽기가 허락되는 동안만 원 서버가 한 청크씩 보낸다(실제 소켓처럼).
+        for _ in 0..<16 {
+            let before = counter.reads
+            upstream.read()
+            guard counter.reads > before else { break }
+            try upstream.writeInbound(ByteBuffer(repeating: 0, count: chunk))
+            pulled += 1
+            #expect(remote.pendingBytes <= TunnelGlueHandler.maxPendingBytes + chunk)
+        }
+        #expect(pulled == TunnelGlueHandler.maxPendingBytes / chunk + 1)   // 1 MiB를 넘긴 뒤 read()가 멈췄다
+        #expect(try client.readOutbound(as: ByteBuffer.self) == nil)          // 아직 전달 전
+        upstream.embeddedEventLoop.advanceTime(to: .now() + .seconds(3600))
+        #expect(remote.pendingBytes == 0 && counter.reads == pulled + 1)      // 다 흘려보내자 미뤘던 read()를 다시 했다
+        var delivered = 0
+        while let b = try client.readOutbound(as: ByteBuffer.self) { delivered += b.readableBytes }
+        #expect(delivered == pulled * chunk)
+        _ = try? client.finish(); _ = try? upstream.finish()
     }
 }

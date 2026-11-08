@@ -25,6 +25,9 @@ let package = Package(
                 .product(name: "Crypto", package: "swift-crypto"),
             ]
         ),
-        .testTarget(name: "EyeProxyCoreTests", dependencies: ["EyeProxyCore"]),
+        .testTarget(name: "EyeProxyCoreTests", dependencies: [
+            "EyeProxyCore",
+            .product(name: "NIOEmbedded", package: "swift-nio"),
+        ]),
     ]
 )

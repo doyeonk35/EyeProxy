@@ -27,6 +27,9 @@ final class TunnelGlueHandler {
     private let bytesPerSecond: Int?
     /// 직전 청크가 (속도 제한) 링크를 다 지난 시각. 전달은 그 뒤 `latencyMS`.
     private var linkFree = NIODeadline.uptimeNanoseconds(0)
+    /// shaping으로 늦춰 아직 전달하지 않은 바이트. `maxPendingBytes`를 넘으면 read()를 미룬다(역압).
+    private(set) var pendingBytes = 0
+    static let maxPendingBytes = 1 << 20
 
     private init(shaping: TunnelShaping?, bytesPerSecond: Int?) {
         self.shaping = shaping
@@ -63,7 +66,7 @@ extension TunnelGlueHandler {
     }
 
     private func partnerBecameWritable() {
-        if self.pendingRead {
+        if self.pendingRead, self.pendingBytes <= Self.maxPendingBytes {
             self.pendingRead = false
             self.context?.read()
         }
@@ -75,14 +78,22 @@ extension TunnelGlueHandler {
 
     /// shaping이 없으면 바로, 있으면 앞 청크 뒤에 `크기/속도`만큼 줄 서고 `latencyMS` 뒤에 실행한다(순서 유지).
     /// 상대는 지금 잡아 둔다(채널이 닫히면 handlerRemoved가 partner를 지운다).
-    /// ponytail: 늦춘 청크는 메모리에 쌓인다(백프레셔 없음). 큰 전송을 느린 속도로 흘리면 read()를 멈추게 고친다.
+    /// 늦춘 바이트가 `maxPendingBytes`를 넘으면 read()가 멈추고, 전달로 그 아래가 되면 미뤘던 read()를 다시 한다.
     private func deliver(_ bytes: Int, context: ChannelHandlerContext, _ action: @escaping (TunnelGlueHandler?) -> Void) {
         let partner = self.partner
         guard let shaping else { return action(partner) }
         var free = max(linkFree, .now())
         if let rate = bytesPerSecond, rate > 0 { free = free + .nanoseconds(Int64(bytes) * 1_000_000_000 / Int64(rate)) }
         linkFree = free
-        context.eventLoop.assumeIsolated().scheduleTask(deadline: free + .milliseconds(Int64(shaping.latencyMS))) { action(partner) }
+        pendingBytes += bytes
+        context.eventLoop.assumeIsolated().scheduleTask(deadline: free + .milliseconds(Int64(shaping.latencyMS))) {
+            action(partner)
+            self.pendingBytes -= bytes
+            if self.pendingRead, let context = self.context {
+                self.pendingRead = false
+                self.read(context: context)   // 아직 막히면 다시 pendingRead
+            }
+        }
     }
 }
 
@@ -135,7 +146,7 @@ extension TunnelGlueHandler: ChannelDuplexHandler {
     }
 
     func read(context: ChannelHandlerContext) {
-        if let partner = self.partner, partner.partnerWritable {
+        if let partner = self.partner, partner.partnerWritable, self.pendingBytes <= Self.maxPendingBytes {
             context.read()
         } else {
             self.pendingRead = true
