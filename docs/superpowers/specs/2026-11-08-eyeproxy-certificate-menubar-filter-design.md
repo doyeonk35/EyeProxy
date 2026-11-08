@@ -175,18 +175,23 @@ Proxyman 기준: 기록은 메뉴 막대에 없고 툴바 ▶ 와 상태 막대 
 SwiftUI `MenuBarExtra`(window style 아님, 메뉴 스타일). 설정 ▸ 일반에 `상태 막대에 아이콘 표시` 토글(기본 켬, 키 `eyeproxy.showStatusItem`).
 
 ```
-🐸  EyeProxy — Listening on 192.168.0.12:9090        (비활성 제목줄; 중지면 "Stopped")
+    Show EyeProxy                                     (앱 활성화 + 메인 창 앞으로; 닫혀 있으면 다시 연다)
     ─
     ✓ Record Traffic                                  (settings.isRecording)
     ✓ macOS Proxy Overridden                          (model.setMacCapture; 변경 중엔 비활성)
     ─
-    Listen on IP          ▸  127.0.0.1:9090   (누르면 복사)
-                             192.168.0.12:9090
-    Enable/Disable Tools  ▸  Breakpoint / Map Local / Map Remote / Block List / Allow List / Network Conditions / No Caching   (toolSwitches 토글, Tools 메뉴와 같은 순서)
+    Listen on 192.168.0.12:9090  ▸  Copy                 (ip:port 복사)
+                                    ─
+                                    Copy IP / Copy Port
+                                    ─
+                                    Copy Shell Command   (export https_proxy=http://ip:port http_proxy=http://ip:port)
+                                 (주소는 LAN 첫 주소, 없으면 127.0.0.1; 중지면 제목 "Listen on — (Stopped)", 비활성)
     ─
-    Open EyeProxy                                     (메인 창 앞으로; 닫혀 있으면 다시 연다)
+    Enable/Disable Tools  ▸  Breakpoint ─ Map Local·Map Remote ─ Block List·Allow List ─ Network Conditions ─ No Caching ─ SSL Proxying List   (toolSwitches 토글 + sslEnabled; Proxyman처럼 구분선으로 묶음)
+    ─
     Quit EyeProxy                      ⌘Q             (NSApp.terminate → 기존 프록시 복원 경로를 탄다)
 ```
+(2026-11-08 변경: Proxyman 상태 메뉴 순서를 그대로 따른다 — Show가 맨 위, 제목 줄 없이 Listen on 항목이 주소를 보여 준다.)
 
 아이콘(템플릿, 18pt, 1x·2x PNG 또는 PDF 한 장):
 - 기록 중: 물 위로 눈을 내민 개구리, 눈 뜸.
