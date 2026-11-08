@@ -55,6 +55,7 @@
 
 ### 2-3. Map Local·Map Remote
 
+14a. **쿼리 "선택한 항목만"** — `curl -x http://127.0.0.1:<포트> "http://<호스트>/info?screenCode=CSSD1400&apiKey=x"`로 요청을 하나 만들고 우클릭 ▸ Tools ▸ Map Local…. 기대: URL은 쿼리 없이, `쿼리: 무시` 아래 표에 `screenCode`·`apiKey`가 체크 해제로 보인다. `screenCode`만 체크 → 모드가 `선택한 항목만`으로 바뀐다. Save 후 Map Local 도구를 켜고 기대: `?screenCode=CSSD1400&apiKey=다른값`·`?apiKey=x&screenCode=CSSD1400`은 로컬 응답, `?screenCode=CSSD0100`·`?apiKey=x`·쿼리 없음은 실제 응답. 규칙 목록 Matching Rule 열 끝에 ` · 쿼리 1개`. URL 칸에 `…/info?a=1&b=*`를 붙여 넣으면 `a`·`b`가 체크된 행으로 표에 옮겨진다.
 14. **새 스크린샷 비교** — Map Local 편집기(Advanced Settings 라벨)와 Map Remote 시트(약 669pt 너비)를 Proxyman 화면과 나란히 놓고 배치·문구 확인.
 
 ### 2-4. Flow 목록

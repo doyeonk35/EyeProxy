@@ -23,7 +23,7 @@ Tools 전체는 너무 커서 세 묶음으로 나눈다. **[내 판단]**
 **목표**
 1. 위 1차 도구가 Proxyman 문서·실측과 같은 동작을 한다.
 2. 사용자 Mac에 있는 Proxyman 규칙(Map Local·Map Remote·Breakpoint·Network Conditions)을 한 번에 가져오면 같은 요청에 같은 결과가 나온다.
-3. Map Local·Map Remote에 **"쿼리 무시" 체크박스**를 더한다(Proxyman에 없는 EyeProxy 전용 기능). **[사용자]**
+3. Map Local·Map Remote에 **쿼리 처리 선택**(무시 / 선택한 항목만 / 전체 일치)을 더한다(Proxyman에 없는 EyeProxy 전용 기능, §4.2). **[사용자]**
 4. 도구 창·편집기·메뉴·단축키 배치가 Proxyman과 거의 같다.
 
 **비목표**
@@ -85,7 +85,8 @@ MatchRule
   mode: wildcard | regex
   methods: any | exact([String])
   includeSubpaths: Bool           // "Include all subpaths of this URL"
-  ignoreQuery: Bool               // EyeProxy 전용. 새 규칙 기본 true, 가져온 규칙 false
+  queryMode: ignore | selected | exact   // EyeProxy 전용. 새 규칙 기본 ignore, 가져온 규칙 exact [사용자]
+  queryConditions: [QueryCondition]      // selected용. QueryCondition { key, value, isEnabled } [사용자]
   graphQLQueryName: String?       // 1차 미사용
 ```
 
@@ -98,12 +99,19 @@ MatchRule
   - 따라서 사용자의 `https://host/path?*`는 쿼리가 있는 `https://host/path?a=1`에는 맞고(`?`가 리터럴 `?` 한 글자에 대응), 쿼리가 없는 `https://host/path`에는 맞지 않는다. Proxyman과 같은 결과다. 테스트에 이 두 경우를 넣는다.
 - **Regex**: `NSRegularExpression`, 전체 URL과 완전 일치해야 한다(부분 일치는 불일치).
 - **Include all subpaths**: 켜면 패턴 뒤에 `/*`가 붙은 것처럼 하위 경로도 맞는다(패턴이 이미 `*`로 끝나면 변화 없음).
-- **쿼리 무시(ignoreQuery)** **[사용자]**:
-  - 켜짐: 매칭 전에 **요청 URL에서만** 첫 `?`부터 끝까지(쿼리)를 떼고 비교한다. **패턴은 건드리지 않는다**(`/v?/users`의 `?`는 계속 한 글자 와일드카드). 그래서 패턴 `https://host/path`가 `https://host/path?a=1`, `https://host/path?b=2`, `https://host/path`에 모두 맞는다 — 사용자가 손으로 붙이던 `?*`를 대신한다. Wildcard·Regex 모두 같은 방식. **[내 판단]**
-  - 쿼리 무시가 켜졌는데 패턴에 쿼리처럼 보이는 부분(`?` 뒤에 `=`나 `*`가 오는 형태)이 있으면 편집기에 "쿼리 무시가 켜져 있어 패턴의 쿼리 부분과는 비교하지 않습니다" 안내를 띄운다(저장은 막지 않음). **[내 판단]**
-  - 꺼짐: Proxyman과 같다(쿼리 포함 전체 URL 비교).
-  - 편집기에서 "Include all subpaths" 바로 아래 체크박스: `☑ 쿼리 무시 (쿼리가 달라도 같은 규칙으로 처리)`. 새 규칙 기본 **켜짐**. **[사용자]**
-  - Proxyman에서 가져온 규칙은 **꺼짐**으로 들인다(그래야 `?*`나 쿼리 전체를 넣은 기존 규칙이 Proxyman과 똑같이 동작). **[사용자 결정의 귀결]**
+- **쿼리 처리(queryMode)** **[사용자]** — 세 가지:
+  - **무시(`ignore`)**: 매칭 전에 **요청 URL에서만** 첫 `?`부터 끝까지(쿼리)를 떼고 비교한다. **패턴은 건드리지 않는다**(`/v?/users`의 `?`는 계속 한 글자 와일드카드). 그래서 패턴 `https://host/path`가 `https://host/path?a=1`, `https://host/path?b=2`, `https://host/path`에 모두 맞는다 — 사용자가 손으로 붙이던 `?*`를 대신한다. Wildcard·Regex 모두 같은 방식. 새 규칙 기본값. **[내 판단]**
+  - **선택한 항목만(`selected`)** **[사용자]**: 경로는 무시처럼 쿼리 없이 비교하고, 추가로 **체크된** 쿼리 조건마다 요청 쿼리에 그 키가 있고 값이 맞아야 일치한다. 체크 안 된 조건과 표에 없는 요청 파라미터는 비교에서 빠진다(있든 없든 상관없음).
+    - 키: 정확히(대소문자 구분). 같은 키가 여러 번 나오면 하나라도 맞으면 일치. 키가 빈 조건은 무시.
+    - 값: `*`(0자 이상)·`?`(1자) 와일드카드, 그 외 리터럴, 대소문자 구분. 값이 `*`면 키가 있기만 하면 된다.
+    - 요청 쪽 키·값은 퍼센트 디코딩 후 비교(`+`는 공백으로 보지 않음 — URLComponents.queryItems 기준). 조건은 사용자가 입력한 그대로.
+    - 체크된 조건이 0개면 무시와 같다.
+  - **전체 일치(`exact`)**: Proxyman과 같다(쿼리 포함 전체 URL 비교). Proxyman에서 가져온 규칙은 이 값으로 들인다(그래야 `?*`나 쿼리 전체를 넣은 기존 규칙이 Proxyman과 똑같이 동작). **[사용자 결정의 귀결]**
+  - 무시·선택한 항목만인데 패턴에 쿼리처럼 보이는 부분(`?` 뒤에 `=`나 `*`가 오는 형태)이 있으면 편집기에 "패턴의 쿼리 부분과는 비교하지 않습니다" 안내를 띄운다(저장은 막지 않음). **[내 판단]**
+  - 편집기: "Include all subpaths" 바로 아래 `쿼리: [무시 | 선택한 항목만 | 전체 일치]`(segmented). 선택한 항목만이면 아래에 Proxyman Edit & Repeat의 Query 탭 같은 표(☑ · Key · Value, 마지막 "New Key… / New Value…" 입력 행은 입력하면 체크된 새 행, 선택 행 − 삭제, 값 placeholder `값 또는 *`)와 회색 안내 "체크한 항목만 비교합니다. 값을 *로 두면 키만 있으면 됩니다."를 둔다. **[사용자]**
+  - URL 칸에 `k=v(&k=v)*` 꼴 쿼리가 든 URL을 붙여 넣거나 입력을 마치면 쿼리를 체크된 조건으로 표에 옮기고 선택한 항목만으로 바꾼다(전체 일치면 그대로). `?` 뒤가 그 꼴이 아니면(`/v?/users`, `?*`) 건드리지 않는다. **[사용자]**
+  - 우클릭 ▸ Tools 미리 채우기: URL은 쿼리 없이, 모드는 무시, 요청의 쿼리 항목은 **체크 해제**로 표에 넣는다. 하나라도 체크하면 선택한 항목만으로 바뀐다. **[사용자]**
+  - 도구 창 Matching Rule 열: `Wildcard: <url>` 뒤에 선택한 항목만이면 ` · 쿼리 n개`, 전체 일치면 ` · 쿼리 전체 일치`. **[사용자]**
 - **Method**: `ANY` 또는 하나 이상의 메서드. 대소문자 무시.
 - **Test your Rule**: 모든 편집기에 링크. 패턴과 샘플 URL 여러 줄을 넣으면 줄마다 Matched / Not Matched. 현재 세션의 선택된 요청 URL을 샘플 첫 줄로 미리 채운다. **[내 판단]**
 
@@ -224,7 +232,7 @@ Map Local과 Breakpoint 조합, Repeat 요청에도 모든 도구가 적용된�
 - 진입점: **Tools ▸ Import Settings ▸ From Proxyman…**, 그리고 각 도구 창 More ▸ Import…(파일 선택).
 - "From Proxyman…"은 `~/Library/Application Support/com.proxyman.NSProxy/user-data/`를 **읽기 전용**으로 읽어 Map Local·Map Remote·Breakpoint·Network Conditions 규칙을 보여 주는 확인 시트를 띄운다(도구별 개수, 체크로 고르기). [가져오기]를 누르면 EyeProxy 규칙 목록 **끝에 추가**한다(기존 EyeProxy 규칙은 그대로).
 - Map Local 응답 파일이 Proxyman `map-local/` 안에 있으면 EyeProxy `map-local/`로 복사하고 경로를 바꾼다. 밖에 있으면 경로를 그대로 쓴다(파일이 없으면 규칙을 가져오되 비활성 + 경고 아이콘).
-- 가져온 규칙: `ignoreQuery = false`, 각 규칙의 `isEnabled`는 Proxyman 값 유지, **도구 스위치는 모두 꺼진 채**로 둔다(반목표).
+- 가져온 규칙: `queryMode = exact`, 각 규칙의 `isEnabled`는 Proxyman 값 유지, **도구 스위치는 모두 꺼진 채**로 둔다(반목표).
 - 같은 Proxyman 규칙 `id`가 이미 있으면 건너뛴다(두 번 눌러도 중복 없음).
 - 알 수 없는 키·노드 종류는 무시하고 건너뛴 개수를 결과 시트에 보여 준다.
 - 확인 시트에 `☐ SSL Proxying 목록도 가져오기`(Proxyman `SSLList-<projectID>`의 `nodes`·`excludeNodes`, 노드의 `kind.domain[].url`) 선택지를 둔다. 기본 켜짐. **[내 판단]**
@@ -235,7 +243,8 @@ Map Local과 Breakpoint 조합, Repeat 요청에도 모든 도구가 적용된�
 ### 5.10 EyeProxy 저장 형식
 
 - 위치: `~/Library/Application Support/com.tv.eyeproxy/rules/` 아래 도구별 파일.
-- 형식: **Proxyman과 같은 JSON 모양**을 쓰고, EyeProxy 전용 필드는 `eyeproxy` 하위 객체에 둔다(예: `"eyeproxy":{"ignoreQuery":true}`). 그래야 Proxyman 파일을 그대로 넣어도 읽힌다. **[내 판단]**
+- 형식: **Proxyman과 같은 JSON 모양**을 쓰고, EyeProxy 전용 필드는 `eyeproxy` 하위 객체에 둔다(예: `"eyeproxy":{"queryMode":"selected","queryItems":[{"key":"a","value":"1","isEnabled":true}],"ignoreQuery":false}`). 그래야 Proxyman 파일을 그대로 넣어도 읽힌다. **[내 판단]**
+  - `queryItems`는 선택한 항목만일 때만 쓴다. `ignoreQuery`(무시 → true, 나머지 → false)도 함께 써서 이전 빌드가 읽어도 크게 어긋나지 않게 한다. 구버전 파일(`ignoreQuery`만)은 true → 무시, false → 전체 일치로 읽고, `eyeproxy`가 없으면(Proxyman 규칙) 전체 일치. **[사용자]**
 - Map Local 응답 파일 확장자는 `.http`(내용은 Proxyman과 같은 HTTP 메시지 원문). Proxyman에서 온 `.json` 이름도 그대로 읽는다.
 - More ▸ Export…는 §5.9의 폴더 형식으로 내보낸다.
 
@@ -263,8 +272,8 @@ Map Local과 Breakpoint 조합, Repeat 요청에도 모든 도구가 적용된�
 
 ### 6.3 편집기
 
-- **Map Local**: 별도 창. Matching Rule 묶음(Name, URL, [Method ▾][Use Wildcard ▾] "와일드카드 * 와 ? 지원" `Test your Rule`, ☐ Include all subpaths, ☑ 쿼리 무시), Advanced Settings(Delay Response ▾), Map To 묶음([Local File | Local Directory], ☑ Enable Local File, 파일 경로, 상태 점 "HTTP 메시지 형식(저장됨)", 메시지 편집기), 하단 [Select Local File] … [⚙ ▾] [Save ⌘S].
-- **Map Remote**: 시트. Matching Rule(Name, Rule, [Method ▾][Use Wildcard ▾], ☑ Include all subpaths, ☑ 쿼리 무시), Map To(Protocol/Host/Port/Path/Query + 안내 두 줄), Advanced(Preserve Original URL, Preserve Host Header), [Cancel] [Add ⌘↩].
+- **Map Local**: 별도 창. Matching Rule 묶음(Name, URL, [Method ▾][Use Wildcard ▾] "와일드카드 * 와 ? 지원" `Test your Rule`, ☐ Include all subpaths, `쿼리: 무시 | 선택한 항목만 | 전체 일치` + 쿼리 표), Advanced Settings(Delay Response ▾), Map To 묶음([Local File | Local Directory], ☑ Enable Local File, 파일 경로, 상태 점 "HTTP 메시지 형식(저장됨)", 메시지 편집기), 하단 [Select Local File] … [⚙ ▾] [Save ⌘S].
+- **Map Remote**: 시트. Matching Rule(Name, Rule, [Method ▾][Use Wildcard ▾], ☑ Include all subpaths, `쿼리: 무시 | 선택한 항목만 | 전체 일치` + 쿼리 표), Map To(Protocol/Host/Port/Path/Query + 안내 두 줄), Advanced(Preserve Original URL, Preserve Host Header), [Cancel] [Add ⌘↩].
 - **Breakpoint 규칙**: 시트. Matching Rule + ☐ Request ☐ Response, [Cancel] [Add ⌘↩].
 - **Block/Allow**: 시트. Matching Rule + (Block만) Action ▾, Block App [Select App…].
 - **Network Conditions**: 시트. Name, ☐ Apply System-wide / Host, Network Profile ▾ + [Custom Profile…].
@@ -281,7 +290,7 @@ Map Local과 Breakpoint 조합, Repeat 요청에도 모든 도구가 적용된�
 
 ## 8. 테스트 기준
 
-- 매칭: Wildcard·Regex·subpaths·쿼리 무시 켬/끔·메서드·scheme 생략 패턴에 대한 표 기반 테스트. 사용자 실데이터 형태 패턴(`https://host/path?*`, 쿼리 전체를 넣은 패턴)이 Proxyman과 같은 결과인지 포함.
+- 매칭: Wildcard·Regex·subpaths·쿼리 무시/선택한 항목만/전체 일치·메서드·scheme 생략 패턴에 대한 표 기반 테스트. 사용자 실데이터 형태 패턴(`https://host/path?*`, 쿼리 전체를 넣은 패턴)이 Proxyman과 같은 결과인지 포함.
 - 가져오기: §3의 JSON 예시(값만 바꾼 것)를 픽스처로 넣어 모든 필드가 들어오는지, 두 번 가져와도 중복이 없는지, 도구 스위치가 꺼진 채인지.
 - 각 도구: Core 통합 테스트(로컬 HTTP·HTTPS 서버 상대)로 Map Local 파일·디렉터리(없는 파일 fallback), Map Remote(Host 헤더 두 경우), Block 세 액션, Allow 통과, No Caching 헤더, Network Conditions 지연 하한, Breakpoint 세 버튼(Continue/Drop+Abort 429·503/Apply).
 - Proxyman 사용자 데이터 폴더에 쓰기가 없는지(가져오기 테스트에서 읽기 전용 디렉터리로 검증).
