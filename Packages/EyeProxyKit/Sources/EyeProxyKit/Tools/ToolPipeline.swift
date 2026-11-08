@@ -31,7 +31,8 @@ extension RuleStore {
 
 /// 스위치·규칙으로 인터셉터 체인을 조립한다(스펙 §4.5 순서).
 public enum ToolPipeline {
-    public static func chain(rules: RuleSet, switches: ToolSwitches, breakpoints: BreakpointCenter,
+    /// `sslPolicy`: 현재 SSL Proxying 설정. 바뀌면 체인을 다시 만들어야 한다(자동 복호화가 이것을 본다).
+    public static func chain(rules: RuleSet, switches: ToolSwitches, sslPolicy: SSLProxyingPolicy, breakpoints: BreakpointCenter,
                              appPath: @escaping AppPathLookup, base: [any RequestInterceptor]) -> InterceptorChain {
         let allow = switches.allowList ? AllowInterceptor(rules: rules.allow) : nil
         let block = switches.blockList ? BlockInterceptor(rules: rules.block, appPath: appPath) : nil
@@ -41,7 +42,7 @@ public enum ToolPipeline {
         let breakpoint = switches.breakpoint ? BreakpointInterceptor(rules: rules.breakpoint, center: breakpoints) : nil
         let network = switches.networkConditions
             ? rules.networkConditions.first(where: \.isEnabled).map { NetworkConditionsInterceptor(rule: $0) } : nil
-        let autoDecrypt = AutoDecryptInterceptor(hosts: autoDecryptHosts(rules: rules, switches: switches))
+        let autoDecrypt = AutoDecryptInterceptor(hosts: autoDecryptHosts(rules: rules, switches: switches), sslPolicy: sslPolicy)
 
         let request: [(any RequestInterceptor)?] = [allow, block, noCaching, mapRemote, mapLocal, breakpoint, network]
         let response: [(any ResponseInterceptor)?] = [noCaching, breakpoint, network]
@@ -64,14 +65,20 @@ public enum ToolPipeline {
             + hosts(switches.allowList, rules.allow, pathOnly: true)
     }
 
-    /// 규칙 호스트면 SSL Proxying 목록과 무관하게 복호화한다.
+    /// 규칙 호스트면 SSL Proxying 목록에 없어도 복호화한다. SSL Proxying이 꺼져 있으면 아무것도 하지 않고,
+    /// 목록이 이미 복호화하는 호스트는 목록에 맡긴다(메모 없음).
     public struct AutoDecryptInterceptor: ConnectInterceptor {
         let hosts: [(pattern: String, ruleName: String)]
+        let sslPolicy: SSLProxyingPolicy
 
-        public init(hosts: [(pattern: String, ruleName: String)]) { self.hosts = hosts }
+        public init(hosts: [(pattern: String, ruleName: String)], sslPolicy: SSLProxyingPolicy) {
+            self.hosts = hosts
+            self.sslPolicy = sslPolicy
+        }
 
         public func intercept(host: String, port: Int, context: ConnectContext) async -> ConnectVerdict {
-            guard let hit = hosts.first(where: { MatchRule(url: $0.pattern).hostGlobMatches(host) }) else { return ConnectVerdict() }
+            guard sslPolicy.isEnabled, !sslPolicy.shouldDecrypt(host: host),
+                  let hit = hosts.first(where: { MatchRule(url: $0.pattern).hostGlobMatches(host) }) else { return ConnectVerdict() }
             return ConnectVerdict(action: .decrypt, note: "자동 복호화(규칙: \(hit.ruleName))")
         }
     }

@@ -26,6 +26,8 @@ private func request(_ url: String) -> FlowRequest {
                        path: c.percentEncodedPath, headers: [], body: Data())
 }
 
+private let connectCtx = ConnectContext(clientAddress: "127.0.0.1", clientPort: nil)
+
 @MainActor private func waitPending(_ center: BreakpointCenter, _ count: Int) async -> Int {
     for _ in 0..<200 where center.pending.count != count { try? await Task.sleep(for: .milliseconds(10)) }
     return center.pending.count
@@ -36,7 +38,7 @@ struct ToolPipelineTests {
     @Test @MainActor func chainOrderFollowsSpec() throws {
         let base: [any RequestInterceptor] = [CAProfileResponder(certificateAuthority: try CertificateAuthority.generate())]
         let rules = RuleSet(networkConditions: [ncRule])
-        let chain = ToolPipeline.chain(rules: rules, switches: allSwitches(true), breakpoints: BreakpointCenter(), appPath: noApp, base: base)
+        let chain = ToolPipeline.chain(rules: rules, switches: allSwitches(true), sslPolicy: SSLProxyingPolicy(), breakpoints: BreakpointCenter(), appPath: noApp, base: base)
         #expect(typeNames(chain.request) == ["CAProfileResponder", "AllowInterceptor", "BlockInterceptor", "NoCachingInterceptor",
                                              "MapRemoteInterceptor", "MapLocalInterceptor", "BreakpointInterceptor",
                                              "NetworkConditionsInterceptor"])
@@ -46,7 +48,7 @@ struct ToolPipelineTests {
 
     @Test @MainActor func disabledToolsAreAbsent() throws {
         let base: [any RequestInterceptor] = [CAProfileResponder(certificateAuthority: try CertificateAuthority.generate())]
-        let chain = ToolPipeline.chain(rules: RuleSet(networkConditions: [ncRule]), switches: allSwitches(false),
+        let chain = ToolPipeline.chain(rules: RuleSet(networkConditions: [ncRule]), switches: allSwitches(false), sslPolicy: SSLProxyingPolicy(),
                                        breakpoints: BreakpointCenter(), appPath: noApp, base: base)
         #expect(typeNames(chain.request) == ["CAProfileResponder"])
         #expect(chain.response.isEmpty)
@@ -56,7 +58,7 @@ struct ToolPipelineTests {
     @Test @MainActor func networkConditionsNeedsEnabledRule() {
         var off = ncRule
         off.isEnabled = false
-        let chain = ToolPipeline.chain(rules: RuleSet(networkConditions: [off]), switches: allSwitches(true),
+        let chain = ToolPipeline.chain(rules: RuleSet(networkConditions: [off]), switches: allSwitches(true), sslPolicy: SSLProxyingPolicy(),
                                        breakpoints: BreakpointCenter(), appPath: noApp, base: [])
         #expect(!typeNames(chain.request).contains("NetworkConditionsInterceptor"))
         #expect(!typeNames(chain.connect).contains("NetworkConditionsInterceptor"))
@@ -92,11 +94,29 @@ struct ToolPipelineTests {
     }
 
     @Test func autoDecryptInterceptorDecryptsMatchingHosts() async {
-        let i = ToolPipeline.AutoDecryptInterceptor(hosts: [("*.example.com", "R")])
-        let ctx = ConnectContext(clientAddress: "127.0.0.1", clientPort: nil)
-        #expect(await i.intercept(host: "API.example.com", port: 443, context: ctx)
+        let i = ToolPipeline.AutoDecryptInterceptor(hosts: [("*.example.com", "R")], sslPolicy: SSLProxyingPolicy())
+        #expect(await i.intercept(host: "API.example.com", port: 443, context: connectCtx)
                 == ConnectVerdict(action: .decrypt, note: "자동 복호화(규칙: R)"))
-        #expect(await i.intercept(host: "other.com", port: 443, context: ctx) == ConnectVerdict())
+        #expect(await i.intercept(host: "other.com", port: 443, context: connectCtx) == ConnectVerdict())
+    }
+
+    /// SSL Proxying 전체 스위치가 꺼지면 규칙 호스트도 복호화하지 않는다.
+    @Test @MainActor func autoDecryptOffWhenSSLProxyingDisabled() async {
+        let rules = RuleSet(mapLocal: tree(MapLocalRule(name: "R", match: MatchRule(url: "https://api.example.com/x"))))
+        var s = ToolSwitches()
+        s.mapLocal = true
+        let chain = ToolPipeline.chain(rules: rules, switches: s, sslPolicy: SSLProxyingPolicy(isEnabled: false),
+                                       breakpoints: BreakpointCenter(), appPath: noApp, base: [])
+        #expect(await chain.runConnect(host: "api.example.com", port: 443, context: connectCtx) == ConnectVerdict())
+    }
+
+    /// SSL Proxying 목록이 이미 복호화하는 호스트에는 자동 복호화 메모를 달지 않는다.
+    @Test func autoDecryptSkipsHostsAlreadyInSSLList() async {
+        let i = ToolPipeline.AutoDecryptInterceptor(hosts: [("*.example.com", "R")],
+                                                    sslPolicy: SSLProxyingPolicy(patterns: ["api.example.com"]))
+        #expect(await i.intercept(host: "api.example.com", port: 443, context: connectCtx) == ConnectVerdict())
+        #expect(await i.intercept(host: "img.example.com", port: 443, context: connectCtx)
+                == ConnectVerdict(action: .decrypt, note: "자동 복호화(규칙: R)"))
     }
 
     @Test @MainActor func mapRemoteThenMapLocalMatchesNewURL() async throws {
@@ -110,7 +130,7 @@ struct ToolPipelineTests {
                                           mapTo: MapTarget(host: "b.example.com"))))
         var s = ToolSwitches()
         (s.mapRemote, s.mapLocal) = (true, true)
-        let chain = ToolPipeline.chain(rules: rules, switches: s, breakpoints: BreakpointCenter(), appPath: noApp, base: [])
+        let chain = ToolPipeline.chain(rules: rules, switches: s, sslPolicy: SSLProxyingPolicy(), breakpoints: BreakpointCenter(), appPath: noApp, base: [])
         let (decision, _) = await chain.runRequest(request("https://a.example.com/v1"), context: FlowContext(id: .init(), clientAddress: "127.0.0.1"))
         guard case .respond(let r) = decision else { Issue.record("Map Local 응답이 아님: \(decision)"); return }
         #expect(r.body == Data("local".utf8))
@@ -190,7 +210,7 @@ struct ToolPipelineServerTests {
                                                           mapTo: MapTarget(scheme: "http", host: "127.0.0.1", port: port))))
         var s = ToolSwitches()
         s.mapRemote = true
-        return await ToolPipeline.chain(rules: rules, switches: s, breakpoints: BreakpointCenter(), appPath: noApp, base: [])
+        return await ToolPipeline.chain(rules: rules, switches: s, sslPolicy: SSLProxyingPolicy(), breakpoints: BreakpointCenter(), appPath: noApp, base: [])
     }
 
     @Test func mapRemoteRewriteReachesOrigin() async throws {
@@ -223,7 +243,7 @@ struct ToolPipelineServerTests {
         var s = ToolSwitches()
         s.breakpoint = true
         let rules = RuleSet(breakpoint: tree(BreakpointRule(name: "BP", match: MatchRule(url: "http://127.0.0.1:\(originPort)/*"))))
-        let (server, port) = try await loopbackServer(ToolPipeline.chain(rules: rules, switches: s, breakpoints: center, appPath: noApp, base: []))
+        let (server, port) = try await loopbackServer(ToolPipeline.chain(rules: rules, switches: s, sslPolicy: SSLProxyingPolicy(), breakpoints: center, appPath: noApp, base: []))
         let client = try await rawConnect(port: port, sending: "GET http://127.0.0.1:\(originPort)/bp HTTP/1.1\r\nHost: 127.0.0.1:\(originPort)\r\n\r\n")
         #expect(await waitPending(center, 1) == 1)
         try await client.close()
