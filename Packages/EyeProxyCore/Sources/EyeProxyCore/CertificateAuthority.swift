@@ -70,6 +70,11 @@ public final class CertificateAuthority: Sendable {
         return ""
     }
 
+    /// CA 인증서(DER)의 SHA-256 지문: 대문자 16진 바이트를 `:`로 구분(`AB:CD:…`).
+    public var sha256Fingerprint: String {
+        SHA256.hash(data: certificateDER).map { String(format: "%02X", $0) }.joined(separator: ":")
+    }
+
     /// 리프·캐시 키용 호스트: 소문자, 끝 점 제거, IPv6 대괄호 제거.
     static func normalizedHost(_ rawHost: String) -> String {
         var host = rawHost.lowercased()

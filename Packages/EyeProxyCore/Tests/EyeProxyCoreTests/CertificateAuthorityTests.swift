@@ -71,3 +71,11 @@ private func tempDir() -> URL { FileManager.default.temporaryDirectory.appending
     #expect(try cert.extensions.subjectAlternativeNames == SubjectAlternativeNames([.dnsName("api.example.com")]))
     #expect(cert.issuer == (try Certificate(derEncoded: ca.certificateDER)).subject)
 }
+@Test func fingerprintIsColonSeparatedSHA256() throws {
+    let ca = try CertificateAuthority.generate()
+    let fp = ca.sha256Fingerprint
+    #expect(fp.count == 95)
+    #expect(fp.wholeMatch(of: /([0-9A-F]{2}:){31}[0-9A-F]{2}/) != nil)
+    #expect(fp == ca.sha256Fingerprint)
+    #expect(fp == SHA256.hash(data: ca.certificateDER).map { String(format: "%02X", $0) }.joined(separator: ":"))
+}
