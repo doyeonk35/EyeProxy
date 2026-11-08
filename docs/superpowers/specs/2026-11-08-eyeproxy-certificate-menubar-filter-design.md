@@ -258,7 +258,7 @@ SwiftUI `MenuBarExtra`(window style 아님, 메뉴 스타일). 설정 ▸ 일반
 
 이번 묶음에서 바꾼다(2026-11-08 결정). **번들 ID `com.tv.eyeproxy`(.debug)는 유지한다** — 그래야 0.2.0 사용자가 Sparkle로 그대로 업데이트되고, UserDefaults·Application Support·설치된 CA·프로파일이 전부 이어진다. 바꾸는 것은 사용자가 보는 이름이다. 코드 안의 식별자(모듈·폴더·키·UTI·레포)는 그대로 둔다.
 
-Sparkle 확인 결과(소스 `SUUpdateValidator.m`·`SUInstaller.m`): 업데이트 검증은 EdDSA 서명 또는 코드 서명 일치로 통과하고 번들 ID를 비교하지 않는다. 설치할 때는 새 번들의 `CFBundleName`으로 `Prog.app`이 되며 같은 폴더에 `Prog.app`이 없으면 그 이름으로 놓는다. 즉 0.2.0 → Prog 자동 업데이트가 된다. 단 Sparkle 피드 URL이 지금 자리(`https://doyeonk35.github.io/EyeProxy/appcast.xml`)에 남아 있어야 하므로 **GitHub 레포 이름도 EyeProxy로 둔다**(이 문서의 결정; 레포 이름을 바꾸면 0.2.0의 자동 업데이트가 끊긴다).
+Sparkle 확인 결과(소스 `SUUpdateValidator.m`·`SUInstaller.m`): 업데이트 검증은 EdDSA 서명 또는 코드 서명 일치로 통과하고 번들 ID를 비교하지 않는다. (2026-11-08 정정) 링크된 Sparkle은 `SPARKLE_NORMALIZE_INSTALLED_APPLICATION_NAME = 0`이라 `SUInstaller`가 호스트의 기존 번들 경로에 그대로 설치한다. 즉 0.2.0 → Prog 자동 업데이트는 되지만(번들 ID 일치) 디스크의 파일명은 `/Applications/EyeProxy.app`으로 남고 실행하면 "Prog"으로 보인다. 파일명을 바꾸려면 Finder에서 이름을 바꾸거나 zip으로 재설치하고 옛 복사본을 지운다(같은 번들 ID라 둘 다 두면 안 된다). 단 Sparkle 피드 URL이 지금 자리(`https://doyeonk35.github.io/EyeProxy/appcast.xml`)에 남아 있어야 하므로 **GitHub 레포 이름도 EyeProxy로 둔다**(이 문서의 결정; 레포 이름을 바꾸면 0.2.0의 자동 업데이트가 끊긴다).
 
 ### 8.1 바뀌는 것
 

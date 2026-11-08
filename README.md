@@ -10,6 +10,8 @@ macOS용 MITM 디버깅 프록시 (Proxyman류). Mac·시뮬레이터·Apple TV�
 2. 압축을 풀어 `Prog.app`을 `/Applications`로 옮긴다. (Developer ID 서명·공증 완료 — 바로 실행된다.)
 3. 이후 업데이트는 앱 메뉴 `Prog > 업데이트 확인…` (Sparkle).
 
+0.2.0(EyeProxy)에서 Sparkle로 업데이트하면 앱은 Prog으로 실행되지만 파일명은 `EyeProxy.app`으로 남는다. 바꾸려면 Finder에서 이름을 바꾸거나 zip으로 재설치하고 옛 복사본을 지운다(같은 번들 ID라 둘 다 두면 안 된다).
+
 ## 첫 실행
 
 1. 처음 켜면 루트 CA가 자동 생성된다.
@@ -97,7 +99,7 @@ Certificate
 ```
 
 - 묶음 안은 OR, 묶음 사이는 AND. 아무것도 안 고르면 `All`이 선택된 것으로 보이고, `All`을 누르면 세 묶음을 모두 비운다.
-- 검색어·사이드바(기기·프로세스·호스트·고정)·숨김 포함과 AND로 겹친다. 필터 바를 바꿔도 다른 조건은 그대로다. 선택한 행이 걸러지면 선택이 풀린다.
+- 검색어·사이드바(기기·프로세스·호스트·고정)·숨김 포함과 AND로 겹친다. 필터 바를 바꿔도 다른 조건은 그대로다. 선택한 행이 필터에 걸러지면 검색어로 걸러질 때와 같게 동작한다.
 - 저장하지 않는다(앱을 다시 켜면 `All`).
 - 분류(칩에 마우스를 올리면 규칙이 보인다): 프로토콜은 scheme(복호화 안 한 터널은 HTTPS). 콘텐츠는 응답 `Content-Type`(없으면 요청) 기준으로 GraphQL(경로에 `graphql` 또는 `application/graphql`) → Form(요청이 urlencoded·multipart) → JSON → XML → JS → CSS → Document(html·plain·pdf·markdown·csv) → Media(이미지·영상·오디오·폰트·HLS) → Other 순서로 처음 맞는 것. 상태 칩을 고르면 응답 없는 행은 빠진다.
 

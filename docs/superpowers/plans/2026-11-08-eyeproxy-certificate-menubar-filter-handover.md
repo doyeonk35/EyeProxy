@@ -56,7 +56,7 @@ Proxyman 기준으로 메뉴 막대를 재편하고, 목록 위 필터 바와 �
 | 밝은·어두운 막대 | 시스템 화면 모드를 바꿔 가며 아이콘 확인 | 템플릿으로 막대 색을 따르고 눈동자·공기방울이 뚫려 보임 | [ ] 미확인 |
 | 설정 토글 뒤 재표시 | 상태 막대에 아이콘 표시를 끈 뒤 다시 켬 | 아이콘이 다시 나타나고 메뉴가 정상 동작 | [ ] 미확인 |
 | VoiceOver 칩 상태 | VoiceOver로 필터 칩 이동 | 칩 이름과 "선택됨" 상태를 읽음 | [ ] 미확인 |
-| Sparkle 0.2.0 → Prog | 릴리스 뒤 0.2.0 EyeProxy.app에서 업데이트 확인 | 업데이트 설치 후 `/Applications/Prog.app`, 설정·규칙·CA 유지 | [ ] 미확인 |
+| Sparkle 0.2.0 → Prog | 릴리스 뒤 0.2.0 EyeProxy.app에서 업데이트 확인 | 업데이트 성공, 앱 이름 Prog으로 실행, 파일명은 EyeProxy.app 그대로. 설정·규칙·CA 유지 | [ ] 미확인 |
 | xcstrings 동기화 | Xcode GUI에서 한 번 빌드(CLI 빌드는 갱신 안 함) → `Localizable.xcstrings` 커밋 | 새 문자열 추가, 지운 메뉴 키·옛 `/ssl` 키가 stale 표시 | [ ] 미확인 |
 
 확인됨 10 · 미확인 18.
@@ -81,6 +81,7 @@ README `## 알려진 제한(Certificate·필터 바·상태 막대)`에 사용�
 
 - 표시 이름은 **Prog**(Debug는 Prog-Debug), 번들 ID `com.tv.eyeproxy`(.debug)는 그대로다. 설정·Application Support·설치된 CA·프로파일이 이어진다.
 - Sparkle 피드는 기존 자리(`https://doyeonk35.github.io/EyeProxy/appcast.xml`)라 0.2.0에서 자동 업데이트가 이어진다. 레포 이름은 바꾸지 않는다.
+- Sparkle로 업데이트한 설치본은 파일명이 EyeProxy.app으로 남는다. 바꾸려면 Finder에서 이름을 바꾸거나 zip으로 재설치하고 옛 복사본을 지운다(같은 번들 ID라 둘 다 두면 안 됨).
 - `./scripts/release.sh <version>`은 `Prog-<version>.zip`을 만들고 appcast 제목도 Prog다. 기존 appcast 항목은 그대로 둔다.
 - 릴리스 전에 Xcode GUI에서 한 번 빌드해 `Localizable.xcstrings`를 동기화하고 커밋한다.
 - 릴리스 노트에 "앱 이름이 Prog으로 바뀌었고 설정·인증서는 그대로"를 적는다. 이미 설치된 CA 이름은 EyeProxy 그대로이고, Reset하면 새 이름(Prog Root CA)으로 다시 만들어진다.
