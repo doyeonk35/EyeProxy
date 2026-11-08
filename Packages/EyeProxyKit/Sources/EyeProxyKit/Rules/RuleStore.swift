@@ -69,7 +69,7 @@ public final class RuleStore {
         }
     }
 
-    // MARK: 트리가 아닌 JSON 배열 파일 (Network Conditions)
+    // MARK: 트리가 아닌 JSON 배열 파일 (Network Conditions, Breakpoint 템플릿)
 
     private func array<T: Codable & Sendable>(_ name: String, as _: T.Type) -> [T] {
         if let cached = cache[name] as? [T] { return cached }
@@ -102,6 +102,12 @@ public final class RuleStore {
     public var customNetworkProfiles: [NetworkProfile] {
         get { array("network-profiles.json", as: NetworkProfile.self) }
         set { setArray(newValue, name: "network-profiles.json") }
+    }
+
+    /// Breakpoint 편집기 템플릿.
+    public var breakpointTemplates: [BreakpointTemplate] {
+        get { array("breakpoint-templates.json", as: BreakpointTemplate.self) }
+        set { setArray(newValue, name: "breakpoint-templates.json") }
     }
 
     /// 하나를 켜고 나머지는 끈다(한 번에 규칙 하나만 활성). 저장은 한 번.
