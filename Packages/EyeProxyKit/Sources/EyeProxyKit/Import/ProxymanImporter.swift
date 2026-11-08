@@ -127,21 +127,36 @@ public enum ProxymanImporter {
         let text = String(decoding: data, as: UTF8.self)
         var p = ProxymanImportPreview()
         p.sourceDirectory = bundle
-        func pick<R: ToolRule>(_ t: R.Type) -> [RuleNode<R>]? {
-            guard let r = try? RuleTree<R>.decodeLenient(data), r.skipped == 0, !r.tree.nodes.isEmpty else { return nil }
-            return r.tree.nodes
+        func pick<R: ToolRule>(_ t: R.Type, if guardOK: Bool) -> (nodes: [RuleNode<R>], skipped: Int)? {
+            guard guardOK, let r = try? RuleTree<R>.decodeLenient(data), !r.tree.nodes.isEmpty else { return nil }
+            return (r.tree.nodes, r.skipped)
         }
+        let has = { (key: String) in text.contains("\"\(key)\"") }
+        let isBP = has("isRequest") || has("isResponse")
+        // 규칙 모양이 겹치므로(MapLocal/Allow는 거의 아무 페이로드나 읽는다) 필수 키가 있는 도구만 후보로 두고,
+        // 읽힌 노드가 가장 많은 도구가 이긴다(동률이면 앞선 도구). 깨진 노드는 skipped로 센다.
+        let remote = pick(MapRemoteRule.self, if: has("toURL"))
+        let block = pick(BlockRule.self, if: has("blockAction"))
+        let local = pick(MapLocalRule.self, if: has("isLocalFileEnable"))
+        let bp = pick(BreakpointRule.self, if: isBP)
+        let allow = pick(AllowRule.self, if: !(has("toURL") || has("blockAction") || has("isLocalFileEnable") || isBP))
+        let best = [remote?.nodes.count, block?.nodes.count, local?.nodes.count, bp?.nodes.count, allow?.nodes.count].enumerated()
+            .compactMap { i, n in n.map { (i, $0) } }.max { $0.1 < $1.1 }?.0
         if let list = try? JSONDecoder().decode([NetworkConditionRule].self, from: data), !list.isEmpty {
             p.networkConditions = list
-        } else if let n = pick(MapRemoteRule.self) { p.mapRemote = n    // toURL 필수
-        } else if let n = pick(BlockRule.self) { p.block = n            // blockAction 필수
-        } else if text.contains("\"isLocalFileEnable\""), let n = pick(MapLocalRule.self) {
-            // 번들의 상대 경로는 번들 폴더 기준 절대 경로로 되돌린다.
-            p.mapLocal = mapRules(n) { r in
-                if let b = bundle, let path = r.localFile?.path, !path.hasPrefix("/") { r.localFile?.path = b.appendingPathComponent(path).path }
+        } else if let best {
+            switch best {
+            case 0: p.mapRemote = remote!.nodes; p.skipped = remote!.skipped
+            case 1: p.block = block!.nodes; p.skipped = block!.skipped
+            case 2:
+                // 번들의 상대 경로는 번들 폴더 기준 절대 경로로 되돌린다.
+                p.mapLocal = mapRules(local!.nodes) { r in
+                    if let b = bundle, let path = r.localFile?.path, !path.hasPrefix("/") { r.localFile?.path = b.appendingPathComponent(path).path }
+                }
+                p.skipped = local!.skipped
+            case 3: p.breakpoint = bp!.nodes; p.skipped = bp!.skipped
+            default: p.allow = allow!.nodes; p.skipped = allow!.skipped
             }
-        } else if text.contains("\"isRequest\"") || text.contains("\"isResponse\""), let n = pick(BreakpointRule.self) { p.breakpoint = n
-        } else if let n = pick(AllowRule.self) { p.allow = n
         } else {
             guard let obj = try? JSONSerialization.jsonObject(with: data) else { throw ProxymanImportError.notFound(url) }
             p.skipped = (obj as? [Any])?.count ?? ((obj as? [String: Any])?["nodes"] as? [Any])?.count ?? 0
@@ -157,7 +172,8 @@ public enum ProxymanImporter {
     // MARK: 적용
 
     @MainActor
-    public static func apply(_ preview: ProxymanImportPreview, selection: ImportSelection, into store: RuleStore, settings: AppSettings) -> ImportResult {
+    public static func apply(_ preview: ProxymanImportPreview, selection: ImportSelection, into store: RuleStore, settings: AppSettings,
+                             proxymanDirectory: URL = defaultDirectory) -> ImportResult {
         var result = ImportResult()
         result.skipped = preview.skipped
         var deferred = 0
@@ -193,12 +209,15 @@ public enum ProxymanImporter {
         }
 
         if selection.mapLocal {
+            let roots = [proxymanDirectory, preview.sourceDirectory].compactMap { $0 }
+                .map { $0.appendingPathComponent("map-local", isDirectory: true).standardizedFileURL.resolvingSymlinksInPath().path }
             merge(preview.mapLocal, .mapLocal, &result.mapLocal) { r in
                 guard let ref = r.localFile else { return }
                 let src = URL(fileURLWithPath: ref.path)
-                if let root = preview.sourceDirectory?.appendingPathComponent("map-local", isDirectory: true),
-                   src.standardizedFileURL.resolvingSymlinksInPath().path.hasPrefix(root.standardizedFileURL.resolvingSymlinksInPath().path + "/"),
-                   FileManager.default.fileExists(atPath: src.path) {
+                let resolved = src.standardizedFileURL.resolvingSymlinksInPath().path
+                // 가져온 원본이 Proxyman 폴더(기본 위치/미리보기 원본)나 번들 안이면 우리 폴더로 복사한다.
+                let inside = roots.contains { resolved.hasPrefix($0 + "/") }
+                if inside, FileManager.default.fileExists(atPath: src.path) {
                     let dest = store.mapLocalDirectory.appendingPathComponent(src.lastPathComponent)
                     do {
                         try FileManager.default.createDirectory(at: store.mapLocalDirectory, withIntermediateDirectories: true)

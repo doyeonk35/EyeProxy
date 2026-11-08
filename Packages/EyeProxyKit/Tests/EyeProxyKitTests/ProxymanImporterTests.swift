@@ -228,3 +228,29 @@ private func snapshot(_ dir: URL) -> [String] {
     let p = try ProxymanImporter.preview(proxymanDirectory: dir)
     #expect(p.skipped == 1 && p.mapLocal.count == 1)
 }
+
+@Test func previewFileWithBrokenNodeKeepsGoodOnes() throws {
+    let root = try tempDir(); defer { try? fm.removeItem(at: root) }
+    let raw = try String(contentsOf: try fixtureRoot().appendingPathComponent("proxyman_map_local_tree_rules.config"), encoding: .utf8)
+    let f = root.appendingPathComponent("rules.config")
+    let good = String(raw.replacingOccurrences(of: "FIXTURES", with: root.path).trimmingCharacters(in: .whitespacesAndNewlines).dropLast())
+    try (good + #",{"nodeType":{"node":{"_0":{"id":"BAD"}}}}]"#).write(to: f, atomically: true, encoding: .utf8)
+    let p = try ProxymanImporter.previewFile(f)
+    #expect(p.mapLocal.count == 1 && p.skipped == 1)
+}
+
+@Test @MainActor func exportFileInsideProxymanFolderIsCopied() throws {
+    let root = try tempDir(); defer { try? fm.removeItem(at: root) }
+    let dir = try proxymanCopy(in: root)
+    let raw = try String(contentsOf: try fixtureRoot().appendingPathComponent("proxyman_map_local_tree_rules.config"), encoding: .utf8)
+    let f = root.appendingPathComponent("export.config")
+    try raw.replacingOccurrences(of: "FIXTURES", with: dir.path).write(to: f, atomically: true, encoding: .utf8)
+    let p = try ProxymanImporter.previewFile(f)
+    #expect(p.sourceDirectory == nil)
+    let store = makeStore(root)
+    _ = ProxymanImporter.apply(p, selection: ImportSelection(), into: store,
+                               settings: AppSettings(defaults: UserDefaults(suiteName: "imp-\(UUID().uuidString)")!), proxymanDirectory: dir)
+    guard case .rule(let rule) = store.tree(.mapLocal).nodes[0] else { Issue.record("rule 아님"); return }
+    let path = try #require(rule.localFile?.path)
+    #expect(path.hasPrefix(store.mapLocalDirectory.path + "/") && fm.fileExists(atPath: path))
+}
