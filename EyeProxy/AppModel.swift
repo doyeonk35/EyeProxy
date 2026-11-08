@@ -29,7 +29,8 @@ final class AppModel {
     let breakpoints = BreakpointCenter()
     @ObservationIgnored let resolver = ProcessResolver()
     let devices: DeviceRegistry
-    let certificateAuthority: CertificateAuthority
+    /// 초기화(`resetCertificateAuthority`)로 바뀔 수 있다. 서버·체인·Compose는 매번 이 값을 읽는다.
+    private(set) var certificateAuthority: CertificateAuthority
     /// 새로 만든 CA를 저장하지 못했으면 그 이유. 매 실행 새 루트 CA가 되므로 Task 15 인증서 화면에서 표시한다.
     let caSaveError: String?
     private(set) var serverState: ServerState = .stopped
@@ -77,6 +78,8 @@ final class AppModel {
     private(set) var vpnPrimaryDetected = false
     /// 시스템 프록시·CA 설치·프로필 저장 실패. 기기 창(없으면 메인 창)에 alert로 표시한다.
     var systemError: String?
+    /// 오류가 아닌 안내(CA 초기화 결과 등). 창이 alert로 띄운다.
+    var infoMessage: String?
     /// 기기 창이 열려 있으면 오류 alert는 그 창이 맡는다(메인 창은 띄우지 않음).
     var devicesWindowOpen = false
 
@@ -116,9 +119,7 @@ final class AppModel {
     private static func loadOrCreateCA() -> (CertificateAuthority, String?) {
         do {
             if let ca = try CertificateAuthority.load(from: caDirectory) { return (ca, nil) }
-            // 팀원끼리 기기를 같이 쓸 때 구별되도록 호스트 이름을 넣는다. 기존 CA는 그대로 둔다.
-            let host = ProcessInfo.processInfo.hostName.split(separator: ".").first.map(String.init) ?? "Mac"
-            let ca = try CertificateAuthority.generate(commonName: "EyeProxy Root CA (\(host))")
+            let ca = try CertificateAuthority.generate(commonName: defaultCommonName())
             do {
                 try ca.save(to: caDirectory)
                 return (ca, nil)
@@ -129,6 +130,30 @@ final class AppModel {
             guard let ca = try? CertificateAuthority.generate() else { fatalError("CA 생성 실패: \(error)") }
             return (ca, nil)
         }
+    }
+
+    /// 새 루트 CA 이름. 팀원끼리 기기를 같이 쓸 때 구별되도록 호스트 이름을 넣는다.
+    static func defaultCommonName() -> String {
+        let host = ProcessInfo.processInfo.hostName.split(separator: ".").first.map(String.init) ?? "Mac"
+        return "EyeProxy Root CA (\(host))"
+    }
+
+    /// 옛 CA 폴더를 백업으로 옮기고 새 CA로 서버를 다시 띄운다. 결과는 `infoMessage`, 실패는 `systemError`.
+    /// 확인 alert는 호출하는 쪽이 띄운다. 키체인·기기의 옛 CA는 건드리지 않는다.
+    func resetCertificateAuthority() async {
+        let rotated: (ca: CertificateAuthority, backup: URL?)
+        do {
+            rotated = try CARotation.rotate(directory: Self.caDirectory, commonName: Self.defaultCommonName())
+        } catch {
+            systemError = String(localized: "CA를 초기화하지 못했습니다: \(error.localizedDescription)")
+            return
+        }
+        certificateAuthority = rotated.ca
+        await restartServer()   // startServer가 현재 certificateAuthority로 ProxyServer·CAProfileResponder를 새로 만든다
+        await refreshMacCAInstalled()
+        let backupNote = rotated.backup.map { String(localized: "이전 CA는 \($0.path)에 있습니다.") }
+            ?? String(localized: "이전 CA 폴더는 없었습니다.")
+        infoMessage = String(localized: "새 CA를 만들었습니다. \(backupNote) Mac·시뮬레이터·기기에 다시 설치하세요. 키체인의 이전 CA는 키체인 접근에서 지우세요.")
     }
 
     // MARK: - 서버
