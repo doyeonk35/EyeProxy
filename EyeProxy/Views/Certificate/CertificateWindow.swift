@@ -72,7 +72,8 @@ struct CertificateWindow: View {
         case .simulators: form { SimulatorSection(installedSimulators: $installedSimulators) }
         case .iosDevices: form { IOSDevicesSection() }
         case .tvWatch: form { TVWatchSection() }
-        case .android, .developments: ContentUnavailableView("준비 중", systemImage: "hammer")
+        case .android: form { AndroidSection() }
+        case .developments: ContentUnavailableView("준비 중", systemImage: "hammer")
         case .exportReset: form { ExportResetSection() }
         case .connectedDevices: form { ConnectedDevicesSection(); ConnectionLogSection() }
         }

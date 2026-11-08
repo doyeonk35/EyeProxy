@@ -3,7 +3,7 @@ import EyeProxyKit
 import Foundation
 
 enum CertificateExportFormat {
-    case pem, der, p12, privateKey
+    case pem, der, p12, privateKey, crt
 
     var defaultFileName: String {
         switch self {
@@ -11,6 +11,7 @@ enum CertificateExportFormat {
         case .der: "EyeProxy-CA.cer"
         case .p12: "EyeProxy-CA.p12"
         case .privateKey: "EyeProxy-CA-key.pem"
+        case .crt: "EyeProxy-CA.crt"
         }
     }
 }
@@ -41,7 +42,7 @@ extension AppModel {
         case .p12:
             guard let entered = askP12Password() else { return }
             password = entered
-        case .pem, .der: break
+        case .pem, .der, .crt: break
         }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = format.defaultFileName
@@ -50,7 +51,7 @@ extension AppModel {
         Task {
             do {
                 switch format {
-                case .pem: try CertificateExporter.writePEM(ca, to: url)
+                case .pem, .crt: try CertificateExporter.writePEM(ca, to: url)
                 case .der: try CertificateExporter.writeDER(ca, to: url)
                 case .privateKey: try CertificateExporter.writePrivateKey(ca, to: url)
                 case .p12: try await CertificateExporter.writeP12(ca, to: url, password: password)
@@ -59,6 +60,34 @@ extension AppModel {
                 systemError = String(localized: "인증서를 내보내지 못했습니다: \(Self.describe(error))")
             }
         }
+    }
+
+    /// Android용 PEM을 `EyeProxy-CA.crt`로 저장.
+    func exportCACrt() { exportCertificate(.crt) }
+
+    /// 찾은 adb로 실행해 출력을 돌려준다. adb가 없거나 실패하면 그 사실을 문장으로 돌려준다.
+    func runADB(_ args: [String]) async -> String {
+        guard let adb = AndroidSetup.locateADB() else { return String(localized: "adb를 찾지 못했습니다.") }
+        do {
+            let r = try await AndroidSetup.runADB(adb, args)
+            let output = r.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard r.status == 0 else { return String(localized: "adb 실패(종료 코드 \(r.status)): \(output)") }
+            return output.isEmpty ? String(localized: "완료") : output
+        } catch {
+            return String(localized: "adb를 실행하지 못했습니다: \(Self.describe(error))")
+        }
+    }
+
+    /// 프록시를 host:현재 포트로 설정한 뒤, 현재 CA를 임시 `EyeProxy-CA.crt`로 써서 기기 다운로드 폴더로 push. 두 출력을 합친다.
+    func adbSetProxyAndPushCA(host: String) async -> String {
+        let proxy = String(localized: "프록시: ") + (await runADB(AndroidSetup.proxyArguments(host: host, port: runningPort ?? settings.port)))
+        let crt = FileManager.default.temporaryDirectory.appending(path: "EyeProxy-CA.crt")
+        do {
+            try CertificateExporter.writePEM(certificateAuthority, to: crt)
+        } catch {
+            return proxy + "\n" + String(localized: "CA 파일을 쓰지 못했습니다: \(Self.describe(error))")
+        }
+        return proxy + "\n" + String(localized: "CA 복사: ") + (await runADB(AndroidSetup.pushArguments(crt: crt)))
     }
 
     func resetCertificatesWithConfirmation() async {
