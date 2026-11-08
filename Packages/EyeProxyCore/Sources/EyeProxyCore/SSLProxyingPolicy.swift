@@ -2,7 +2,7 @@ import Foundation
 
 public struct SSLProxyingPolicy: Equatable, Codable, Sendable {
     public var isEnabled: Bool
-    /// "api.tving.com", "*.tving.com", "*" — `*`는 임의 문자열, 비교는 대소문자 무시.
+    /// "api.example.com", "*.example.com", "*" — `*`는 임의 문자열, 비교는 대소문자 무시.
     public var patterns: [String]
 
     public init(isEnabled: Bool = true, patterns: [String] = []) {

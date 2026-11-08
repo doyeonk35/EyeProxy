@@ -17,7 +17,7 @@
 - 새 사용자 문자열은 `EyeProxy/Localizable.xcstrings`에 `"<문자열>" : { }` 항목 추가(sourceLanguage ko).
 - 시스템 설정 변경 명령 실행 금지. 시스템 명령은 `lsof`·`simctl list`처럼 읽기 전용만.
 - 커밋 메시지 `<type>(<scope>): <한국어 요약>`, 끝에 `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
-- 작업 디렉터리는 worktree `/Users/kimdoyeon/personal/EyeProxy/.claude/worktrees/flow-readability`(브랜치 `worktree-flow-readability`). main 체크아웃으로 `cd` 금지.
+- 작업 디렉터리는 worktree `<repo>/.claude/worktrees/flow-readability`(브랜치 `worktree-flow-readability`). main 체크아웃으로 `cd` 금지.
 - 테스트: `swift test --package-path Packages/EyeProxyKit`(기준 75) / `Packages/EyeProxyCore`(기준 36). 앱 빌드: `xcodegen generate && xcodebuild build -scheme EyeProxy -configuration Debug -destination 'platform=macOS' -allowProvisioningUpdates 2>&1 | grep -E "warning:|error:|BUILD"` → 경고 0.
 - 기존 동작 유지: 2MB 본문 컷, hex 덤프, 이미지·HTML 미리보기, 컬럼 가시성 저장, 컨텍스트 메뉴(SSL 프록싱·cURL), 레이아웃 A/B.
 
@@ -105,10 +105,10 @@
 `FlowRowTests.swift`:
 ```swift
 @Test func rowDerivesSortKeys() {
-    var f = Flow.fixture(url: "https://api.tving.com/v2?x=1", method: "POST", status: 404)
+    var f = Flow.fixture(url: "https://api.example.com/v2?x=1", method: "POST", status: 404)
     f.response?.body = Data(count: 12); f.completedAt = f.startedAt.addingTimeInterval(0.0634)
     let r = FlowRow(flow: f, number: 7)
-    #expect(r.number == 7 && r.method == "POST" && r.host == "api.tving.com" && r.status == 404 && r.size == 12 && r.durationMS == 63)
+    #expect(r.number == 7 && r.method == "POST" && r.host == "api.example.com" && r.status == 404 && r.size == 12 && r.durationMS == 63)
     var p = Flow.fixture(client: "1", decrypted: false); #expect(FlowRow(flow: p, number: 1).status == -1 && FlowRow(flow: p, number: 1).size == -1 && FlowRow(flow: p, number: 1).durationMS == -1)
     p.error = "x"; #expect(FlowRow(flow: p, number: 1).status == -2)
 }
@@ -144,8 +144,8 @@
 - [ ] **Step 1: 실패 테스트** — `settingsDefaultsAndPersistence`에 추가:
 ```swift
 #expect(s.pinnedHosts.isEmpty && s.wrapLongLines)
-s.togglePin("api.tving.com"); s.togglePin("gw.tving.com"); s.togglePin("api.tving.com"); s.wrapLongLines = false
-#expect(AppSettings(defaults: d).pinnedHosts == ["gw.tving.com"] && !AppSettings(defaults: d).wrapLongLines)
+s.togglePin("api.example.com"); s.togglePin("gw.example.com"); s.togglePin("api.example.com"); s.wrapLongLines = false
+#expect(AppSettings(defaults: d).pinnedHosts == ["gw.example.com"] && !AppSettings(defaults: d).wrapLongLines)
 ```
 - [ ] **Step 2: 실패 확인** — `--filter settingsDefaultsAndPersistence` → 컴파일 실패.
 - [ ] **Step 3: 구현** — 기존 `didSet` 저장 패턴 그대로.
@@ -295,19 +295,19 @@ s.togglePin("api.tving.com"); s.togglePin("gw.tving.com"); s.togglePin("api.tvin
 private func flow(_ client: String, _ url: String) -> Flow { var f = Flow.fixture(url: url, method: "GET", status: 200); f = Flow(id: f.id, clientAddress: client, startedAt: f.startedAt, request: f.request, response: f.response); return f }
 
 @Test func treeSplitsMacByAppAndRemoteByHost() {
-    let a = flow("127.0.0.1", "https://www.tving.com/"), b = flow("127.0.0.1", "https://api.tving.com/x"), c = flow("::1", "https://api.tving.com/y"), d = flow("192.168.0.9", "https://api.tving.com/z")
+    let a = flow("127.0.0.1", "https://www.example.com/"), b = flow("127.0.0.1", "https://api.example.com/x"), c = flow("::1", "https://api.example.com/y"), d = flow("192.168.0.9", "https://api.example.com/z")
     let safari = ProcessIdentity(pid: 1, path: "/Applications/Safari.app/Contents/MacOS/Safari")
     let sim = ProcessIdentity(pid: 2, path: "/x/CoreSimulator/Devices/U1/data/TVING.app/TVING")
-    let t = SidebarTree.build(flows: [a, b, c, d], attribution: [a.id: safari, b.id: sim], devices: [Device(address: "192.168.0.9", name: "거실 TV", kind: .appleTV, lastSeen: .now)], pinned: ["gw.tving.com", "api.tving.com"], runtimes: ["U1": "tvOS 18.1"])
-    #expect(t.pinned.map(\.host) == ["gw.tving.com", "api.tving.com"] && t.pinned.map(\.count) == [0, 3])
+    let t = SidebarTree.build(flows: [a, b, c, d], attribution: [a.id: safari, b.id: sim], devices: [Device(address: "192.168.0.9", name: "거실 TV", kind: .appleTV, lastSeen: .now)], pinned: ["gw.example.com", "api.example.com"], runtimes: ["U1": "tvOS 18.1"])
+    #expect(t.pinned.map(\.host) == ["gw.example.com", "api.example.com"] && t.pinned.map(\.count) == [0, 3])
     #expect(t.devices.count == 2)
     let mac = t.devices.first { $0.address == "127.0.0.1" }!
     #expect(mac.displayName == "이 Mac" && mac.kind == .thisMac && mac.count == 3 && mac.hosts.isEmpty)
     #expect(mac.apps.map(\.displayName) == ["Safari", "TVING (tvOS 시뮬레이터)", "기타"] || mac.apps.map(\.displayName) == ["TVING (tvOS 시뮬레이터)", "Safari", "기타"])
-    #expect(mac.apps.last!.groupKey == FlowFilter.unknownProcessKey && mac.apps.last!.hosts == [HostNode(host: "api.tving.com", count: 1)])
+    #expect(mac.apps.last!.groupKey == FlowFilter.unknownProcessKey && mac.apps.last!.hosts == [HostNode(host: "api.example.com", count: 1)])
     let tv = t.devices.first { $0.address == "192.168.0.9" }!
-    #expect(tv.displayName == "거실 TV" && tv.kind == .appleTV && tv.apps.isEmpty && tv.hosts == [HostNode(host: "api.tving.com", count: 1)])
-    #expect(t.hosts.map(\.host) == ["api.tving.com", "www.tving.com"])
+    #expect(tv.displayName == "거실 TV" && tv.kind == .appleTV && tv.apps.isEmpty && tv.hosts == [HostNode(host: "api.example.com", count: 1)])
+    #expect(t.hosts.map(\.host) == ["api.example.com", "www.example.com"])
 }
 @Test func treeMergesLoopbackAddresses() {
     let t = SidebarTree.build(flows: [flow("::1", "https://a/"), flow("127.0.0.1", "https://a/")], attribution: [:], devices: [], pinned: [], runtimes: [:])
@@ -509,7 +509,7 @@ private func flow(_ client: String, _ url: String) -> Flow { var f = Flow.fixtur
 
 - [ ] **Step 3: `JSONTreeView`** — `OutlineGroup(nodes, children: \.children)`에 `JSONTreeNode`; `JSONBody`의 `.task(id: mode)`에서 `JSONTreeNode.parse(pretty:)`.
 
-- [ ] **Step 4: 빌드·확인** — 경고 0. 앱에서 JSON 응답 선택: 줄번호·색·줄바꿈 토글 동작, Tree 키 순서가 원문과 같음, 1MB 이상 JSON에서 멈추지 않음(`curl -o` 없이 큰 응답은 image.tving.com 같은 바이너리로 hex 확인).
+- [ ] **Step 4: 빌드·확인** — 경고 0. 앱에서 JSON 응답 선택: 줄번호·색·줄바꿈 토글 동작, Tree 키 순서가 원문과 같음, 1MB 이상 JSON에서 멈추지 않음(`curl -o` 없이 큰 응답은 image.example.com 같은 바이너리로 hex 확인).
 
 - [ ] **Step 5: 커밋** — `feat(app): 줄번호·색·줄바꿈 본문 뷰`
 

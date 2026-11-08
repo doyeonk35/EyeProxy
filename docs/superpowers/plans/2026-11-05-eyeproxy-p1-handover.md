@@ -33,7 +33,7 @@ gh api -X POST repos/doyeonk35/EyeProxy/pages -f build_type=legacy -f 'source[br
 9. 시뮬레이터 부팅 → 기기 창 새로고침 → CA 설치 → iOS 시뮬 Safari로 `https://example.com`(SSL 목록에 추가) → 복호화 행("이 Mac" 그룹).
 
 **C. 실기기**
-10. Apple TV: 기기 창 › 실기기 프로필 만들기(SSID·비밀번호·Mac IP) → Apple Configurator 드롭 → TV `설정 > 일반 > 프로필 > 프로필 추가`에 `http://eyeproxy/ssl` → 인증서 신뢰 → TVING 앱 → `api.tving.com` SSL 목록 추가 → JSON 보임, 사이드바 기기 이름 변경.
+10. Apple TV: 기기 창 › 실기기 프로필 만들기(SSID·비밀번호·Mac IP) → Apple Configurator 드롭 → TV `설정 > 일반 > 프로필 > 프로필 추가`에 `http://eyeproxy/ssl` → 인증서 신뢰 → TVING 앱 → `api.example.com` SSL 목록 추가 → JSON 보임, 사이드바 기기 이름 변경.
 11. iPhone: Wi-Fi 수동 프록시 → Safari `http://eyeproxy/ssl` → 설치·신뢰 → 앱 트래픽.
 12. iPhone 신뢰 off 상태로 요청 → 기기 창 연결 로그에 "기기가 EyeProxy 인증서를 신뢰하지 않습니다 (…)".
 13. 공용 기기에 두 사람 CA 설치 → 서로 덮어쓰지 않음(식별자 분리). 기존 `com.tv.eyeproxy.ca` 프로필이 있으면 수동 삭제.

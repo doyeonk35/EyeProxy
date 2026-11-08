@@ -13,11 +13,11 @@ import Crypto
 }
 @Test func leafIsSignedByCAAndHasSAN() throws {
     let ca = try CertificateAuthority.generate()
-    let leaf = try ca.leaf(for: "api.tving.com")
+    let leaf = try ca.leaf(for: "api.example.com")
     let cert = try Certificate(derEncoded: leaf.certificateDER)
     let caCert = try Certificate(derEncoded: ca.certificateDER)
     #expect(cert.issuer == caCert.subject)
-    #expect(try cert.extensions.subjectAlternativeNames?.contains(.dnsName("api.tving.com")) == true)
+    #expect(try cert.extensions.subjectAlternativeNames?.contains(.dnsName("api.example.com")) == true)
     #expect(try cert.extensions.extendedKeyUsage?.contains(.serverAuth) == true)
 }
 @Test func saveAndLoadRoundTrip() throws {
@@ -64,10 +64,10 @@ private func tempDir() -> URL { FileManager.default.temporaryDirectory.appending
 }
 @Test func leafValidityIs397DaysAndHostIsNormalized() throws {
     let ca = try CertificateAuthority.generate()
-    let a = try ca.leaf(for: "API.Tving.com.")
+    let a = try ca.leaf(for: "API.Example.com.")
     let cert = try Certificate(derEncoded: a.certificateDER)
     let days = cert.notValidAfter.timeIntervalSince(cert.notValidBefore) / 86400
     #expect(abs(days - (397 + 1.0 / 24)) < 0.01)
-    #expect(try cert.extensions.subjectAlternativeNames == SubjectAlternativeNames([.dnsName("api.tving.com")]))
+    #expect(try cert.extensions.subjectAlternativeNames == SubjectAlternativeNames([.dnsName("api.example.com")]))
     #expect(cert.issuer == (try Certificate(derEncoded: ca.certificateDER)).subject)
 }
