@@ -24,12 +24,14 @@ public struct BreakpointInterceptor: RequestInterceptor, ResponseInterceptor {
             return .drop
         case .abort(let status):
             context.annotate(ToolMark.annotation(.breakpoint, detail: "중단 \(status)"))
+            // 만든 응답도 응답 체인을 지나므로, 응답 단계에서 멈출 규칙이 있을 때만 건너뛰기 표시를 남긴다.
+            if self.rule(for: request, phase: .response) != nil { await center.markAborted(context.id) }
             return .respond(Self.abortResponse(status))
         }
     }
 
     public func intercept(_ response: FlowResponse, for request: FlowRequest, context: FlowContext) async -> ResponseDecision {
-        guard let rule = rule(for: request, phase: .response) else { return .continue(response) }
+        guard let rule = rule(for: request, phase: .response), await !center.consumeAborted(context.id) else { return .continue(response) }
         let item = PausedItem(flowID: context.id, phase: .response, ruleName: rule.name, request: request, response: response)
         switch await center.pause(item) {
         case .continueOriginal, .executeRequest: return .continue(response)

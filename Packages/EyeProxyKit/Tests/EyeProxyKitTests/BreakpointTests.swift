@@ -149,6 +149,24 @@ private func continued(_ d: ResponseDecision) -> FlowResponse? {
         #expect(a.all.last == .tool("Breakpoint: 연결 끊김"))
     }
 
+    @Test func abortResponseDoesNotPauseAgain() async throws {
+        let center = BreakpointCenter()
+        let bp = interceptor([rule(request: true, response: true)], center)
+        let ctx = Annotations().context
+        let task = Task { await bp.intercept(original, context: ctx) }
+        let item = try #require(await waitPending(center, 1).first)
+        center.resolve(item.id, with: .abort(status: 429))
+        let made = try #require(responded(await task.value))
+        // Core가 만든 응답을 응답 체인에 넘긴다: 멈추지 않고 바로 통과.
+        #expect(continued(await bp.intercept(made, for: original, context: ctx)) == made)
+        #expect(center.pending.isEmpty)
+        // 표시는 한 번 쓰면 사라진다: 같은 흐름의 다음 응답은 다시 멈춘다.
+        let again = Task { await bp.intercept(originalResponse, for: original, context: ctx) }
+        let i2 = try #require(await waitPending(center, 1).first)
+        center.resolve(i2.id, with: .continueOriginal)
+        #expect(continued(await again.value) == originalResponse)
+    }
+
     @Test func releaseAllContinuesOriginal() async throws {
         let center = BreakpointCenter()
         let bp = interceptor([rule(request: true, response: true)], center)

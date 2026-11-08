@@ -40,6 +40,8 @@ public enum BreakpointResolution: Sendable, Equatable {
 public final class BreakpointCenter {
     public private(set) var pending: [PausedItem] = []
     @ObservationIgnored private var waiters: [UUID: CheckedContinuation<BreakpointResolution, Never>] = [:]
+    /// 요청 단계에서 Abort로 응답을 만든 흐름. 그 응답은 응답 단계에서 다시 멈추지 않는다(꺼낼 때 지운다).
+    @ObservationIgnored private var aborted: Set<FlowID> = []
 
     public init() {}
 
@@ -65,5 +67,11 @@ public final class BreakpointCenter {
     /// 앱 종료 시: 전부 원본대로 보낸다.
     public func releaseAll() {
         for id in Array(waiters.keys) { resolve(id, with: .continueOriginal) }
+        aborted.removeAll()
     }
+
+    func markAborted(_ id: FlowID) { aborted.insert(id) }
+
+    /// 표시돼 있었으면 지우고 true.
+    func consumeAborted(_ id: FlowID) -> Bool { aborted.remove(id) != nil }
 }
