@@ -68,3 +68,13 @@ private func tempDir() -> URL {
     #expect(store.tree(.test).nodes.isEmpty && store.loadWarnings.count == 1)
     #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("test.json").path))
 }
+
+@Test @MainActor func mapLocalDirectoryHonorsOverride() {
+    let dir = tempDir()
+    let store = RuleStore(directory: dir)
+    let custom = URL(fileURLWithPath: "/tmp/eyeproxy-custom", isDirectory: true)
+    store.mapLocalFolderOverride = custom
+    #expect(store.mapLocalDirectory == custom)
+    store.mapLocalFolderOverride = nil
+    #expect(store.mapLocalDirectory == dir.deletingLastPathComponent().appendingPathComponent("map-local", isDirectory: true))
+}

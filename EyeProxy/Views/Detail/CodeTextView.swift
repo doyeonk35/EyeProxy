@@ -1,13 +1,17 @@
 import AppKit
 import SwiftUI
 
-/// 읽기 전용·선택 가능한 모노 텍스트(줄번호·줄바꿈 토글). `text`는 인스턴스가 바뀔 때만 다시 넣는다.
+/// 선택 가능한 모노 텍스트(줄번호·줄바꿈 토글). `text`는 인스턴스가 바뀔 때만 다시 넣는다.
+/// `isEditable`이면 일반 텍스트로 편집되고 글자마다 `onChange`가 불린다. 이때 같은 문자열의 새 `text`는
+/// 색(속성)만 입혀 커서·되돌리기를 건드리지 않는다.
 ///
 /// 줄번호는 NSRulerView를 쓰지 않고 텍스트 뷰 왼쪽 여백에 직접 그린다. macOS 26에서 세로 ruler에
 /// 스크롤 가장자리 덮개(NSBannerView)가 붙어 본문과 그 위 툴바까지 가려 보이지 않았다.
 struct CodeTextView: NSViewRepresentable {
     let text: NSAttributedString
     let wrap: Bool
+    var isEditable = false
+    var onChange: ((String) -> Void)?
 
     static let font = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular)
 
@@ -16,18 +20,35 @@ struct CodeTextView: NSViewRepresentable {
         NSMutableAttributedString(string: s, attributes: [.font: font, .foregroundColor: NSColor.textColor])
     }
 
-    final class Coordinator {
+    @MainActor final class Coordinator: NSObject, NSTextViewDelegate {
         var text: NSAttributedString?
         var wrap: Bool?
+        var onChange: ((String) -> Void)?
+
+        func textDidChange(_ notification: Notification) {
+            guard let tv = notification.object as? GutterTextView else { return }
+            tv.reloadLineStarts()
+            onChange?(tv.string)
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSScrollView {
         let tv = GutterTextView()
-        tv.isEditable = false
+        tv.isEditable = isEditable
         tv.isSelectable = true
+        tv.isRichText = false
+        tv.allowsUndo = isEditable
         tv.usesFontPanel = false
+        // JSON·헤더를 고치므로 따옴표·대시 자동 치환과 맞춤법 교정을 끈다.
+        tv.isAutomaticQuoteSubstitutionEnabled = false
+        tv.isAutomaticDashSubstitutionEnabled = false
+        tv.isAutomaticTextReplacementEnabled = false
+        tv.isAutomaticSpellingCorrectionEnabled = false
+        tv.isContinuousSpellCheckingEnabled = false
+        tv.typingAttributes = [.font: Self.font, .foregroundColor: NSColor.textColor]
+        tv.delegate = context.coordinator
         tv.font = Self.font
         tv.textColor = .textColor
         tv.backgroundColor = .textBackgroundColor
@@ -48,6 +69,9 @@ struct CodeTextView: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let tv = scroll.documentView as? GutterTextView, let tc = tv.textContainer else { return }
         let c = context.coordinator
+        c.onChange = onChange
+        tv.isEditable = isEditable
+        tv.allowsUndo = isEditable
         if c.wrap != wrap {
             c.wrap = wrap
             let big = CGFloat.greatestFiniteMagnitude
@@ -61,11 +85,26 @@ struct CodeTextView: NSViewRepresentable {
                 tc.containerSize = NSSize(width: big, height: big)
             }
         }
-        if c.text !== text {
+        if c.text !== text, let storage = tv.textStorage {
             c.text = text
-            tv.textStorage?.setAttributedString(text)
-            tv.reloadLineStarts()
+            if isEditable, storage.string == text.string {
+                recolor(storage, from: text)
+            } else {
+                storage.setAttributedString(text)
+                tv.reloadLineStarts()
+            }
         }
+    }
+
+    /// 글자는 그대로 두고 글자색만 `text`의 것으로 바꾼다.
+    private func recolor(_ storage: NSTextStorage, from text: NSAttributedString) {
+        let full = NSRange(location: 0, length: storage.length)
+        storage.beginEditing()
+        storage.addAttribute(.foregroundColor, value: NSColor.textColor, range: full)
+        text.enumerateAttribute(.foregroundColor, in: full) { value, range, _ in
+            if let value { storage.addAttribute(.foregroundColor, value: value, range: range) }
+        }
+        storage.endEditing()
     }
 }
 

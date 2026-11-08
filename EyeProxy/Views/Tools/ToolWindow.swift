@@ -28,6 +28,10 @@ where Columns.TableRowValue == ToolRow<Rule>, Columns.TableColumnSortComparator 
     let newRule: () -> Rule
     var editorStyle: ToolEditorStyle = .sheet
     var helpURL: URL?
+    /// 표 아래 회색 안내(Map Remote의 /etc/hosts 안내).
+    var note: LocalizedStringKey?
+    /// 우클릭 ▸ Tools로 만든 새 규칙을 편집기에 넘기기 전에 도구별로 더 채운다(Map Local 응답 메시지).
+    var prefill: ((inout Rule, PendingNewRule) -> Void)?
     let moreItems: AnyView
     let editor: (Binding<Rule>, _ onSave: @escaping (Rule) -> Void, _ onCancel: @escaping () -> Void) -> Editor
     let columns: Columns
@@ -44,6 +48,7 @@ where Columns.TableRowValue == ToolRow<Rule>, Columns.TableColumnSortComparator 
 
     init(windowID: String, title: String, description: String, toolSwitch: WritableKeyPath<ToolSwitches, Bool>,
          file: RuleFile<Rule>, newRule: @escaping () -> Rule, editorStyle: ToolEditorStyle = .sheet, helpURL: URL? = nil,
+         note: LocalizedStringKey? = nil, prefill: ((inout Rule, PendingNewRule) -> Void)? = nil,
          @ViewBuilder moreItems: () -> some View = { EmptyView() },
          @ViewBuilder editor: @escaping (Binding<Rule>, _ onSave: @escaping (Rule) -> Void, _ onCancel: @escaping () -> Void) -> Editor,
          @TableColumnBuilder<ToolRow<Rule>, Never> columns: () -> Columns) {
@@ -55,6 +60,8 @@ where Columns.TableRowValue == ToolRow<Rule>, Columns.TableColumnSortComparator 
         self.newRule = newRule
         self.editorStyle = editorStyle
         self.helpURL = helpURL
+        self.note = note
+        self.prefill = prefill
         self.moreItems = AnyView(moreItems())
         self.editor = editor
         self.columns = columns()
@@ -76,6 +83,9 @@ where Columns.TableRowValue == ToolRow<Rule>, Columns.TableColumnSortComparator 
                 .overlay {
                     if tree.nodes.isEmpty { Text("Click \"+\" or ⌘N to add new entry").foregroundStyle(.secondary) }
                 }
+            if let note {
+                Text(note).font(.caption).foregroundStyle(.secondary).padding(.horizontal).padding(.top, 6)
+            }
             Text("New: ⌘N  Edit: ⌘↩  Delete: ⌘⌫  Duplicate: ⌘D  Toggle: ␣")
                 .font(.caption).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)
@@ -302,6 +312,7 @@ where Columns.TableRowValue == ToolRow<Rule>, Columns.TableColumnSortComparator 
         model.pendingNewRule = nil
         var rule = newRule()
         rule.match = pending.match
+        prefill?(&rule, pending)
         openEditor(rule)
     }
 }

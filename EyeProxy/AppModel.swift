@@ -41,6 +41,8 @@ final class AppModel {
     var pendingNewRule: PendingNewRule?
     /// 별도 창 편집기(`ToolEditorStyle.window`)로 넘기는 규칙. 키 = 규칙 id.
     var editorDrafts: [String: any ToolRule] = [:]
+    /// 우클릭 ▸ Tools ▸ Map Local…로 미리 채운 HTTP 메시지. 키 = 규칙 id. Map Local 편집기가 꺼낸다.
+    var editorMessages: [String: String] = [:]
     var settingsTab: SettingsTab = .general
 
     // 온보딩(기기 윈도우)
@@ -85,6 +87,7 @@ final class AppModel {
         _ = rules.ruleSet
         _ = rules.customNetworkProfiles
         _ = rules.breakpointTemplates
+        rules.mapLocalFolderOverride = settings.mapLocalDefaultFolder.map { URL(fileURLWithPath: $0, isDirectory: true) }
         observeTools()
         // 백업 없이 VPN 복사본만 남은 경우(종료 때 관리자 인증 취소 등)도 시작 시 알린다.
         Task { await refreshEffectiveProxyWarning() }

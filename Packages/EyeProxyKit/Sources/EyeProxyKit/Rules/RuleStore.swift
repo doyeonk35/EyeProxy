@@ -14,9 +14,12 @@ public final class RuleStore {
     public private(set) var revision = 0
     public private(set) var loadWarnings: [String] = []
 
-    /// Map Local 응답 파일 폴더(`rules`의 형제).
+    /// More ▸ Default Local File Folder로 고른 폴더. nil이면 기본 폴더.
+    public var mapLocalFolderOverride: URL?
+
+    /// Map Local 응답 파일 폴더. 기본은 `rules`의 형제 `map-local`.
     public var mapLocalDirectory: URL {
-        directory.deletingLastPathComponent().appendingPathComponent("map-local", isDirectory: true)
+        mapLocalFolderOverride ?? directory.deletingLastPathComponent().appendingPathComponent("map-local", isDirectory: true)
     }
 
     /// 파일 이름 → 디코드된 `RuleTree<R>`. 읽기만으로 뷰가 다시 그려지지 않게 관찰 제외.

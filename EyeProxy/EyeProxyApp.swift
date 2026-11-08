@@ -71,6 +71,19 @@ import SwiftUI
             AllowListWindow().environment(model)
         }
         .defaultSize(width: 1200, height: 672)
+        Window("Map Local", id: "tool-map-local") {
+            MapLocalWindow().environment(model)
+        }
+        .defaultSize(width: 1200, height: 672)
+        WindowGroup("Map Local Editor", id: "map-local-editor", for: String.self) { $ruleID in
+            if let ruleID { MapLocalEditor(ruleID: ruleID).environment(model) }
+        }
+        .defaultSize(width: 1050, height: 900)
+        .restorationBehavior(.disabled)
+        Window("Map Remote", id: "tool-map-remote") {
+            MapRemoteWindow().environment(model)
+        }
+        .defaultSize(width: 1200, height: 672)
         PlaceholderToolScenes()
         Window("기기", id: "devices") {
             DevicesView()

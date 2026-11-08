@@ -22,6 +22,8 @@ public final class AppSettings {
     public var toolSwitches: ToolSwitches {
         didSet { defaults.set(try? JSONEncoder().encode(toolSwitches), forKey: "eyeproxy.toolSwitches") }
     }
+    /// Map Local 응답 파일 폴더(More ▸ Default Local File Folder). nil이면 기본 폴더.
+    public var mapLocalDefaultFolder: String? { didSet { defaults.set(mapLocalDefaultFolder, forKey: "eyeproxy.mapLocalDefaultFolder") } }
     /// 저장하지 않는다 (실행할 때마다 기록 중으로 시작).
     public var isRecording = true
 
@@ -37,6 +39,7 @@ public final class AppSettings {
         pinnedHosts = defaults.stringArray(forKey: "eyeproxy.pinnedHosts") ?? []
         wrapLongLines = defaults.object(forKey: "eyeproxy.wrapLongLines") as? Bool ?? true
         appearance = defaults.string(forKey: "eyeproxy.appearance").flatMap(Appearance.init(rawValue:)) ?? .system
+        mapLocalDefaultFolder = defaults.string(forKey: "eyeproxy.mapLocalDefaultFolder")
         toolSwitches = defaults.data(forKey: "eyeproxy.toolSwitches").flatMap { try? JSONDecoder().decode(ToolSwitches.self, from: $0) } ?? ToolSwitches()
     }
 

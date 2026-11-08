@@ -32,3 +32,13 @@ import Testing
     d.set(Data("x".utf8), forKey: "eyeproxy.toolSwitches")
     #expect(AppSettings(defaults: d).toolSwitches == ToolSwitches())
 }
+
+@Test @MainActor func mapLocalDefaultFolderPersists() {
+    let d = UserDefaults(suiteName: UUID().uuidString)!
+    let s = AppSettings(defaults: d)
+    #expect(s.mapLocalDefaultFolder == nil)
+    s.mapLocalDefaultFolder = "/tmp/maps"
+    #expect(AppSettings(defaults: d).mapLocalDefaultFolder == "/tmp/maps")
+    s.mapLocalDefaultFolder = nil
+    #expect(AppSettings(defaults: d).mapLocalDefaultFolder == nil)
+}
