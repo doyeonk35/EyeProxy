@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- AppIcon.svg의 16·32px용 단순판: 혀·패킷 없음, 눈 키우고 입 굵게. scripts/make-icons.sh가 사용. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2fd36f"/><stop offset="1" stop-color="#149a4a"/>
+    </linearGradient>
+    <clipPath id="squircle"><rect width="1024" height="1024" rx="230"/></clipPath>
+  </defs>
+  <g clip-path="url(#squircle)">
+    <rect width="1024" height="1024" fill="url(#bg)"/>
+    <!-- 머리 -->
+    <path d="M150 640 C150 420, 874 420, 874 640 C874 820, 700 900, 512 900 C324 900, 150 820, 150 640 Z" fill="#9bf0b5"/>
+    <!-- 눈 -->
+    <circle cx="330" cy="450" r="175" fill="#9bf0b5"/>
+    <circle cx="694" cy="450" r="175" fill="#9bf0b5"/>
+    <circle cx="330" cy="450" r="120" fill="#ffffff"/>
+    <circle cx="694" cy="450" r="120" fill="#ffffff"/>
+    <circle cx="350" cy="465" r="64" fill="#0b2a16"/>
+    <circle cx="714" cy="465" r="64" fill="#0b2a16"/>
+    <!-- 입 -->
+    <path d="M320 720 C420 800, 604 800, 704 720" stroke="#0b2a16" stroke-width="64" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>
