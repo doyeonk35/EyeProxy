@@ -4,12 +4,16 @@ enum ShellError: Error { case privilegedFailed(String) }
 
 /// 절대경로 실행 파일을 Process로 실행. 0이 아닌 종료 코드는 throw하지 않는다(호출자가 status 확인).
 /// stdin: 표준 입력으로 줄 문자열(scutil 대화형 명령 등). 출력과 같이 임시 파일로 넘긴다.
+/// environment: 현재 환경에 덧붙일 변수(비밀번호처럼 인자에 노출하면 안 되는 값).
 enum Shell {
-    static func run(_ command: String, _ args: [String], stdin: String? = nil) async throws -> (status: Int32, stdout: String, stderr: String) {
+    static func run(_ command: String, _ args: [String], stdin: String? = nil, environment: [String: String]? = nil) async throws -> (status: Int32, stdout: String, stderr: String) {
         try await withCheckedThrowingContinuation { cont in
             let p = Process()
             p.executableURL = URL(fileURLWithPath: command)
             p.arguments = args
+            if let environment {
+                p.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
+            }
             // 파이프 버퍼(64KB) 교착을 피하려고 임시 파일로 출력을 받는다.
             let dir = FileManager.default.temporaryDirectory
             let outURL = dir.appending(path: "eyeproxy-\(UUID()).out"), errURL = dir.appending(path: "eyeproxy-\(UUID()).err")

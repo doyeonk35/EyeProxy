@@ -57,11 +57,14 @@ public final class CertificateAuthority: Sendable {
         try fm.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         // 키를 먼저, 처음부터 0600으로 생성
         let keyURL = directory.appending(path: "ca-key.pem")
-        guard fm.createFile(atPath: keyURL.path, contents: Data(key.pemRepresentation.utf8), attributes: [.posixPermissions: 0o600]) else {
+        guard fm.createFile(atPath: keyURL.path, contents: Data(privateKeyPEM.utf8), attributes: [.posixPermissions: 0o600]) else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: keyURL.path])
         }
         try certificatePEM.write(to: directory.appending(path: "ca.pem"), atomically: true, encoding: .utf8)
     }
+
+    /// CA 개인키 PEM(`ca-key.pem`에 저장되는 것과 같은 바이트). 비밀 값이므로 로그·인자에 넣지 않는다.
+    public var privateKeyPEM: String { key.pemRepresentation }
 
     public var commonName: String {
         for rdn in certificate.subject { for a in rdn where a.type == .RDNAttributeType.commonName {

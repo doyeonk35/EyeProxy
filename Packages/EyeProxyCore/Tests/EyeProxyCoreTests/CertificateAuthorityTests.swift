@@ -79,3 +79,9 @@ private func tempDir() -> URL { FileManager.default.temporaryDirectory.appending
     #expect(fp == ca.sha256Fingerprint)
     #expect(fp == SHA256.hash(data: ca.certificateDER).map { String(format: "%02X", $0) }.joined(separator: ":"))
 }
+@Test func privateKeyPEMRoundTrips() throws {
+    let ca = try CertificateAuthority.generate()
+    let key = try P256.Signing.PrivateKey(pemRepresentation: ca.privateKeyPEM)
+    let cert = try Certificate(derEncoded: ca.certificateDER)
+    #expect(cert.publicKey == Certificate.PublicKey(key.publicKey))
+}
