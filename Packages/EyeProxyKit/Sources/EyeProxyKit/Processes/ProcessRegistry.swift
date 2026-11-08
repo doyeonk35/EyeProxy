@@ -9,6 +9,7 @@ public final class ProcessRegistry {
     public init() {}
 
     public func set(_ identity: ProcessIdentity, for id: FlowID) { attribution[id] = identity }
+    public func remove(_ id: FlowID) { attribution[id] = nil }
     public func replace(_ all: [FlowID: ProcessIdentity]) { attribution = all }
     public func clear() { attribution = [:] }
 }

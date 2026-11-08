@@ -32,7 +32,23 @@ public final class SessionStore {
             if connectionLog.count > Self.logCap { connectionLog.removeFirst(connectionLog.count - Self.logCap) }
         case .annotated(let id, let annotation):
             guard let i = index[id] else { return }
-            flows[i].annotations.append(annotation)
+            if annotation == .unrecorded {
+                remove(at: i)
+            } else if !flows[i].annotations.contains(annotation) {
+                flows[i].annotations.append(annotation)
+            }
+        }
+    }
+
+    /// 번호는 항상 위치 + 1이므로(`replace`와 같음) 뒤 흐름들의 위치·번호를 한 칸씩 당긴다.
+    private func remove(at i: Int) {
+        let removed = flows.remove(at: i)
+        index[removed.id] = nil
+        numbers[removed.id] = nil
+        next -= 1
+        for k in i..<flows.count {
+            index[flows[k].id] = k
+            numbers[flows[k].id] = k + 1
         }
     }
 

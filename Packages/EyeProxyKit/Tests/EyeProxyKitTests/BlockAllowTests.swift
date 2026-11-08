@@ -20,12 +20,6 @@ private func request(_ url: String) -> FlowRequest {
 
 private let connectCtx = ConnectContext(clientAddress: "127.0.0.1", clientPort: 5000)
 
-private final class Counter: Sendable {
-    private let n = Mutex(0)
-    var value: Int { n.withLock { $0 } }
-    func bump() { n.withLock { $0 += 1 } }
-}
-
 private func block(_ rules: [BlockRule], app: String? = nil, calls: Counter = Counter()) -> BlockInterceptor {
     BlockInterceptor(rules: RuleTree(nodes: rules.map { .rule($0) })) { _, _ in
         calls.bump()

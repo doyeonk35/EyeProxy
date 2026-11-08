@@ -22,6 +22,8 @@ public struct FlowFilter: Equatable, Sendable {
     public var host: String? = nil
     /// ProcessIdentity.groupKey. 귀속 없는 흐름의 키는 `unknownProcessKey`.
     public var process: String? = nil
+    /// false면 `.hidden` 주석이 있는 흐름(Block List의 숨김)을 뺀다.
+    public var includeHidden = false
 
     public init(text: String = "", device: String? = nil, host: String? = nil) {
         self.text = text
@@ -39,6 +41,7 @@ public struct FlowFilter: Equatable, Sendable {
 
     /// process: 그 흐름의 groupKey(귀속 없으면 nil).
     public func matches(_ flow: Flow, process: String?) -> Bool {
+        if !includeHidden, flow.annotations.contains(.hidden) { return false }
         if let device, !Self.sameDevice(flow.clientAddress, device) { return false }
         if let wanted = self.process, (process ?? Self.unknownProcessKey) != wanted { return false }
         if let host, flow.request.host != host { return false }

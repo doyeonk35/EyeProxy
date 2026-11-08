@@ -29,3 +29,16 @@ public struct FlowRow: Identifiable, Sendable {
         durationMS = flow.completedAt.map { Int((($0.timeIntervalSince(flow.startedAt)) * 1000).rounded()) } ?? -1
     }
 }
+
+extension Flow {
+    /// 상세 헤더에 보일 도구 주석. 숨김·미기록 표시는 뺀다.
+    public var annotationLabels: [String] {
+        annotations.compactMap {
+            switch $0 {
+            case .tool(let label): label
+            case .originalURL(let url): "원래 URL: \(url)"
+            case .hidden, .unrecorded: nil
+            }
+        }
+    }
+}
