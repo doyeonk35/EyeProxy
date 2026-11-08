@@ -86,3 +86,16 @@ import Testing
     let s = SessionStore(); s.replace(flows: loaded.flows, numbers: loaded.numbers)
     #expect(fs.map { s.number($0.id) } == [1, 2, 3])
 }
+
+@Test @MainActor func sessionFileRoundTripsHighlights() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).eyeproxy"); defer { try? FileManager.default.removeItem(at: url) }
+    let a = Flow.fixture(client: "1", decrypted: false), b = Flow.fixture(client: "2", decrypted: false)
+    let highlights = [a.id: FlowHighlight(color: .purple, strikethrough: true), b.id: FlowHighlight(color: nil, strikethrough: true)]
+    try SessionDocument.save(flows: [a, b], connectionLog: [], highlights: highlights, to: url)
+    let loaded = try SessionDocument.load(from: url)
+    #expect(loaded.highlights == highlights)
+    let s = SessionStore(); s.replace(flows: loaded.flows, highlights: loaded.highlights, numbers: loaded.numbers)
+    #expect(s.highlights == highlights)
+    try Data(#"{"version":1,"flows":[],"connectionLog":[]}"#.utf8).write(to: url.appending(path: "index.json"))
+    #expect(try SessionDocument.load(from: url).highlights.isEmpty)   // 구버전 세션
+}

@@ -307,11 +307,12 @@ final class AppModel {
         stamp.dateFormat = "yyyyMMdd-HHmm"
         panel.nameFieldStringValue = "Prog-\(stamp.string(from: .now)).\(SessionDocument.pathExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let (flows, log, attribution, comments, numbers) =
-            (session.flows, session.connectionLog, processes.attribution, session.comments, session.numbersByID)
+        let (flows, log, attribution, comments, highlights, numbers) =
+            (session.flows, session.connectionLog, processes.attribution, session.comments, session.highlights, session.numbersByID)
         do {
             try await Task.detached {
-                try SessionDocument.save(flows: flows, connectionLog: log, processes: attribution, comments: comments, numbers: numbers, to: url)
+                try SessionDocument.save(flows: flows, connectionLog: log, processes: attribution, comments: comments,
+                                         highlights: highlights, numbers: numbers, to: url)
             }.value
         } catch {
             systemError = String(localized: "세션을 저장하지 못했습니다: \(error.localizedDescription)")
@@ -325,7 +326,8 @@ final class AppModel {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let loaded = try await Task.detached { try SessionDocument.load(from: url) }.value
-            session.replace(flows: loaded.flows, connectionLog: loaded.connectionLog, comments: loaded.comments, numbers: loaded.numbers)
+            session.replace(flows: loaded.flows, connectionLog: loaded.connectionLog, comments: loaded.comments,
+                            highlights: loaded.highlights, numbers: loaded.numbers)
             processes.replace(loaded.processes)
             filter = FlowFilter()
             selectedFlowID = nil
