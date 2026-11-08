@@ -20,3 +20,37 @@ import Testing
     #expect(FlowFilter(device: "192.168.0.21", host: "api.example.com").matches(f))
     #expect(!FlowFilter(device: "other").matches(f)); #expect(!FlowFilter(host: "x.com").matches(f))
 }
+
+private func typed(_ url: String, status: Int, _ type: String) -> Flow {
+    var f = Flow.fixture(url: url, method: "GET", status: status)
+    f.response?.headers = [HTTPHeader(name: "Content-Type", value: type)]
+    return f
+}
+
+@Test func barGroupsAreOrWithinAndAcrossGroups() {
+    var b = FlowFilter(); b.protocols = [.https]; b.contentKinds = [.json, .xml]; b.statusClasses = [2]
+    #expect(b.matches(typed("https://a.com/", status: 200, "application/json")))
+    #expect(!b.matches(typed("http://a.com/", status: 200, "application/json")))
+    #expect(!b.matches(typed("https://a.com/", status: 200, "text/css")))
+    #expect(!b.matches(typed("https://a.com/", status: 404, "application/json")))
+}
+
+@Test func statusFilterExcludesPendingRows() {
+    var f = Flow.fixture(url: "https://a.com/", method: "GET", status: 200); f.response = nil
+    var b = FlowFilter(); #expect(b.matches(f))
+    b.statusClasses = [2]; #expect(!b.matches(f))
+}
+
+@Test func barFilterStacksWithTextAndHost() {
+    var b = FlowFilter(text: "search", host: "api.example.com"); b.contentKinds = [.json]
+    #expect(b.matches(typed("https://api.example.com/search", status: 200, "application/json")))
+    #expect(!b.matches(typed("https://api.example.com/list", status: 200, "application/json")))
+    #expect(!b.matches(typed("https://x.example.com/search", status: 200, "application/json")))
+    #expect(!b.matches(typed("https://api.example.com/search", status: 200, "text/html")))
+}
+
+@Test func clearBarKeepsOtherFields() {
+    var b = FlowFilter(text: "q", host: "h"); b.protocols = [.http]; b.contentKinds = [.css]; b.statusClasses = [5]
+    #expect(!b.isBarEmpty); b.clearBar()
+    #expect(b.isBarEmpty && b.text == "q" && b.host == "h")
+}
