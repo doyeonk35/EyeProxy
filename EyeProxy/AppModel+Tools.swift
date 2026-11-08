@@ -1,3 +1,4 @@
+import AppKit
 import EyeProxyCore
 import EyeProxyKit
 import Foundation
@@ -31,6 +32,29 @@ extension AppModel {
                 await self?.applyTools()
             }
         }
+    }
+
+    /// 멈춘 Breakpoint 신호를 메인 창과 무관하게 낸다(§2 반목표): Dock 배지에 대기 수, 새로 멈추면 Breakpoint 창을 열고 Dock 아이콘을 튀긴다.
+    func observeBreakpoints() {
+        withObservationTracking {
+            _ = breakpoints.pending.count
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.observeBreakpoints()
+                self?.pendingBreakpointsChanged()
+            }
+        }
+    }
+
+    private func pendingBreakpointsChanged() {
+        let count = breakpoints.pending.count
+        NSApp.dockTile.badgeLabel = count > 0 ? String(count) : nil
+        if count > lastPendingBreakpoints {
+            openBreakpointsWindow?()
+            NSApp.activate()
+            NSApp.requestUserAttention(.informationalRequest)
+        }
+        lastPendingBreakpoints = count
     }
 
     /// 호출 순서대로 직렬화하고 실행 시점의 규칙을 읽으므로 마지막 변경이 이긴다. 진행 중인 요청은 이전 체인을 그대로 쓴다.

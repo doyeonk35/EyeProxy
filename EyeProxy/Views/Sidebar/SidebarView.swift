@@ -11,7 +11,7 @@ struct SidebarView: View {
         let tree = model.sidebarTree
         List(selection: $model.sidebarSelection) {
             Label("전체", systemImage: "tray.full")
-                .badge(model.session.flows.count)
+                .badge(model.sidebarFlows.count)
                 .tag(SidebarItem.allFlows)
             Section("고정") {
                 if tree.pinned.isEmpty {

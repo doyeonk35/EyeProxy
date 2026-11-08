@@ -24,6 +24,12 @@ struct MainToolbar: ToolbarContent {
                     Text("No Caching").modifier(Capsuled(color: .orange, selected: false))
                 }
                 PendingBreakpointsButton(count: model.breakpoints.pending.count)
+                if !model.rules.loadWarnings.isEmpty {
+                    Button("⚠︎ 규칙 경고 \(model.rules.loadWarnings.count)건") { model.showRuleWarnings = true }
+                        .buttonStyle(.link)
+                        .foregroundStyle(.red)
+                        .help("규칙 파일을 읽거나 저장하지 못했습니다 — 눌러서 보기")
+                }
             }
                 .font(.caption)
                 .lineLimit(1)

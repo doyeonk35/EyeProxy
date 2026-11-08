@@ -29,11 +29,16 @@ struct MainWindow: View {
         .sheet(isPresented: Binding(get: { model.commentingFlowID != nil }, set: { if !$0 { model.commentingFlowID = nil } })) {
             if let id = model.commentingFlowID { CommentSheet(id: id) }
         }
-        // 새로 멈춘 건이 생기면 Breakpoint 창을 앞으로(스펙 §5.1).
-        .onChange(of: model.breakpoints.pending.count) { old, new in
-            guard new > old else { return }
-            openWindow(id: "breakpoints")
-            NSApp.activate()
+        // 새로 멈춘 건이 생기면 Breakpoint 창을 앞으로(스펙 §5.1). 관찰은 앱 수준(AppModel.observeBreakpoints)이 한다.
+        .onAppear { model.openBreakpointsWindow = { openWindow(id: "breakpoints") } }
+        // 규칙 파일을 읽거나 저장하지 못했으면 알린다. 확인하면 경고를 지운다.
+        .onChange(of: model.rules.loadWarnings.count, initial: true) { _, count in
+            if count > 0 { model.showRuleWarnings = true }
+        }
+        .alert("규칙 파일 경고", isPresented: $model.showRuleWarnings) {
+            Button("확인") { model.rules.clearWarnings() }
+        } message: {
+            Text(model.rules.loadWarnings.joined(separator: "\n"))
         }
     }
 }

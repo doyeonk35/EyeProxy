@@ -54,6 +54,11 @@ final class AppModel {
     var commentingFlowID: FlowID?
     /// Edit and Repeat…로 Compose 창에 채울 요청. Compose 창이 꺼내 쓴다.
     var composeSeed: FlowRequest?
+    /// 규칙 파일 경고(`rules.loadWarnings`) alert. 새 경고가 생기거나 툴바 경고를 누르면 켠다.
+    var showRuleWarnings = false
+    /// Breakpoint 창을 여는 동작. 메인 창이 등록한다(창이 닫혀도 앱 수준 관찰이 부른다).
+    @ObservationIgnored var openBreakpointsWindow: (@MainActor () -> Void)?
+    @ObservationIgnored var lastPendingBreakpoints = 0
 
     // 온보딩(기기 윈도우)
     @ObservationIgnored let systemProxy = SystemProxy(backupURL: supportDirectory.appending(path: "system-proxy-backup.json"))
@@ -101,6 +106,7 @@ final class AppModel {
         rules.mapLocalFolderOverride = settings.mapLocalDefaultFolder.map { URL(fileURLWithPath: $0, isDirectory: true) }
             .flatMap { ProxymanImporter.isSafeWriteTarget($0) ? $0 : nil }
         observeTools()
+        observeBreakpoints()
         // 백업 없이 VPN 복사본만 남은 경우(종료 때 관리자 인증 취소 등)도 시작 시 알린다.
         Task { await refreshEffectiveProxyWarning() }
     }
@@ -316,8 +322,13 @@ final class AppModel {
         Dictionary(bootedSimulators.map { ($0.udid, $0.runtime) }, uniquingKeysWith: { a, _ in a })
     }
 
+    /// 사이드바·배지가 세는 흐름. "숨김 포함"이 꺼져 있으면 Block List로 숨긴 흐름을 뺀다.
+    var sidebarFlows: [Flow] {
+        filter.includeHidden ? session.flows : session.flows.filter { !$0.annotations.contains(.hidden) }
+    }
+
     var sidebarTree: SidebarTree {
-        SidebarTree.build(flows: session.flows, attribution: processes.attribution, devices: devices.devices,
+        SidebarTree.build(flows: sidebarFlows, attribution: processes.attribution, devices: devices.devices,
                           pinned: settings.pinnedHosts, runtimes: simulatorRuntimes)
     }
 
