@@ -17,7 +17,7 @@ public struct MapRemoteInterceptor: RequestInterceptor {
             out.scheme = s
             if to.port == nil, request.port == oldDefault { out.port = s == "http" ? 80 : 443 }
         }
-        if let h = to.host { out.host = h }
+        if let h = to.host, !h.isEmpty { out.host = h }
         if let p = to.port { out.port = p }
 
         var path = request.path
@@ -26,18 +26,20 @@ public struct MapRemoteInterceptor: RequestInterceptor {
             query = String(path[path.index(after: q)...])
             path = String(path[..<q])
         }
-        if let mapPath = to.path {
+        if let mapPath = to.path, !mapPath.isEmpty {
             let body = "/" + mapPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            if rule.match.includeSubpaths, let prefix = rule.matchedPrefix,
-               let r = path.range(of: prefix, options: [.anchored, .caseInsensitive]),
-               r.upperBound == path.endIndex || path[r.upperBound] == "/" {
+            if rule.match.includeSubpaths, let prefix = rule.matchedPrefix, prefix.isEmpty {
+                path = (body == "/" ? "" : body) + path
+            } else if rule.match.includeSubpaths, let prefix = rule.matchedPrefix,
+                      let r = path.range(of: prefix, options: [.anchored, .caseInsensitive]),
+                      r.upperBound == path.endIndex || path[r.upperBound] == "/" {
                 path = (body == "/" ? "" : body) + path[r.upperBound...]
                 if path.isEmpty { path = "/" }
             } else {
                 path = body
             }
         }
-        if let q = to.query { query = q }
+        if let q = to.query, !q.isEmpty { query = q }
         out.path = path + (query.map { "?" + $0 } ?? "")
 
         if !rule.preserveHostHeader {

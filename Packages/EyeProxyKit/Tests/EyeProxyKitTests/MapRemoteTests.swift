@@ -102,3 +102,23 @@ private func rule(_ pattern: String, _ to: MapTarget, name: String = "R", hostHe
     let bad = Data(#"[{"_0":{"id":"A","name":"n","isEnabled":true,"url":"x"}}]"#.utf8)
     #expect(try RuleTree<MapRemoteRule>.decodeLenient(bad).skipped == 1)
 }
+
+@Test func emptyStringsAssignedAfterInitKeepComponents() async throws {
+    var rl = rule("https://api.example.com/*", MapTarget(host: "staging.example.com", path: "v2", query: "a=1"))
+    rl.mapTo.host = ""
+    rl.mapTo.path = ""
+    rl.mapTo.query = ""
+    rl.mapTo.scheme = ""
+    let r = try #require(await run(rl, "https://api.example.com/v1/a?x=1"))
+    #expect(r.url == "https://api.example.com/v1/a?x=1")
+}
+
+@Test func hostOnlyPatternPrependsPath() async throws {
+    let r = try #require(await run(rule("api.example.com", MapTarget(path: "v2")), "https://api.example.com/a/b?x=1"))
+    #expect(r.path == "/v2/a/b?x=1")
+}
+
+@Test func slashStarPatternPrependsPath() async throws {
+    let r = try #require(await run(rule("https://api.example.com/*", MapTarget(path: "v2")), "https://api.example.com/a/b?x=1"))
+    #expect(r.path == "/v2/a/b?x=1")
+}

@@ -100,15 +100,15 @@ public struct MapRemoteRule: ToolRule {
         try c.encode(preserveOriginalURL, forKey: "isPreserveOriginalURL")
     }
 
-    /// 패턴 경로에서 첫 `*`/`?` 앞까지, 끝 `/` 제외. 정규식·경로 없음이면 nil.
+    /// 패턴 경로에서 첫 `*`/`?` 앞까지, 끝 `/` 제외. 경로가 없으면 "". 정규식이면 nil.
     var matchedPrefix: String? {
         guard match.mode == .wildcard else { return nil }
         var pattern = Substring(match.url)
         if let s = pattern.range(of: "://"), !pattern[..<s.lowerBound].contains("/") { pattern = pattern[s.upperBound...] }
-        guard let slash = pattern.firstIndex(of: "/") else { return nil }
+        guard let slash = pattern.firstIndex(of: "/") else { return "" }
         var prefix = String(pattern[slash...].prefix { $0 != "*" && $0 != "?" })
         while prefix.hasSuffix("/") { prefix.removeLast() }
-        return prefix.isEmpty ? nil : prefix
+        return prefix
     }
 }
 
