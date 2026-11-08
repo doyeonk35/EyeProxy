@@ -73,7 +73,7 @@ struct CertificateWindow: View {
         case .iosDevices: form { IOSDevicesSection() }
         case .tvWatch: form { TVWatchSection() }
         case .android: form { AndroidSection() }
-        case .developments: ContentUnavailableView("준비 중", systemImage: "hammer")
+        case .developments: DevelopmentsSection()
         case .exportReset: form { ExportResetSection() }
         case .connectedDevices: form { ConnectedDevicesSection(); ConnectionLogSection() }
         }

@@ -53,6 +53,8 @@ final class AppModel {
     var settingsTab: SettingsTab = .general
     /// Certificate 창의 선택 섹션. Certificate 메뉴가 바꾼 뒤 창을 연다.
     var certificateSection: CertificateSection = .mac
+    /// 개발 환경 섹션에서 고른 플랫폼. Certificate 메뉴가 바꾼 뒤 창을 연다.
+    var developmentPlatform: DevPlatform = .httpClients
     /// Flow ▸ Add Comment…로 코멘트를 편집 중인 흐름. 메인 창이 시트를 띄운다.
     var commentingFlowID: FlowID?
     /// Edit and Repeat…로 Compose 창에 채울 요청. Compose 창이 꺼내 쓴다.
