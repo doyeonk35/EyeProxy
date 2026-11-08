@@ -37,3 +37,9 @@ import Testing
     #expect(s.number(c.id) == 1 && s.number(a.id) == nil)
     s.replace(flows: [b, a]); #expect(s.number(b.id) == 1 && s.number(a.id) == 2)
 }
+@Test @MainActor func storeAppendsAnnotationToMatchingFlow() {
+    let s = SessionStore(); let f = Flow.fixture(client: "1", decrypted: false)
+    s.apply(.annotated(id: f.id, .hidden)); #expect(s.flows.isEmpty)
+    s.apply(.requestStarted(f)); s.apply(.annotated(id: f.id, .tool("Map Local")))
+    #expect(s.flows[0].annotations == [.tool("Map Local")])
+}

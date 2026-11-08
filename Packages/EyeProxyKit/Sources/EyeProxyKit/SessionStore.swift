@@ -30,6 +30,9 @@ public final class SessionStore {
         case .connectionLog(let entry):
             connectionLog.append(entry)
             if connectionLog.count > Self.logCap { connectionLog.removeFirst(connectionLog.count - Self.logCap) }
+        case .annotated(let id, let annotation):
+            guard let i = index[id] else { return }
+            flows[i].annotations.append(annotation)
         }
     }
 

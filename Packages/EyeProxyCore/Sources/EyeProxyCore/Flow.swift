@@ -80,6 +80,14 @@ public struct ConnectionLogEntry: Equatable, Codable, Sendable, Identifiable {
     }
 }
 
+/// 도구가 흐름에 다는 표시. Kit이 목록 표시·기록 여부에 쓴다.
+public enum FlowAnnotation: Codable, Equatable, Sendable {
+    case hidden
+    case unrecorded
+    case tool(String)
+    case originalURL(String)
+}
+
 public struct Flow: Equatable, Codable, Sendable, Identifiable {
     public let id: FlowID
     public let clientAddress: String
@@ -94,6 +102,7 @@ public struct Flow: Equatable, Codable, Sendable, Identifiable {
     public var isDecrypted: Bool
     /// CONNECT 패스스루 항목이면 true (request.method == "CONNECT")
     public var isTunnel: Bool
+    public var annotations: [FlowAnnotation] = []
 
     public init(id: FlowID, clientAddress: String, clientPort: Int? = nil, startedAt: Date, request: FlowRequest, response: FlowResponse? = nil,
                 completedAt: Date? = nil, error: String? = nil, isDecrypted: Bool = false, isTunnel: Bool = false) {
@@ -108,6 +117,26 @@ public struct Flow: Equatable, Codable, Sendable, Identifiable {
         self.isDecrypted = isDecrypted
         self.isTunnel = isTunnel
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, clientAddress, clientPort, startedAt, request, response, completedAt, error, isDecrypted, isTunnel, annotations
+    }
+
+    /// 이전 저장분(annotations 키 없음) 디코딩을 위해 직접 구현.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(FlowID.self, forKey: .id)
+        clientAddress = try c.decode(String.self, forKey: .clientAddress)
+        clientPort = try c.decodeIfPresent(Int.self, forKey: .clientPort)
+        startedAt = try c.decode(Date.self, forKey: .startedAt)
+        request = try c.decode(FlowRequest.self, forKey: .request)
+        response = try c.decodeIfPresent(FlowResponse.self, forKey: .response)
+        completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
+        error = try c.decodeIfPresent(String.self, forKey: .error)
+        isDecrypted = try c.decode(Bool.self, forKey: .isDecrypted)
+        isTunnel = try c.decode(Bool.self, forKey: .isTunnel)
+        annotations = try c.decodeIfPresent([FlowAnnotation].self, forKey: .annotations) ?? []
+    }
 }
 
 public enum FlowEvent: Sendable {
@@ -115,4 +144,5 @@ public enum FlowEvent: Sendable {
     case responseReceived(id: FlowID, response: FlowResponse, completedAt: Date)
     case failed(id: FlowID, error: String, completedAt: Date)
     case connectionLog(ConnectionLogEntry)
+    case annotated(id: FlowID, FlowAnnotation)
 }

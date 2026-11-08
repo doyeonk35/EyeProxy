@@ -25,6 +25,12 @@ public enum ProxyServerError: Error, Equatable {
     case notRunning
 }
 
+/// `exchange`의 결과: 클라이언트에 쓸 응답, 또는 응답 없이 연결을 끊기.
+enum ExchangeOutcome: Sendable {
+    case respond(FlowResponse)
+    case drop
+}
+
 public actor ProxyServer {
     /// 여러 소비자 금지: 앱에서 하나만 구독.
     public nonisolated let events: AsyncStream<FlowEvent>
@@ -112,33 +118,47 @@ public actor ProxyServer {
     /// 이벤트루프(터널 등)에서 바로 이벤트를 낸다.
     nonisolated func emit(_ event: FlowEvent) { eventSink.yield(event) }
 
-    /// 요청 하나의 수명: 이벤트 → 요청 인터셉터 → 업스트림 → 응답 인터셉터 → 이벤트. 실패는 502로 바꿔 돌려준다.
-    func exchange(_ request: FlowRequest, clientAddress: String, clientPort: Int? = nil, upstream: UpstreamClient, isDecrypted: Bool = false) async -> FlowResponse {
+    /// 요청 하나의 수명: 이벤트 → 요청 인터셉터 → (업스트림) → 응답 인터셉터 → 이벤트. 실패는 502로 바꿔 돌려준다.
+    /// 요청 체인의 `.respond`도 응답 체인을 거친다. 어느 체인이든 `.drop`이면 `.failed`를 내고 `.drop`을 돌려준다.
+    func exchange(_ request: FlowRequest, clientAddress: String, clientPort: Int? = nil, upstream: UpstreamClient, isDecrypted: Bool = false) async -> ExchangeOutcome {
         let id = FlowID()
-        let context = FlowContext(id: id, clientAddress: clientAddress)
+        let sink = eventSink
+        let context = FlowContext(id: id, clientAddress: clientAddress, clientPort: clientPort) { sink.yield(.annotated(id: id, $0)) }
         eventSink.yield(.requestStarted(Flow(id: id, clientAddress: clientAddress, clientPort: clientPort, startedAt: Date(), request: request, isDecrypted: isDecrypted)))
         let chain = interceptors
+        let response: FlowResponse, sent: FlowRequest
         switch await chain.runRequest(request, context: context) {
-        case .respond(let response):
-            eventSink.yield(.responseReceived(id: id, response: response, completedAt: Date()))
-            return response
+        case .drop:
+            return dropped(id)
+        case .respond(let local):
+            (response, sent) = (local, request)
         case .continue(let outgoing):
             do {
-                let raw = try await upstream.send(outgoing, tls: outgoing.scheme == "https", clientAddress: clientAddress)
-                let response = await chain.runResponse(raw, for: outgoing, context: context)
-                eventSink.yield(.responseReceived(id: id, response: response, completedAt: Date()))
-                return response
+                response = try await upstream.send(outgoing, tls: outgoing.scheme == "https", clientAddress: clientAddress)
+                sent = outgoing
             } catch let error as LoopbackBlockedError {
                 eventSink.yield(.failed(id: id, error: error.description, completedAt: Date()))
-                return FlowResponse(status: 403, reason: "Forbidden", headers: [], body: Data())
+                return .respond(FlowResponse(status: 403, reason: "Forbidden", headers: [], body: Data()))
             } catch {
                 let message = Task.isCancelled ? "client disconnected"
                     : Self.upstreamTLSLabel(error).map { "\($0): \(error)" } ?? String(describing: error)
                 eventSink.yield(.failed(id: id, error: message, completedAt: Date()))
-                return FlowResponse(status: 502, reason: "Bad Gateway", headers: [.init(name: "Content-Type", value: "text/plain")],
-                                    body: Data("EyeProxy: upstream error: \(message)".utf8))
+                return .respond(FlowResponse(status: 502, reason: "Bad Gateway", headers: [.init(name: "Content-Type", value: "text/plain")],
+                                             body: Data("EyeProxy: upstream error: \(message)".utf8)))
             }
         }
+        switch await chain.runResponse(response, for: sent, context: context) {
+        case .drop:
+            return dropped(id)
+        case .continue(let final):
+            eventSink.yield(.responseReceived(id: id, response: final, completedAt: Date()))
+            return .respond(final)
+        }
+    }
+
+    private func dropped(_ id: FlowID) -> ExchangeOutcome {
+        eventSink.yield(.failed(id: id, error: "규칙으로 연결 끊김", completedAt: Date()))
+        return .drop
     }
 
     /// 업스트림 TLS 오류 분류. 체인 검증 실패는 CERTIFICATE_VERIFY_FAILED 핸드셰이크 실패로, 호스트명 불일치는 NIOSSLExtraError로 온다.

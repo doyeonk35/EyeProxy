@@ -95,6 +95,55 @@ struct ProxyServerHTTPTests {
         #expect(id == flow.id && res.status == 418)
     }
 
+    @Test func respondedRequestPassesResponseChain() async throws {
+        struct Local: RequestInterceptor {
+            func intercept(_ r: FlowRequest, context: FlowContext) async -> RequestDecision {
+                .respond(FlowResponse(status: 200, reason: "OK", headers: [], body: Data("local".utf8)))
+            }
+        }
+        struct Seen: ResponseInterceptor {
+            func intercept(_ r: FlowResponse, for req: FlowRequest, context: FlowContext) async -> ResponseDecision {
+                var r = r; r.headers.append(.init(name: "X-Seen", value: "1")); return .continue(r)
+            }
+        }
+        let server = try makeServer(.init(request: [Local()], response: [Seen()]))
+        let port = try await server.start()
+        defer { await server.stop() }
+        let (status, headers, body) = try await fetchViaProxy("http://127.0.0.1:1/x", proxyPort: port)
+        #expect(status == 200); #expect(headers["X-Seen"] == "1"); #expect(body == Data("local".utf8))
+    }
+
+    @Test func dropClosesClientWithoutResponse() async throws {
+        struct Drop: RequestInterceptor { func intercept(_ r: FlowRequest, context: FlowContext) async -> RequestDecision { .drop } }
+        let server = try makeServer(.init(request: [Drop()]))
+        let port = try await server.start()
+        defer { await server.stop() }
+        var iterator = server.events.makeAsyncIterator()
+        await #expect(throws: (any Error).self) { _ = try await fetchViaProxy("http://127.0.0.1:1/x", proxyPort: port) }
+        guard case .requestStarted(let flow) = await iterator.next() else { Issue.record("no requestStarted"); return }
+        guard case .failed(let id, let error, _) = await iterator.next() else { Issue.record("no failed"); return }
+        #expect(id == flow.id && error == "규칙으로 연결 끊김")
+    }
+
+    @Test func annotateEmitsEvent() async throws {
+        struct Tag: RequestInterceptor {
+            func intercept(_ r: FlowRequest, context: FlowContext) async -> RequestDecision { context.annotate(.tool("Map Remote")); return .continue(r) }
+        }
+        let origin = TestOrigin { _ in FlowResponse(status: 200, reason: "OK", headers: [], body: Data()) }
+        let originPort = try await origin.start()
+        defer { await origin.stop() }
+        let server = try makeServer(.init(request: [Tag()]))
+        let port = try await server.start()
+        defer { await server.stop() }
+        var iterator = server.events.makeAsyncIterator()
+        _ = try await fetchViaProxy("http://127.0.0.1:\(originPort)/", proxyPort: port)
+        guard case .requestStarted(let flow) = await iterator.next() else { Issue.record("no requestStarted"); return }
+        guard case .annotated(let id, let annotation) = await iterator.next() else { Issue.record("no annotated"); return }
+        #expect(id == flow.id && annotation == .tool("Map Remote"))
+        guard case .responseReceived(let rid, _, _) = await iterator.next() else { Issue.record("no responseReceived"); return }
+        #expect(rid == flow.id)
+    }
+
     @Test func upstreamFailureYields502AndFailedEvent() async throws {
         let closed = TestOrigin { _ in FlowResponse(status: 200, reason: "OK", headers: [], body: Data()) }
         let closedPort = try await closed.start()

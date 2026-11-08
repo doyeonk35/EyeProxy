@@ -102,12 +102,15 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
         let server = self.server, upstream = self.upstream
         let clientAddress = context.channel.remoteAddress?.ipAddress ?? "unknown"
         let clientPort = context.channel.remoteAddress?.port
-        let promise = context.eventLoop.makePromise(of: FlowResponse.self)
+        let promise = context.eventLoop.makePromise(of: ExchangeOutcome.self)
         let isDecrypted = tlsOrigin != nil
         inFlight = Task { promise.succeed(await server.exchange(request, clientAddress: clientAddress, clientPort: clientPort, upstream: upstream, isDecrypted: isDecrypted)) }
-        promise.futureResult.assumeIsolated().whenSuccess { response in
+        promise.futureResult.assumeIsolated().whenSuccess { outcome in
             self.inFlight = nil
-            self.write(response, to: head, keepAlive: keepAlive, context: context)
+            switch outcome {
+            case .respond(let response): self.write(response, to: head, keepAlive: keepAlive, context: context)
+            case .drop: context.close(promise: nil)
+            }
         }
     }
 

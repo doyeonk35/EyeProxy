@@ -4,10 +4,10 @@ import NIOSSL
 @testable import EyeProxyCore
 
 private struct MarkResponse: ResponseInterceptor {
-    func intercept(_ response: FlowResponse, for request: FlowRequest, context: FlowContext) async -> FlowResponse {
+    func intercept(_ response: FlowResponse, for request: FlowRequest, context: FlowContext) async -> ResponseDecision {
         var r = response
         r.headers.append(.init(name: "X-Modified", value: "1"))
-        return r
+        return .continue(r)
     }
 }
 
