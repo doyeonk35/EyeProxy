@@ -28,10 +28,8 @@ struct TestRuleSheet: View {
                 .fixedSize()
                 TextField("URL", text: $match.url, prompt: Text(verbatim: "api.example.com/v1/*"))
             }
-            HStack(spacing: 16) {
-                Toggle("Include all subpaths of this URL", isOn: $match.includeSubpaths)
-                Toggle("쿼리 무시 (쿼리가 달라도 같은 규칙으로 처리)", isOn: $match.ignoreQuery)
-            }
+            Toggle("Include all subpaths of this URL", isOn: $match.includeSubpaths)
+            QueryFields(match: $match)
             if let error = match.validationError { Text(error).foregroundStyle(.red) }
             Text("샘플 URL (한 줄에 하나)").foregroundStyle(.secondary)
             TextEditor(text: $samples)
@@ -54,6 +52,6 @@ struct TestRuleSheet: View {
             }
         }
         .padding()
-        .frame(width: 640, height: 480)
+        .frame(width: 640, height: match.queryMode == .selected || !match.queryConditions.isEmpty ? 640 : 480)
     }
 }

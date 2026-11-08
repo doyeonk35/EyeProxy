@@ -11,6 +11,7 @@ struct MatchRuleFields: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openSettings) private var openSettings
     @State private var testing = false
+    @FocusState private var urlFocused: Bool
 
     static let methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 
@@ -19,6 +20,11 @@ struct MatchRuleFields: View {
             TextField("Name", text: $name)
             VStack(alignment: .leading, spacing: 4) {
                 TextField("URL", text: $match.url, prompt: Text(verbatim: "api.example.com/v1/*"))
+                    .focused($urlFocused)
+                    .onSubmit(moveQueryToTable)
+                    // 붙여 넣기(한 번에 여러 글자)는 바로 옮긴다. 규칙을 불러올 때 바뀐 값은 포커스가 없어 건드리지 않는다.
+                    .onChange(of: match.url) { old, new in if urlFocused && new.count - old.count > 1 { moveQueryToTable() } }
+                    .onChange(of: urlFocused) { if !urlFocused { moveQueryToTable() } }
                 hostHint.font(.caption)
             }
             HStack(spacing: 8) {
@@ -35,11 +41,10 @@ struct MatchRuleFields: View {
             }
             Toggle("Include all subpaths of this URL", isOn: $match.includeSubpaths)
                 .toggleStyle(.checkbox)
-            Toggle("쿼리 무시 (쿼리가 달라도 같은 규칙으로 처리)", isOn: $match.ignoreQuery)
-                .toggleStyle(.checkbox)
+            QueryFields(match: $match)
             if let error = match.validationError { Text(error).foregroundStyle(.red) }
-            if match.ignoreQuery && match.hasQueryLikePattern {
-                Text("쿼리 무시가 켜져 있어 패턴의 쿼리 부분과는 비교하지 않습니다").foregroundStyle(.secondary)
+            if match.queryMode != .exact && match.hasQueryLikePattern {
+                Text("쿼리가 '무시'·'선택한 항목만'이라 패턴의 쿼리 부분과는 비교하지 않습니다").foregroundStyle(.secondary)
             }
         }
         .sheet(isPresented: $testing) {
@@ -65,6 +70,16 @@ struct MatchRuleFields: View {
         }
     }
 
+    /// URL 칸의 `k=v` 쿼리를 체크된 조건으로 옮기고 '선택한 항목만'으로. '전체 일치'면 그대로 둔다.
+    private func moveQueryToTable() {
+        guard match.queryMode != .exact else { return }
+        let split = MatchRule.splitQuery(fromPattern: match.url)
+        guard !split.conditions.isEmpty else { return }
+        match.url = split.url
+        match.queryConditions += split.conditions
+        match.queryMode = .selected
+    }
+
     private var selectedMethods: [String] {
         if case .exact(let list) = match.methods { list.map { $0.uppercased() } } else { [] }
     }
@@ -87,5 +102,88 @@ struct MatchRuleFields: View {
 
     private var selectedFlowURL: String {
         model.selectedFlowID.flatMap { model.session.flow($0) }.map { MatchRule.urlString($0.request, includeQuery: true) } ?? ""
+    }
+}
+
+/// 쿼리 모드 Picker와 조건 표(Proxyman Edit & Repeat의 Query 탭 모양). 편집기와 Test your Rule이 같이 쓴다.
+struct QueryFields: View {
+    @Binding var match: MatchRule
+    @State private var selection: QueryCondition.ID?
+    @State private var newKey = ""
+    @State private var newValue = ""
+    @FocusState private var newRowFocused: Bool
+
+    /// '선택한 항목만'이거나, 우클릭 ▸ Tools로 채운 체크 해제 조건이 있는 '무시'.
+    private var showsTable: Bool {
+        match.queryMode == .selected
+            || (match.queryMode == .ignore && !match.queryConditions.isEmpty && !match.queryConditions.contains(where: \.isEnabled))
+    }
+
+    var body: some View {
+        Group {
+            Picker("쿼리", selection: $match.queryMode) {
+                Text("무시").tag(QueryMode.ignore)
+                Text("선택한 항목만").tag(QueryMode.selected)
+                Text("전체 일치").tag(QueryMode.exact)
+            }
+            .pickerStyle(.segmented)
+            .fixedSize()
+            if showsTable {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("체크한 항목만 비교합니다. 값을 *로 두면 키만 있으면 됩니다.").font(.caption).foregroundStyle(.secondary)
+                    table
+                }
+            }
+        }
+        // 하나라도 체크하면 '선택한 항목만'으로.
+        .onChange(of: match.queryConditions) {
+            if match.queryMode == .ignore && match.queryConditions.contains(where: \.isEnabled) { match.queryMode = .selected }
+        }
+    }
+
+    private var table: some View {
+        VStack(spacing: 0) {
+            List(selection: $selection) {
+                ForEach($match.queryConditions) { $c in
+                    row(Toggle("", isOn: $c.isEnabled), TextField("", text: $c.key), TextField("", text: $c.value, prompt: Text("값 또는 *")))
+                }
+                row(Toggle("", isOn: .constant(true)).disabled(true).hidden(),
+                    TextField("", text: $newKey, prompt: Text("New Key…")).focused($newRowFocused).onSubmit(addNewRow),
+                    TextField("", text: $newValue, prompt: Text("New Value…")).focused($newRowFocused).onSubmit(addNewRow))
+                    .selectionDisabled()
+            }
+            .listStyle(.bordered(alternatesRowBackgrounds: true))
+            .frame(height: 130)
+            .onChange(of: newRowFocused) { if !newRowFocused { addNewRow() } }
+            HStack {
+                Button {
+                    match.queryConditions.removeAll { $0.id == selection }
+                    selection = nil
+                } label: { Image(systemName: "minus") }
+                .disabled(selection == nil)
+                .help("선택한 행 삭제")
+                Spacer()
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func row(_ check: some View, _ key: some View, _ value: some View) -> some View {
+        HStack(spacing: 6) {
+            check.toggleStyle(.checkbox).labelsHidden()
+            key.frame(width: 160)
+            value
+        }
+        .textFieldStyle(.plain)
+        .font(.system(.body, design: .monospaced))
+    }
+
+    /// 새 행 입력이 끝나면 체크된 조건으로 더한다.
+    private func addNewRow() {
+        let key = newKey.trimmingCharacters(in: .whitespaces)
+        guard !key.isEmpty else { return }
+        match.queryConditions.append(QueryCondition(key: key, value: newValue, isEnabled: true))
+        newKey = ""
+        newValue = ""
     }
 }

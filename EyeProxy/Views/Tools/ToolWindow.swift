@@ -365,7 +365,7 @@ enum RuleText {
     }
 
     static func matching(_ match: MatchRule) -> String {
-        "\(match.mode == .regex ? "Regex" : "Wildcard"): \(match.url)"
+        "\(match.mode == .regex ? "Regex" : "Wildcard"): \(match.url)" + (match.queryDescription.map { " · \($0)" } ?? "")
     }
 }
 
