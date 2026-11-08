@@ -73,9 +73,6 @@ private struct ToolsMenu: View {
 /// 다음 태스크가 채울 창 자리. 메뉴·우클릭에서 열리는지만 보장한다.
 struct PlaceholderToolScenes: Scene {
     var body: some Scene {
-        placeholder("Breakpoint Rules", id: "tool-breakpoint-rules")
-        placeholder("Breakpoint Templates", id: "breakpoint-templates")
-        placeholder("Network Conditions", id: "tool-network")
         placeholder("Compose", id: "compose")
         placeholder("Import from Proxyman", id: "import-proxyman")
     }

@@ -1,8 +1,10 @@
+import AppKit
 import EyeProxyCore
 import SwiftUI
 
 struct MainWindow: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var model = model
@@ -26,6 +28,12 @@ struct MainWindow: View {
         .searchable(text: $model.filter.text, placement: .toolbar, prompt: Text("URL·메서드·상태 검색"))
         .sheet(isPresented: Binding(get: { model.commentingFlowID != nil }, set: { if !$0 { model.commentingFlowID = nil } })) {
             if let id = model.commentingFlowID { CommentSheet(id: id) }
+        }
+        // 새로 멈춘 건이 생기면 Breakpoint 창을 앞으로(스펙 §5.1).
+        .onChange(of: model.breakpoints.pending.count) { old, new in
+            guard new > old else { return }
+            openWindow(id: "breakpoints")
+            NSApp.activate()
         }
     }
 }

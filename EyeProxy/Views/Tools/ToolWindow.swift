@@ -33,6 +33,8 @@ where Columns.TableRowValue == ToolRow<Rule>, Columns.TableColumnSortComparator 
     /// 우클릭 ▸ Tools로 만든 새 규칙을 편집기에 넘기기 전에 도구별로 더 채운다(Map Local 응답 메시지).
     var prefill: ((inout Rule, PendingNewRule) -> Void)?
     let moreItems: AnyView
+    /// 하단 More 왼쪽에 놓는 도구별 버튼(Breakpoint의 Templates…).
+    let accessory: AnyView
     let editor: (Binding<Rule>, _ onSave: @escaping (Rule) -> Void, _ onCancel: @escaping () -> Void) -> Editor
     let columns: Columns
 
@@ -50,6 +52,7 @@ where Columns.TableRowValue == ToolRow<Rule>, Columns.TableColumnSortComparator 
          file: RuleFile<Rule>, newRule: @escaping () -> Rule, editorStyle: ToolEditorStyle = .sheet, helpURL: URL? = nil,
          note: LocalizedStringKey? = nil, prefill: ((inout Rule, PendingNewRule) -> Void)? = nil,
          @ViewBuilder moreItems: () -> some View = { EmptyView() },
+         @ViewBuilder accessory: () -> some View = { EmptyView() },
          @ViewBuilder editor: @escaping (Binding<Rule>, _ onSave: @escaping (Rule) -> Void, _ onCancel: @escaping () -> Void) -> Editor,
          @TableColumnBuilder<ToolRow<Rule>, Never> columns: () -> Columns) {
         self.windowID = windowID
@@ -63,6 +66,7 @@ where Columns.TableRowValue == ToolRow<Rule>, Columns.TableColumnSortComparator 
         self.note = note
         self.prefill = prefill
         self.moreItems = AnyView(moreItems())
+        self.accessory = AnyView(accessory())
         self.editor = editor
         self.columns = columns()
     }
@@ -189,6 +193,7 @@ where Columns.TableRowValue == ToolRow<Rule>, Columns.TableColumnSortComparator 
             TextField("Filter", text: $filter)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 200)
+            accessory
             Menu("More") {
                 // ponytail: Import…/Export…는 Task 18에서 연결한다.
                 Button("Import…") {}.disabled(true)

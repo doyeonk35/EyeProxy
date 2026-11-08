@@ -5,6 +5,8 @@ import SwiftUI
 struct MatchRuleFields: View {
     @Binding var name: String
     @Binding var match: MatchRule
+    /// Block·Allow: 호스트만 있는 규칙은 CONNECT에서 판정하므로 복호화하지 않는다.
+    var hostOnlyDecidedAtConnect = false
 
     @Environment(AppModel.self) private var model
     @Environment(\.openSettings) private var openSettings
@@ -46,7 +48,9 @@ struct MatchRuleFields: View {
     }
 
     @ViewBuilder private var hostHint: some View {
-        if match.hostPattern != nil {
+        if hostOnlyDecidedAtConnect && match.isDecidedAtConnect {
+            Text("호스트 전체 규칙은 연결(CONNECT) 단계에서 판정합니다").foregroundStyle(.secondary)
+        } else if match.hostPattern != nil {
             Text("이 호스트는 자동으로 복호화됩니다").foregroundStyle(.secondary)
         } else if match.needsSSLListEntry {
             HStack(spacing: 4) {

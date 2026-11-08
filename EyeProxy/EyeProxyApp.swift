@@ -58,11 +58,22 @@ import SwiftUI
             SettingsView()
                 .environment(model)
         }
-        // ponytail: 자리표시자. Task 16에서 Breakpoint 창으로 바꾼다.
         Window("Breakpoints", id: "breakpoints") {
-            Text("Breakpoint 창은 다음 작업에서 추가됩니다")
-                .frame(minWidth: 400, minHeight: 200)
+            BreakpointWindow().environment(model)
         }
+        .defaultSize(width: 1100, height: 720)
+        Window("Breakpoint Rules", id: "tool-breakpoint-rules") {
+            BreakpointRulesWindow().environment(model)
+        }
+        .defaultSize(width: 1200, height: 672)
+        Window("Breakpoint Templates", id: "breakpoint-templates") {
+            BreakpointTemplatesWindow().environment(model)
+        }
+        .defaultSize(width: 800, height: 632)
+        Window("Network Conditions", id: "tool-network") {
+            NetworkConditionsWindow().environment(model)
+        }
+        .defaultSize(width: 1200, height: 672)
         Window("Block List", id: "tool-block") {
             BlockListWindow().environment(model)
         }
