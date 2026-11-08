@@ -1,7 +1,7 @@
 import EyeProxyKit
 import SwiftUI
 
-enum SettingsTab: Hashable { case general, ssl, bypass }
+enum SettingsTab: Hashable { case general, ssl, bypass, tools }
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
@@ -12,6 +12,7 @@ struct SettingsView: View {
             GeneralSettings().tabItem { Label("일반", systemImage: "gearshape") }.tag(SettingsTab.general)
             SSLSettings().tabItem { Label("SSL Proxying", systemImage: "lock") }.tag(SettingsTab.ssl)
             BypassSettings().tabItem { Label("Bypass", systemImage: "arrow.uturn.right") }.tag(SettingsTab.bypass)
+            ToolSettings().tabItem { Label("도구", systemImage: "hammer") }.tag(SettingsTab.tools)
         }
         .frame(width: 480, height: 360)
     }
@@ -89,6 +90,18 @@ private struct BypassSettings: View {
             } footer: {
                 Text("변경은 Mac 캡처를 다시 켤 때 적용")
             }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+private struct ToolSettings: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var settings = model.settings
+        Form {
+            Toggle("Repeat 요청에 No-Cache 사용", isOn: $settings.toolSwitches.repeatNoCache)
         }
         .formStyle(.grouped)
     }

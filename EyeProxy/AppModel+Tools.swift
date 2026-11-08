@@ -43,6 +43,27 @@ extension AppModel {
         toolsUpdate = update
         await update.value
     }
+
+    // MARK: - Compose·Repeat (§5.8)
+
+    /// 프록시가 떠 있을 때만. 요청은 이 프록시를 거쳐 나가 목록에 기록된다.
+    var composeClient: ComposeClient? {
+        runningPort.map { ComposeClient(proxyPort: $0, trustRootDER: certificateAuthority.certificateDER) }
+    }
+
+    /// 선택한 요청을 그대로 다시 보낸다(창 없이). 결과는 메인 목록의 새 행으로 보인다.
+    func repeatFlows(_ ids: Set<FlowID>) {
+        guard let client = composeClient else {
+            systemError = String(localized: "프록시가 실행 중이 아닙니다")
+            return
+        }
+        let noCache = settings.toolSwitches.repeatNoCache
+        // 목록 순서대로 보낸다.
+        for flow in session.flows where ids.contains(flow.id) && !flow.isTunnel {
+            let request = noCache ? NoCachingInterceptor.noCache(flow.request) : flow.request
+            Task { _ = try? await client.send(request, timeout: 60) }
+        }
+    }
 }
 
 /// 우클릭 ▸ Tools ▸ … 로 연 새 규칙의 매칭 칸(`MatchRule(prefilledFrom:)` — 쿼리 뺀 URL + 쿼리 무시).

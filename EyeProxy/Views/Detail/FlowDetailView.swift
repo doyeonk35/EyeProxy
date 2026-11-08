@@ -55,7 +55,8 @@ struct FlowDetailView: View {
     }
 }
 
-private struct MessagePane: View {
+/// 요청·응답 한쪽(헤더·쿼리·본문·쿠키). Compose 창의 응답 쪽도 쓴다.
+struct MessagePane: View {
     enum Tab: Hashable { case headers, query, body, cookies }
 
     let title: LocalizedStringKey

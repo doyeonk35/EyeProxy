@@ -34,7 +34,13 @@ final class AppModel {
     let caSaveError: String?
     private(set) var serverState: ServerState = .stopped
     var filter = FlowFilter()
-    var selectedFlowID: FlowID?
+    /// 목록 선택(여러 건 가능 — Repeat). 상세·코멘트 등 한 건용 동작은 `selectedFlowID`를 쓴다.
+    var selectedFlowIDs: Set<FlowID> = []
+    /// 정확히 한 건이 선택됐을 때 그 흐름.
+    var selectedFlowID: FlowID? {
+        get { selectedFlowIDs.count == 1 ? selectedFlowIDs.first : nil }
+        set { selectedFlowIDs = newValue.map { [$0] } ?? [] }
+    }
     var sortOrder: [KeyPathComparator<FlowRow>] = [KeyPathComparator(\.number)]
     var sidebarSelection: SidebarItem? = .allFlows
     /// 우클릭 ▸ Tools로 열 새 규칙. 해당 도구 창이 꺼내 편집기를 연다.
@@ -46,6 +52,8 @@ final class AppModel {
     var settingsTab: SettingsTab = .general
     /// Flow ▸ Add Comment…로 코멘트를 편집 중인 흐름. 메인 창이 시트를 띄운다.
     var commentingFlowID: FlowID?
+    /// Edit and Repeat…로 Compose 창에 채울 요청. Compose 창이 꺼내 쓴다.
+    var composeSeed: FlowRequest?
 
     // 온보딩(기기 윈도우)
     @ObservationIgnored let systemProxy = SystemProxy(backupURL: supportDirectory.appending(path: "system-proxy-backup.json"))

@@ -9,11 +9,16 @@ public struct NoCachingInterceptor: RequestInterceptor, ResponseInterceptor {
         return headers.filter { !drop.contains($0.name.lowercased()) } + add
     }
 
-    public func intercept(_ request: FlowRequest, context: FlowContext) async -> RequestDecision {
+    /// 요청 쪽 규칙. Repeat의 No-Cache 옵션(§5.8)도 이것을 쓴다.
+    public static func noCache(_ request: FlowRequest) -> FlowRequest {
         var r = request
-        r.headers = Self.rewrite(r.headers, remove: ["if-modified-since", "if-none-match"],
-                                 add: [HTTPHeader(name: "Pragma", value: "no-cache"), HTTPHeader(name: "Cache-Control", value: "no-cache")])
-        return .continue(r)
+        r.headers = rewrite(r.headers, remove: ["if-modified-since", "if-none-match"],
+                            add: [HTTPHeader(name: "Pragma", value: "no-cache"), HTTPHeader(name: "Cache-Control", value: "no-cache")])
+        return r
+    }
+
+    public func intercept(_ request: FlowRequest, context: FlowContext) async -> RequestDecision {
+        .continue(Self.noCache(request))
     }
 
     public func intercept(_ response: FlowResponse, for request: FlowRequest, context: FlowContext) async -> ResponseDecision {

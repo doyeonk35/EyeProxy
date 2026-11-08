@@ -17,6 +17,12 @@
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
+    <!-- Compose·Repeat는 임의의 http 주소로 보낸다(URLSession ATS 예외). -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
     <key>NSLocalNetworkUsageDescription</key>
     <string>같은 네트워크의 기기(Apple TV·iPhone)와 서버에 연결하기 위해 필요합니다.</string>
     <key>SUFeedURL</key>

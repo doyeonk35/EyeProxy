@@ -95,6 +95,10 @@ import SwiftUI
             MapRemoteWindow().environment(model)
         }
         .defaultSize(width: 1200, height: 672)
+        Window("Compose", id: "compose") {
+            ComposeView().environment(model)
+        }
+        .defaultSize(width: 1200, height: 732)
         PlaceholderToolScenes()
         Window("기기", id: "devices") {
             DevicesView()

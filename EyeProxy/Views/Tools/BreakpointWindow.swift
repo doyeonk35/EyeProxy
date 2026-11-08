@@ -54,7 +54,7 @@ struct BreakpointWindow: View {
 
 enum BreakpointTab: Hashable { case header, query, body, raw }
 
-/// 한 건의 편집 상태. `queryRows`는 빈 행을 잃지 않도록 경로와 따로 둔다(바뀌면 경로에 다시 쓴다).
+/// 한 건의 편집 상태(Breakpoint·Compose 요청 편집). `queryRows`는 빈 행을 잃지 않도록 경로와 따로 둔다(바뀌면 경로에 다시 쓴다).
 struct BreakpointDraft {
     var request: FlowRequest
     var response: FlowResponse?
@@ -67,6 +67,11 @@ struct BreakpointDraft {
         request = item.request
         response = item.response
         queryRows = Self.queryRows(item.request.path)
+    }
+
+    init(request: FlowRequest) {
+        self.request = request
+        queryRows = Self.queryRows(request.path)
     }
 
     static func split(_ path: String) -> (path: String, query: String?) {

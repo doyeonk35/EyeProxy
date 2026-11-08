@@ -16,7 +16,7 @@ struct FlowListView: View {
         let comments = model.session.comments
 
         // Proxyman 메인 목록과 같은 열·순서(Task 15b). 선택 열은 숨김 기본값.
-        Table(rows, selection: $model.selectedFlowID, sortOrder: $model.sortOrder, columnCustomization: $columnCustomization) {
+        Table(rows, selection: $model.selectedFlowIDs, sortOrder: $model.sortOrder, columnCustomization: $columnCustomization) {
             Group {
                 TableColumn("", value: \.state) { (row: FlowRow) in
                     Circle().fill(FlowColors.state(row.state)).frame(width: 8, height: 8)
@@ -50,14 +50,14 @@ struct FlowListView: View {
                 }
                 .width(min: 80, ideal: 130, max: 240)
                 .customizationID("client")
-                TableColumn("Method", value: \.method) { (row: FlowRow) in MethodTag(method: row.method, selected: row.id == model.selectedFlowID) }
+                TableColumn("Method", value: \.method) { (row: FlowRow) in MethodTag(method: row.method, selected: model.selectedFlowIDs.contains(row.id)) }
                     .width(min: 50, ideal: 70, max: 110)
                     .customizationID("method")
                 TableColumn("Status", value: \.state) { (row: FlowRow) in Text(Self.stateText(row.state)) }
                     .width(min: 70, ideal: 86, max: 120)
                     .customizationID("state")
                 TableColumn("Code", value: \.status) { (row: FlowRow) in
-                    if row.flow.response != nil { StatusTag(flow: row.flow, selected: row.id == model.selectedFlowID) }
+                    if row.flow.response != nil { StatusTag(flow: row.flow, selected: model.selectedFlowIDs.contains(row.id)) }
                 }
                 .width(min: 40, ideal: 50, max: 80)
                 .customizationID("code")
@@ -90,7 +90,7 @@ struct FlowListView: View {
                 .customizationID("ssl")
                 TableColumn("Edited", value: \.edited) { (row: FlowRow) in
                     HStack(spacing: 4) {
-                        ForEach(row.editedMarks, id: \.self) { EditedTag(mark: $0, selected: row.id == model.selectedFlowID) }
+                        ForEach(row.editedMarks, id: \.self) { EditedTag(mark: $0, selected: model.selectedFlowIDs.contains(row.id)) }
                     }
                     .lineLimit(1)
                 }
@@ -113,8 +113,18 @@ struct FlowListView: View {
             }
         }
         .alternatingRowBackgrounds(.disabled)
+        // Flow ▸ Repeat(⌘↩)는 메인 창이 key일 때만 켜진다 → 다른 창의 ⌘↩를 빼앗지 않는다.
+        .focusedSceneValue(\.flowSelection, model.selectedFlowIDs.isEmpty ? nil : model.selectedFlowIDs)
         .contextMenu(forSelectionType: FlowID.self) { ids in
-            if let id = ids.first, let flow = model.session.flow(id) {
+            if !ids.isEmpty {
+                Button("Repeat") { model.repeatFlows(ids) }
+            }
+            if ids.count == 1, let id = ids.first, let flow = model.session.flow(id) {
+                Button("Edit and Repeat…") {
+                    model.composeSeed = flow.request
+                    openWindow(id: "compose")
+                }
+                Divider()
                 Button("Enable SSL Proxying for \(flow.request.host)") {
                     Task { await model.enableSSLProxying(for: flow.request.host) }
                 }

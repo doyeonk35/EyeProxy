@@ -1,3 +1,4 @@
+import EyeProxyCore
 import EyeProxyKit
 import SwiftUI
 
@@ -11,11 +12,30 @@ struct ToolsCommands: Commands {
     }
 }
 
-/// 선택된 흐름 하나에 적용하는 항목. Repeat·Edit and Repeat는 Task 17에서 붙는다.
+extension FocusedValues {
+    /// 메인 창이 key일 때의 목록 선택. 다른 창(Compose·Breakpoint 등)이 앞이면 nil → Repeat ⌘↩가 그 창의 ⌘↩를 가로채지 않는다.
+    @Entry var flowSelection: Set<FlowID>?
+}
+
+/// 선택된 흐름에 적용하는 항목(스펙 §5.8·§6.1).
 private struct FlowMenu: View {
     let model: AppModel
+    @FocusedValue(\.flowSelection) private var selection
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        let ids = selection ?? []
+        Button("Repeat") { model.repeatFlows(ids) }
+            .keyboardShortcut(.return, modifiers: .command)
+            .disabled(ids.isEmpty)
+        Button("Edit and Repeat…") {
+            guard let id = ids.first, let flow = model.session.flow(id) else { return }
+            model.composeSeed = flow.request
+            openWindow(id: "compose")
+        }
+        .keyboardShortcut(.return, modifiers: [.command, .option])
+        .disabled(ids.count != 1)
+        Divider()
         let id = model.selectedFlowID
         Button(id.flatMap { model.session.comments[$0] } == nil ? "Add Comment…" : "Edit Comment…") { model.commentingFlowID = id }
             .disabled(id == nil)
@@ -73,7 +93,6 @@ private struct ToolsMenu: View {
 /// 다음 태스크가 채울 창 자리. 메뉴·우클릭에서 열리는지만 보장한다.
 struct PlaceholderToolScenes: Scene {
     var body: some Scene {
-        placeholder("Compose", id: "compose")
         placeholder("Import from Proxyman", id: "import-proxyman")
     }
 
