@@ -14,6 +14,7 @@
 //
 // Ported from swift-nio-examples `connect-proxy/Sources/ConnectProxy/GlueHandler.swift` (renamed).
 // 두 채널을 같은 EventLoop에 두고 바이트를 양방향으로 그대로 옮긴다. 백프레셔는 상대가 쓰기 불가면 read()를 미룬다.
+// shaping이 있으면 읽은 청크와 닫기를 순서대로 늦춰 전달한다(EyeProxy 추가).
 
 import NIOCore
 
@@ -21,14 +22,23 @@ final class TunnelGlueHandler {
     private var partner: TunnelGlueHandler?
     private var context: ChannelHandlerContext?
     private var pendingRead: Bool = false
+    private let shaping: TunnelShaping?
+    /// 이 핸들러가 읽는 방향의 속도.
+    private let bytesPerSecond: Int?
+    /// 직전 청크가 (속도 제한) 링크를 다 지난 시각. 전달은 그 뒤 `latencyMS`.
+    private var linkFree = NIODeadline.uptimeNanoseconds(0)
 
-    private init() {}
+    private init(shaping: TunnelShaping?, bytesPerSecond: Int?) {
+        self.shaping = shaping
+        self.bytesPerSecond = bytesPerSecond
+    }
 }
 
 extension TunnelGlueHandler {
-    static func matchedPair() -> (TunnelGlueHandler, TunnelGlueHandler) {
-        let first = TunnelGlueHandler()
-        let second = TunnelGlueHandler()
+    /// first = 클라이언트 쪽(올림), second = 업스트림 쪽(내림).
+    static func matchedPair(shaping: TunnelShaping? = nil) -> (TunnelGlueHandler, TunnelGlueHandler) {
+        let first = TunnelGlueHandler(shaping: shaping, bytesPerSecond: shaping?.upBytesPerSecond)
+        let second = TunnelGlueHandler(shaping: shaping, bytesPerSecond: shaping?.downBytesPerSecond)
         first.partner = second
         second.partner = first
         return (first, second)
@@ -62,10 +72,22 @@ extension TunnelGlueHandler {
     private var partnerWritable: Bool {
         self.context?.channel.isWritable ?? false
     }
+
+    /// shaping이 없으면 바로, 있으면 앞 청크 뒤에 `크기/속도`만큼 줄 서고 `latencyMS` 뒤에 실행한다(순서 유지).
+    /// 상대는 지금 잡아 둔다(채널이 닫히면 handlerRemoved가 partner를 지운다).
+    /// ponytail: 늦춘 청크는 메모리에 쌓인다(백프레셔 없음). 큰 전송을 느린 속도로 흘리면 read()를 멈추게 고친다.
+    private func deliver(_ bytes: Int, context: ChannelHandlerContext, _ action: @escaping (TunnelGlueHandler?) -> Void) {
+        let partner = self.partner
+        guard let shaping else { return action(partner) }
+        var free = max(linkFree, .now())
+        if let rate = bytesPerSecond, rate > 0 { free = free + .nanoseconds(Int64(bytes) * 1_000_000_000 / Int64(rate)) }
+        linkFree = free
+        context.eventLoop.assumeIsolated().scheduleTask(deadline: free + .milliseconds(Int64(shaping.latencyMS))) { action(partner) }
+    }
 }
 
 extension TunnelGlueHandler: ChannelDuplexHandler {
-    typealias InboundIn = NIOAny
+    typealias InboundIn = ByteBuffer   // 양쪽 모두 원시 바이트. unwrap은 shaping 때만.
     typealias OutboundIn = NIOAny
     typealias OutboundOut = NIOAny
 
@@ -79,7 +101,12 @@ extension TunnelGlueHandler: ChannelDuplexHandler {
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        self.partner?.partnerWrite(data)
+        guard let shaping else { self.partner?.partnerWrite(data); return }
+        guard !shaping.blackhole else { return }
+        deliver(unwrapInboundIn(data).readableBytes, context: context) { partner in
+            partner?.partnerWrite(data)
+            partner?.partnerFlush()
+        }
     }
 
     func channelReadComplete(context: ChannelHandlerContext) {
@@ -87,18 +114,18 @@ extension TunnelGlueHandler: ChannelDuplexHandler {
     }
 
     func channelInactive(context: ChannelHandlerContext) {
-        self.partner?.partnerCloseFull()
+        deliver(0, context: context) { $0?.partnerCloseFull() }
     }
 
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
         if let event = event as? ChannelEvent, case .inputClosed = event {
             // We have read EOF.
-            self.partner?.partnerWriteEOF()
+            deliver(0, context: context) { $0?.partnerWriteEOF() }
         }
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
-        self.partner?.partnerCloseFull()
+        deliver(0, context: context) { $0?.partnerCloseFull() }
     }
 
     func channelWritabilityChanged(context: ChannelHandlerContext) {

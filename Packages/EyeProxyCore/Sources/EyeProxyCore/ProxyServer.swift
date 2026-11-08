@@ -120,11 +120,14 @@ public actor ProxyServer {
 
     /// 요청 하나의 수명: 이벤트 → 요청 인터셉터 → (업스트림) → 응답 인터셉터 → 이벤트. 실패는 502로 바꿔 돌려준다.
     /// 요청 체인의 `.respond`도 응답 체인을 거친다. 어느 체인이든 `.drop`이면 `.failed`를 내고 `.drop`을 돌려준다.
-    func exchange(_ request: FlowRequest, clientAddress: String, clientPort: Int? = nil, upstream: UpstreamClient, isDecrypted: Bool = false) async -> ExchangeOutcome {
+    /// `note`가 있으면 흐름에 `.tool(note)` 주석을 단다(CONNECT 판정이 복호화를 강제한 연결).
+    func exchange(_ request: FlowRequest, clientAddress: String, clientPort: Int? = nil, upstream: UpstreamClient, isDecrypted: Bool = false,
+                  note: String? = nil) async -> ExchangeOutcome {
         let id = FlowID()
         let sink = eventSink
         let context = FlowContext(id: id, clientAddress: clientAddress, clientPort: clientPort) { sink.yield(.annotated(id: id, $0)) }
         eventSink.yield(.requestStarted(Flow(id: id, clientAddress: clientAddress, clientPort: clientPort, startedAt: Date(), request: request, isDecrypted: isDecrypted)))
+        if let note { context.annotate(.tool(note)) }
         let chain = interceptors
         let response: FlowResponse, sent: FlowRequest
         let (decision, last) = await chain.runRequest(request, context: context)
@@ -157,8 +160,10 @@ public actor ProxyServer {
         }
     }
 
+    static let droppedByRule = "규칙으로 연결 끊김"
+
     private func dropped(_ id: FlowID) -> ExchangeOutcome {
-        eventSink.yield(.failed(id: id, error: "규칙으로 연결 끊김", completedAt: Date()))
+        eventSink.yield(.failed(id: id, error: Self.droppedByRule, completedAt: Date()))
         return .drop
     }
 

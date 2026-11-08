@@ -112,4 +112,21 @@ struct ProxyServerMITMTests {
         #expect(error.hasPrefix("업스트림 인증서 오류: "))
         await server.stop(); await origin.stop()
     }
+
+    @Test func connectDecryptForcesMITMWithEmptySSLList() async throws {
+        let ca = try CertificateAuthority.generate()
+        let origin = TestOrigin(tls: try ca.leaf(for: "localhost")) { _ in FlowResponse(status: 200, reason: "OK", headers: [], body: Data("d".utf8)) }
+        let originPort = try await origin.start()
+        let server = ProxyServer(configuration: .init(port: 0, sslPolicy: .init(patterns: []), upstreamTrustRootsDER: [ca.certificateDER]),
+                                 certificateAuthority: ca, interceptors: .init(connect: [FixedVerdict(verdict: .init(action: .decrypt, note: "규칙: R"))]))
+        let port = try await server.start()
+        var it = server.events.makeAsyncIterator()
+        let (status, _, body) = try await fetchViaProxy("https://localhost:\(originPort)/p", proxyPort: port, trustRootDER: ca.certificateDER)
+        #expect(status == 200 && body == Data("d".utf8))
+        guard case .requestStarted(let flow) = await it.next() else { Issue.record("no requestStarted"); return }
+        #expect(flow.isDecrypted && flow.request.path == "/p")
+        guard case .annotated(let id, let annotation) = await it.next() else { Issue.record("no annotated"); return }
+        #expect(id == flow.id && annotation == .tool("규칙: R"))
+        await server.stop(); await origin.stop()
+    }
 }

@@ -18,11 +18,14 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
     private var inFlight: Task<Void, Never>?
     /// MITM으로 TLS를 끝낸 연결이면 원 서버. 요청은 origin-form(`GET /path`)으로 온다.
     private let tlsOrigin: (host: String, port: Int)?
+    /// CONNECT 판정이 붙인 메모. 이 연결의 모든 흐름에 `.tool(note)`로 단다.
+    private let note: String?
 
-    init(server: ProxyServer, upstream: UpstreamClient, tlsOrigin: (host: String, port: Int)? = nil) {
+    init(server: ProxyServer, upstream: UpstreamClient, tlsOrigin: (host: String, port: Int)? = nil, note: String? = nil) {
         self.server = server
         self.upstream = upstream
         self.tlsOrigin = tlsOrigin
+        self.note = note
     }
 
     /// 프레이밍은 `write`가 전부 정한다(HEAD/204/304의 원 Content-Length 보존).
@@ -103,8 +106,11 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
         let clientAddress = context.channel.remoteAddress?.ipAddress ?? "unknown"
         let clientPort = context.channel.remoteAddress?.port
         let promise = context.eventLoop.makePromise(of: ExchangeOutcome.self)
-        let isDecrypted = tlsOrigin != nil
-        inFlight = Task { promise.succeed(await server.exchange(request, clientAddress: clientAddress, clientPort: clientPort, upstream: upstream, isDecrypted: isDecrypted)) }
+        let isDecrypted = tlsOrigin != nil, note = self.note
+        inFlight = Task {
+            promise.succeed(await server.exchange(request, clientAddress: clientAddress, clientPort: clientPort, upstream: upstream,
+                                                  isDecrypted: isDecrypted, note: note))
+        }
         promise.futureResult.assumeIsolated().whenSuccess { outcome in
             self.inFlight = nil
             switch outcome {
@@ -114,25 +120,41 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
         }
     }
 
-    /// CONNECT 시점의 현재 SSL Proxying 정책으로 MITM 여부를 정한다.
+    /// CONNECT 판정 훅을 먼저 묻고, `.useDefault`면 현재 SSL Proxying 정책으로 MITM 여부를 정한다.
+    /// `record == false`면 판정이 복호화여도 이벤트 없는 터널로 간다.
     private func connect(_ head: HTTPRequestHead, context: ChannelHandlerContext) {
         guard let (host, port) = Self.authority(head.uri) else {
             write(Self.plain(400, "Bad Request"), to: head, keepAlive: false, context: context)
             return
         }
         let server = self.server
-        // nil = 터널, 컨텍스트 = MITM
-        let decision = context.eventLoop.makePromise(of: NIOSSLContext?.self)
+        let connectContext = ConnectContext(clientAddress: context.channel.remoteAddress?.ipAddress ?? "unknown",
+                                            clientPort: context.channel.remoteAddress?.port)
+        // ssl nil = 터널(또는 끊기), 컨텍스트 = MITM
+        let decision = context.eventLoop.makePromise(of: (verdict: ConnectVerdict, ssl: NIOSSLContext?).self)
         decision.completeWithTask {
-            guard await server.sslPolicy.shouldDecrypt(host: host) else { return nil }
-            return try await server.leafContext(for: host)
+            let verdict = await server.interceptors.runConnect(host: host, port: port, context: connectContext)
+            var decrypt = false
+            switch verdict.action {
+            case .decrypt: decrypt = verdict.record
+            case .useDefault: decrypt = verdict.record ? await server.sslPolicy.shouldDecrypt(host: host) : false
+            case .tunnel, .drop: break
+            }
+            return (verdict, decrypt ? try await server.leafContext(for: host) : nil)
         }
         decision.futureResult.assumeIsolated().whenComplete { result in
             switch result {
-            case .success(nil):
-                self.tunnel(head, host: host, port: port, context: context)
-            case .success(let sslContext?):
-                self.intercept(head, host: host, port: port, sslContext: sslContext, context: context)
+            case .success(let d) where d.verdict.action == .drop:
+                if d.verdict.record {
+                    let id = FlowID()
+                    server.emit(.requestStarted(Self.connectFlow(id: id, host: host, port: port, channel: context.channel)))
+                    server.emit(.failed(id: id, error: ProxyServer.droppedByRule, completedAt: Date()))
+                }
+                context.close(promise: nil)
+            case .success((let verdict, nil)):
+                self.tunnel(head, host: host, port: port, record: verdict.record, shaping: verdict.shaping, context: context)
+            case .success((let verdict, let sslContext?)):
+                self.intercept(head, host: host, port: port, sslContext: sslContext, note: verdict.note, context: context)
             case .failure(let error):   // 리프 발급 실패
                 server.emit(.connectionLog(ConnectionLogEntry(id: UUID(), date: Date(), clientAddress: context.channel.remoteAddress?.ipAddress ?? "unknown",
                                                               host: host, port: port, message: String(describing: error))))
@@ -143,7 +165,7 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
 
     /// MITM: 200 → [decoder, encoder, proxy]를 [TLS, decoder, encoder, proxy(tlsOrigin)]로 바꾼다.
     /// TLS 핸들러를 옛 디코더 바로 뒤에 먼저 꽂아, 디코더 제거 때 넘어오는 이미 읽힌 바이트(ClientHello)가 TLS로 가게 한다.
-    private func intercept(_ head: HTTPRequestHead, host: String, port: Int, sslContext: NIOSSLContext, context: ChannelHandlerContext) {
+    private func intercept(_ head: HTTPRequestHead, host: String, port: Int, sslContext: NIOSSLContext, note: String?, context: ChannelHandlerContext) {
         guard context.channel.isActive else { return }
         let status = HTTPResponseStatus.custom(code: 200, reasonPhrase: "Connection Established")
         context.write(wrapOutboundOut(.head(HTTPResponseHead(version: head.version, status: status))), promise: nil)
@@ -152,7 +174,7 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
         let ops = context.pipeline.syncOperations
         let channel = context.channel
         let tls = NIOSSLServerHandler(context: sslContext)
-        let next = ProxyConnectionHandler(server: server, upstream: upstream, tlsOrigin: (host, port))
+        let next = ProxyConnectionHandler(server: server, upstream: upstream, tlsOrigin: (host, port), note: note)
         do {
             try ops.addHandler(tls, position: .after(ops.context(name: "http-decoder").handler))
         } catch {
@@ -179,18 +201,18 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
     }
 
     /// 패스스루: 업스트림 TCP 연결 → 200 → HTTP 핸들러 제거 → 양쪽에 GlueHandler. 바이트는 보지 않는다.
+    /// `record == false`면 이벤트를 내지 않는다. `shaping`은 GlueHandler가 바이트 전달을 늦춘다.
     /// ponytail: half-close 미지원(한쪽 EOF면 양쪽 다 닫는다). 필요하면 allowRemoteHalfClosure를 양쪽에 켠다.
-    private func tunnel(_ head: HTTPRequestHead, host: String, port: Int, context: ChannelHandlerContext) {
+    private func tunnel(_ head: HTTPRequestHead, host: String, port: Int, record: Bool, shaping: TunnelShaping?, context: ChannelHandlerContext) {
         let server = self.server
+        let emit: @Sendable (FlowEvent) -> Void = { if record { server.emit($0) } }
         let id = FlowID()
-        let request = FlowRequest(method: "CONNECT", scheme: "https", host: host, port: port, path: "", headers: [], body: Data())
-        server.emit(.requestStarted(Flow(id: id, clientAddress: context.channel.remoteAddress?.ipAddress ?? "unknown",
-                                         clientPort: context.channel.remoteAddress?.port, startedAt: Date(), request: request, isTunnel: true)))
+        emit(.requestStarted(Self.connectFlow(id: id, host: host, port: port, channel: context.channel)))
         ClientBootstrap(group: context.eventLoop).connect(host: host, port: port).assumeIsolated().whenComplete { result in
             let peer: Channel
             switch result {
             case .failure(let error):
-                server.emit(.failed(id: id, error: String(describing: error), completedAt: Date()))
+                emit(.failed(id: id, error: String(describing: error), completedAt: Date()))
                 self.write(FlowResponse(status: 502, reason: "Bad Gateway", headers: [], body: Data()), to: head, keepAlive: false, context: context)
                 return
             case .success(let channel):
@@ -198,13 +220,13 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
             }
             if shouldBlockUpstream(clientAddress: context.channel.remoteAddress?.ipAddress, peerAddress: peer.remoteAddress?.ipAddress) {
                 peer.close(promise: nil)
-                server.emit(.failed(id: id, error: LoopbackBlockedError().description, completedAt: Date()))
+                emit(.failed(id: id, error: LoopbackBlockedError().description, completedAt: Date()))
                 self.write(FlowResponse(status: 403, reason: "Forbidden", headers: [], body: Data()), to: head, keepAlive: false, context: context)
                 return
             }
             guard context.channel.isActive else {
                 peer.close(promise: nil)
-                server.emit(.failed(id: id, error: "client disconnected", completedAt: Date()))
+                emit(.failed(id: id, error: "client disconnected", completedAt: Date()))
                 return
             }
             // 200 CONNECT 응답에는 Content-Length/Transfer-Encoding을 넣지 않는다(RFC 9110 §9.3.6).
@@ -219,7 +241,7 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
                 if case .failure = removal { channel.close(promise: nil) } else { channel.pipeline.fireChannelReadComplete() }
             }
             ops.removeHandler(name: "http-encoder", promise: nil)
-            let (local, remote) = TunnelGlueHandler.matchedPair()
+            let (local, remote) = TunnelGlueHandler.matchedPair(shaping: shaping)
             do {
                 try ops.addHandler(local)
                 try peer.pipeline.syncOperations.addHandler(remote)
@@ -229,11 +251,18 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
                 return
             }
             channel.closeFuture.whenComplete { _ in
-                server.emit(.responseReceived(id: id, response: FlowResponse(status: 200, reason: "Connection Established", headers: [], body: Data()),
+                emit(.responseReceived(id: id, response: FlowResponse(status: 200, reason: "Connection Established", headers: [], body: Data()),
                                               completedAt: Date()))
             }
             ops.removeHandler(context: context, promise: nil)
         }
+    }
+
+    /// 터널·끊기 항목으로 남는 CONNECT 흐름.
+    private static func connectFlow(id: FlowID, host: String, port: Int, channel: Channel) -> Flow {
+        let request = FlowRequest(method: "CONNECT", scheme: "https", host: host, port: port, path: "", headers: [], body: Data())
+        return Flow(id: id, clientAddress: channel.remoteAddress?.ipAddress ?? "unknown", clientPort: channel.remoteAddress?.port,
+                    startedAt: Date(), request: request, isTunnel: true)
     }
 
     /// CONNECT authority-form(`host:port`, `[::1]:443`). 포트 필수.
