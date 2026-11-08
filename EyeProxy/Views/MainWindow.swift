@@ -12,15 +12,19 @@ struct MainWindow: View {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         } detail: {
-            if model.settings.layout == .classic {
-                VSplitView {
-                    FlowListView().frame(maxWidth: .infinity, minHeight: 160, maxHeight: .infinity)
-                    FlowDetailView().frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
-                }
-            } else {
-                HSplitView {
-                    FlowListView().frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
-                    FlowDetailView().frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 0) {
+                FilterBarView()
+                Divider()
+                if model.settings.layout == .classic {
+                    VSplitView {
+                        FlowListView().frame(maxWidth: .infinity, minHeight: 160, maxHeight: .infinity)
+                        FlowDetailView().frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
+                    }
+                } else {
+                    HSplitView {
+                        FlowListView().frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                        FlowDetailView().frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
             }
         }
