@@ -58,3 +58,18 @@ import Testing
     s.replace(flows: [a], comments: [a.id: "c", FlowID(): "orphan"]); #expect(s.comments == [a.id: "c"])
     s.replace(flows: []); #expect(s.comments.isEmpty)
 }
+
+@Test @MainActor func unrecordedLatestDoesNotLeaveGap() {
+    let s = SessionStore(); let a = Flow.fixture(client: "1", decrypted: false), b = Flow.fixture(client: "2", decrypted: false)
+    s.apply(.requestStarted(a)); s.apply(.requestStarted(b)); s.apply(.annotated(id: b.id, .unrecorded))
+    let c = Flow.fixture(client: "3", decrypted: false); s.apply(.requestStarted(c))
+    #expect(s.number(a.id) == 1 && s.number(b.id) == nil && s.number(c.id) == 2)
+}
+
+@Test @MainActor func unrecordedEarlierLeavesGap() {
+    let s = SessionStore(); let a = Flow.fixture(client: "1", decrypted: false), b = Flow.fixture(client: "2", decrypted: false)
+    s.apply(.requestStarted(a)); s.apply(.requestStarted(b)); s.apply(.annotated(id: a.id, .unrecorded))
+    let c = Flow.fixture(client: "3", decrypted: false); s.apply(.requestStarted(c))
+    #expect(s.number(a.id) == nil && s.number(b.id) == 2 && s.number(c.id) == 3)
+    #expect(s.flows.map(\.id) == [b.id, c.id] && s.flow(b.id) != nil && s.flow(c.id) != nil)   // index는 위치로 다시 맞춰짐
+}

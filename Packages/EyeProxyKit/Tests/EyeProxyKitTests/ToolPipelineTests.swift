@@ -163,13 +163,13 @@ struct ToolPipelineTests {
     s.apply(.annotated(id: b.id, .unrecorded))
     #expect(s.flows.map(\.id) == [a.id, c.id])
     #expect(s.number(b.id) == nil && s.flow(b.id) == nil)
-    #expect(s.number(a.id) == 1 && s.number(c.id) == 2 && s.flow(c.id)?.clientAddress == "3")
+    #expect(s.number(a.id) == 1 && s.number(c.id) == 3 && s.flow(c.id)?.clientAddress == "3")   // 안정 번호: 빈 번호 2
     // 뒤따르는 이벤트는 남은 흐름에 정확히 반영된다.
     s.apply(.responseReceived(id: c.id, response: .init(status: 204, reason: "", headers: [], body: Data()), completedAt: .now))
     #expect(s.flows[1].response?.status == 204)
     let d = Flow.fixture(client: "4", decrypted: false)
     s.apply(.requestStarted(d))
-    #expect(s.number(d.id) == 3)
+    #expect(s.number(d.id) == 4)
     s.apply(.annotated(id: b.id, .hidden))   // 이미 지운 흐름: 무시
     #expect(s.flows.count == 3)
 }

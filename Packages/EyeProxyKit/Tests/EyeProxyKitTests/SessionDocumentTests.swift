@@ -58,3 +58,31 @@ import Testing
     try Data(#"{"version":1,"flows":[],"connectionLog":[]}"#.utf8).write(to: url.appending(path: "index.json"))
     #expect(try SessionDocument.load(from: url).comments.isEmpty)
 }
+
+@Test @MainActor func sessionFileRoundTripsStableNumbers() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).eyeproxy"); defer { try? FileManager.default.removeItem(at: url) }
+    let fs = (1...3).map { Flow.fixture(client: "\($0)", decrypted: false) }
+    let numbers = [fs[0].id: 1, fs[1].id: 3, fs[2].id: 7]
+    try SessionDocument.save(flows: fs, connectionLog: [], numbers: numbers, to: url)
+    let loaded = try SessionDocument.load(from: url)
+    #expect(loaded.numbers == numbers)
+    let s = SessionStore(); s.replace(flows: loaded.flows, numbers: loaded.numbers)
+    #expect(s.numbersByID == numbers)
+    let next = Flow.fixture(client: "4", decrypted: false); s.apply(.requestStarted(next))
+    #expect(s.number(next.id) == 8)
+}
+
+@Test @MainActor func legacySessionGetsPositionalNumbers() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID()).eyeproxy"); defer { try? FileManager.default.removeItem(at: url) }
+    let fs = (1...3).map { Flow.fixture(client: "\($0)", decrypted: false) }
+    try SessionDocument.save(flows: fs, connectionLog: [], to: url)
+    // 구버전 index.json: save가 만든 모양에서 numbers 키만 뺀다.
+    let indexURL = url.appending(path: "index.json")
+    var json = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: indexURL)) as? [String: Any])
+    json["numbers"] = nil
+    try JSONSerialization.data(withJSONObject: json).write(to: indexURL)
+    let loaded = try SessionDocument.load(from: url)
+    #expect(loaded.numbers == nil)
+    let s = SessionStore(); s.replace(flows: loaded.flows, numbers: loaded.numbers)
+    #expect(fs.map { s.number($0.id) } == [1, 2, 3])
+}

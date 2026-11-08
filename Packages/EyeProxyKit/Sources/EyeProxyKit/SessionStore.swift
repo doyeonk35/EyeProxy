@@ -54,24 +54,23 @@ public final class SessionStore {
         }
     }
 
-    /// 번호는 항상 위치 + 1이므로(`replace`와 같음) 뒤 흐름들의 위치·번호를 한 칸씩 당긴다.
+    /// 번호는 붙은 그대로 둔다(빈 번호 허용). 가장 최근 번호면 `next`만 되돌린다. `index`는 위치이므로 뒤를 다시 맞춘다.
     private func remove(at i: Int) {
         let removed = flows.remove(at: i)
         index[removed.id] = nil
-        numbers[removed.id] = nil
+        if numbers.removeValue(forKey: removed.id) == next - 1 { next -= 1 }
         comments[removed.id] = nil
-        next -= 1
-        for k in i..<flows.count {
-            index[flows[k].id] = k
-            numbers[flows[k].id] = k + 1
-        }
+        for k in i..<flows.count { index[flows[k].id] = k }
     }
 
-    public func replace(flows: [Flow], connectionLog: [ConnectionLogEntry] = [], comments: [FlowID: String] = [:]) {
+    /// `numbers`가 nil이면 순서대로 1부터, 있으면 그 번호를 쓰고 빠진 흐름은 최대 번호 뒤로 순서대로 붙인다.
+    public func replace(flows: [Flow], connectionLog: [ConnectionLogEntry] = [], comments: [FlowID: String] = [:],
+                        numbers: [FlowID: Int]? = nil) {
         self.flows = flows
         index = Dictionary(flows.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { _, last in last })
-        numbers = Dictionary(flows.enumerated().map { ($1.id, $0 + 1) }, uniquingKeysWith: { _, last in last })
-        next = flows.count + 1
+        self.numbers = (numbers ?? [:]).filter { index[$0.key] != nil }
+        next = (self.numbers.values.max() ?? 0) + 1
+        for f in flows where self.numbers[f.id] == nil { self.numbers[f.id] = next; next += 1 }
         self.connectionLog = connectionLog
         self.comments = comments.filter { index[$0.key] != nil && !$0.value.isEmpty }
     }
@@ -85,6 +84,9 @@ public final class SessionStore {
     }
 
     public func number(_ id: FlowID) -> Int? { numbers[id] }
+
+    /// 흐름별 안정 번호 전체(세션 저장용).
+    public var numbersByID: [FlowID: Int] { numbers }
 
     public func flow(_ id: FlowID) -> Flow? { index[id].map { flows[$0] } }
 }
