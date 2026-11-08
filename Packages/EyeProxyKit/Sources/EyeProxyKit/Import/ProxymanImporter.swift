@@ -69,6 +69,20 @@ public enum ProxymanImporter {
     public static let defaultDirectory = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Application Support/com.proxyman.NSProxy", isDirectory: true)
 
+    /// EyeProxy가 쓰거나(응답 파일) 쓰기 폴더로 삼아도 되는 위치인가. Proxyman 폴더 자체·그 안·그 조상이면 false.
+    /// 심볼릭 링크를 풀고(없는 끝 성분은 부모를 풀어 이어 붙임) 대소문자를 무시해 비교한다.
+    public static func isSafeWriteTarget(_ url: URL, proxymanDirectory: URL = defaultDirectory) -> Bool {
+        func real(_ u: URL) -> [String] {
+            let u = u.standardizedFileURL
+            if FileManager.default.fileExists(atPath: u.path) || u.pathComponents.count <= 1 {
+                return u.resolvingSymlinksInPath().pathComponents.map { $0.lowercased() }
+            }
+            return real(u.deletingLastPathComponent()) + [u.lastPathComponent.lowercased()]
+        }
+        let target = real(url), proxyman = real(proxymanDirectory)
+        return !target.starts(with: proxyman) && !proxyman.starts(with: target)
+    }
+
     // MARK: 읽기 (파일 열기만 한다)
 
     public static func preview(proxymanDirectory dir: URL) throws -> ProxymanImportPreview {

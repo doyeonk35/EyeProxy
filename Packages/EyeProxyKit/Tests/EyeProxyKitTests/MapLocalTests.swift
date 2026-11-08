@@ -189,3 +189,26 @@ func directoryRelativePath(pattern: String, mode: String, url: String, expected:
     }
     #expect(ContinuousClock.now - start >= .seconds(1))
 }
+
+@Test func ruleWithLocalFileAndDirectoryOffIsSkipped() async throws {
+    let dir = try tempDir()
+    try Data("HTTP/1.1 200 OK\n\nfirst".utf8).write(to: dir.appendingPathComponent("a.http"))
+    try Data("HTTP/1.1 200 OK\n\nsecond".utf8).write(to: dir.appendingPathComponent("b.http"))
+    let match = MatchRule(url: "https://api.example.com/*")
+    var off = MapLocalRule(name: "Off", match: match, localFile: LocalFileRef(name: "a", path: dir.appendingPathComponent("a.http").path))
+    off.useLocalFile = false
+    let on = MapLocalRule(name: "On", match: match, localFile: LocalFileRef(name: "b", path: dir.appendingPathComponent("b.http").path))
+
+    let a = Annotations()
+    let q = request("https://api.example.com/x")
+    guard case .continue(let out) = await MapLocalInterceptor(rules: RuleTree(nodes: [.rule(off)])).intercept(q, context: a.context) else {
+        Issue.record("not continue"); return
+    }
+    #expect(out == q && a.all.isEmpty)
+
+    let b = Annotations()
+    guard case .respond(let res) = await MapLocalInterceptor(rules: RuleTree(nodes: [.rule(off), .rule(on)])).intercept(q, context: b.context) else {
+        Issue.record("not respond"); return
+    }
+    #expect(res.body == Data("second".utf8) && b.all == [.tool("Map Local: On")])
+}

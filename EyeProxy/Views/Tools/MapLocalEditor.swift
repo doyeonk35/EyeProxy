@@ -5,6 +5,7 @@ import SwiftUI
 
 struct MapLocalWindow: View {
     @Environment(AppModel.self) private var model
+    @State private var folderRejected = false
 
     var body: some View {
         ToolWindow(
@@ -18,7 +19,9 @@ struct MapLocalWindow: View {
             }
         ) {
             Menu("Default Local File Folder") {
-                Button("Choose Folder…") { if let url = MapLocalMessage.pick(directory: true) { model.setMapLocalFolder(url) } }
+                Button("Choose Folder…") {
+                    if let url = MapLocalMessage.pick(directory: true) { folderRejected = !model.setMapLocalFolder(url) }
+                }
                 Button("Use Default Folder") { model.setMapLocalFolder(nil) }
                 Button("Reveal in Finder") {
                     let dir = model.rules.mapLocalDirectory
@@ -35,14 +38,21 @@ struct MapLocalWindow: View {
                 Text(verbatim: MapLocalMessage.source(r)).lineLimit(1).truncationMode(.middle)
             }
         }
+        .alert("이 폴더는 쓸 수 없습니다", isPresented: $folderRejected) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("Proxyman 폴더이거나 그 폴더를 포함합니다. 다른 폴더를 고르세요.")
+        }
     }
 }
 
 extension AppModel {
-    /// More ▸ Default Local File Folder. nil = 기본 폴더.
-    func setMapLocalFolder(_ url: URL?) {
+    /// More ▸ Default Local File Folder. nil = 기본 폴더. Proxyman 폴더(그 안·조상 포함)는 거절하고 false.
+    @discardableResult func setMapLocalFolder(_ url: URL?) -> Bool {
+        if let url, !ProxymanImporter.isSafeWriteTarget(url) { return false }
         settings.mapLocalDefaultFolder = url?.path
         rules.mapLocalFolderOverride = url
+        return true
     }
 }
 
@@ -74,6 +84,12 @@ extension AppModel {
         panel.canCreateDirectories = directory
         panel.allowsMultipleSelection = false
         return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    /// 편집기로 열어 다시 써도 되는 파일이면 그 내용. 폴더 안·Proxyman 밖·UTF-8일 때만(아니면 읽기 전용 미리보기).
+    static func editableText(_ path: String, _ dir: URL) -> String? {
+        guard isInside(path, dir), ProxymanImporter.isSafeWriteTarget(URL(fileURLWithPath: path)) else { return nil }
+        return try? String(contentsOfFile: path, encoding: .utf8)
     }
 
     static func isInside(_ path: String, _ dir: URL) -> Bool {
@@ -128,6 +144,8 @@ struct MapLocalEditor: View {
     @State private var external: String?
     @State private var error: String?
     @State private var missing = false
+    /// Proxyman 폴더에 쓰려다 막힌 경로(알림).
+    @State private var blocked: String?
 
     private var dir: URL { model.rules.mapLocalDirectory }
     private var isDirty: Bool { rule != baseline || messageDirty }
@@ -146,6 +164,11 @@ struct MapLocalEditor: View {
         .navigationTitle("Map Local Editor: " + (rule?.name ?? ""))
         .background(WindowCloseGuard(isDirty: { isDirty }, save: save))
         .onAppear(perform: load)
+        .alert("저장할 수 없습니다", isPresented: Binding(get: { blocked != nil }, set: { if !$0 { blocked = nil } })) {
+            Button("확인", role: .cancel) { blocked = nil }
+        } message: {
+            Text(blocked ?? "")
+        }
     }
 
     private func content(_ rule: Binding<MapLocalRule>) -> some View {
@@ -254,11 +277,7 @@ struct MapLocalEditor: View {
             message = prefilled
             messageDirty = true
         } else if let path = r.localFile?.path {
-            if MapLocalMessage.isInside(path, dir) {
-                message = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
-            } else {
-                external = MapLocalMessage.preview(path)
-            }
+            if let text = MapLocalMessage.editableText(path, dir) { message = text } else { external = MapLocalMessage.preview(path) }
             messageDirty = false
         } else {
             message = MapLocalMessage.defaultText
@@ -269,9 +288,9 @@ struct MapLocalEditor: View {
     private func selectFile() {
         guard let url = MapLocalMessage.pick(directory: false) else { return }
         rule?.localFile = LocalFileRef(name: url.lastPathComponent, path: url.path)
-        if MapLocalMessage.isInside(url.path, dir) {
+        if let text = MapLocalMessage.editableText(url.path, dir) {
             external = nil
-            message = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+            message = text
         } else {
             external = MapLocalMessage.preview(url.path)
         }
@@ -280,13 +299,16 @@ struct MapLocalEditor: View {
 
     private func convertExternal() {
         guard let path = rule?.localFile?.path else { return }
-        guard let text = MapLocalMessage.converted(path) else {
+        // 폴더 안 파일이 사라졌으면 기본 메시지로 다시 만든다.
+        guard let text = MapLocalMessage.converted(path) ?? (FileManager.default.fileExists(atPath: path) ? nil : MapLocalMessage.defaultText) else {
             error = String(localized: "파일을 읽지 못했습니다")
             return
         }
         external = nil
         message = text
         messageDirty = true
+        // 원본(바깥 파일·폴더 안 바이너리)은 덮어쓰지 않는다. 저장하면 폴더 안에 새 파일을 만들어 가리킨다.
+        rule?.localFile = nil
     }
 
     /// 응답 파일(파일 모드·편집 가능일 때)과 규칙을 저장한다. 실패하면 false.
@@ -302,10 +324,15 @@ struct MapLocalEditor: View {
         }
         if !r.useDirectory, external == nil {
             let current = r.localFile?.path
-            let inside = current.map { MapLocalMessage.isInside($0, dir) } ?? false
+            let inside = current.map { MapLocalMessage.isInside($0, dir) && ProxymanImporter.isSafeWriteTarget(URL(fileURLWithPath: $0)) } ?? false
             if messageDirty || !inside {
                 // 안쪽 파일은 덮어쓰고, 없거나 바깥 파일이면 폴더 안에 새로 만들어 가리킨다.
                 let target = inside ? URL(fileURLWithPath: current!) : dir.appendingPathComponent(MapLocalMessage.fileName(r))
+                // 폴더 설정과 무관하게 Proxyman 폴더에는 절대 쓰지 않는다.
+                guard ProxymanImporter.isSafeWriteTarget(target) else {
+                    blocked = String(localized: "Proxyman 폴더에는 쓰지 않습니다: \(target.path)")
+                    return false
+                }
                 do {
                     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
                     try Data(message.utf8).write(to: target, options: .atomic)

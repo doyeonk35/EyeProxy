@@ -12,7 +12,9 @@ public struct MapLocalInterceptor: RequestInterceptor {
     }
 
     public func intercept(_ request: FlowRequest, context: FlowContext) async -> RequestDecision {
-        guard let rule = rules.firstMatch(request) else { return .continue(request) }
+        // Local File·Local Directory가 모두 꺼진 규칙은 꺼진 규칙처럼 건너뛴다(Enable Local File).
+        guard let rule = rules.enabledRules.first(where: { ($0.useLocalFile || $0.useDirectory) && $0.match.matches(request) })
+        else { return .continue(request) }
         let response: FlowResponse
         if rule.useDirectory {
             guard let dir = rule.directoryPath, let rel = rule.relativePath(for: request),

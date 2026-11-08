@@ -87,7 +87,9 @@ final class AppModel {
         _ = rules.ruleSet
         _ = rules.customNetworkProfiles
         _ = rules.breakpointTemplates
+        // 저장된 폴더가 Proxyman 폴더와 겹치면(직접 고친 설정 등) 무시하고 기본 폴더를 쓴다.
         rules.mapLocalFolderOverride = settings.mapLocalDefaultFolder.map { URL(fileURLWithPath: $0, isDirectory: true) }
+            .flatMap { ProxymanImporter.isSafeWriteTarget($0) ? $0 : nil }
         observeTools()
         // 백업 없이 VPN 복사본만 남은 경우(종료 때 관리자 인증 취소 등)도 시작 시 알린다.
         Task { await refreshEffectiveProxyWarning() }

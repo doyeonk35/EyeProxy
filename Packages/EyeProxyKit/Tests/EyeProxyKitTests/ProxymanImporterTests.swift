@@ -254,3 +254,25 @@ private func snapshot(_ dir: URL) -> [String] {
     let path = try #require(rule.localFile?.path)
     #expect(path.hasPrefix(store.mapLocalDirectory.path + "/") && fm.fileExists(atPath: path))
 }
+
+@Test func safeWriteTargetExcludesProxymanTree() throws {
+    let base = FileManager.default.temporaryDirectory.appendingPathComponent("safe-\(UUID().uuidString)", isDirectory: true)
+    let proxyman = base.appendingPathComponent("Support/com.proxyman.NSProxy", isDirectory: true)
+    try FileManager.default.createDirectory(at: proxyman.appendingPathComponent("map-local"), withIntermediateDirectories: true)
+    func safe(_ u: URL) -> Bool { ProxymanImporter.isSafeWriteTarget(u, proxymanDirectory: proxyman) }
+    #expect(!safe(proxyman))
+    #expect(!safe(proxyman.appendingPathComponent("map-local/x_1.http")))     // 안 (아직 없는 파일)
+    #expect(!safe(base.appendingPathComponent("Support")))                     // 조상
+    #expect(!safe(URL(fileURLWithPath: "/")))
+    #expect(!safe(URL(fileURLWithPath: proxyman.path.uppercased())))           // 대소문자
+    // 심볼릭 링크로 Proxyman 폴더를 가리키는 경로
+    let link = base.appendingPathComponent("link")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: proxyman)
+    #expect(!safe(link.appendingPathComponent("y.http")))
+    let other = base.appendingPathComponent("eyeproxy/map-local", isDirectory: true)
+    try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+    #expect(safe(other) && safe(other.appendingPathComponent("api_1.http")))
+    #expect(safe(FileManager.default.temporaryDirectory.appendingPathComponent("plain-\(UUID().uuidString)")))
+    #expect(ProxymanImporter.isSafeWriteTarget(FileManager.default.temporaryDirectory))  // 기본 Proxyman 폴더 기준
+    #expect(!ProxymanImporter.isSafeWriteTarget(ProxymanImporter.defaultDirectory.appendingPathComponent("x.http")))
+}
