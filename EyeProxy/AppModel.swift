@@ -51,6 +51,8 @@ final class AppModel {
     /// 우클릭 ▸ Tools ▸ Map Local…로 미리 채운 HTTP 메시지. 키 = 규칙 id. Map Local 편집기가 꺼낸다.
     var editorMessages: [String: String] = [:]
     var settingsTab: SettingsTab = .general
+    /// Certificate 창의 선택 섹션. Certificate 메뉴가 바꾼 뒤 창을 연다.
+    var certificateSection: CertificateSection = .mac
     /// Flow ▸ Add Comment…로 코멘트를 편집 중인 흐름. 메인 창이 시트를 띄운다.
     var commentingFlowID: FlowID?
     /// Edit and Repeat…로 Compose 창에 채울 요청. Compose 창이 꺼내 쓴다.
@@ -441,7 +443,9 @@ final class AppModel {
     /// 사용자에게 보일 오류 문구. 관리자 인증 취소(osascript -128)는 따로 알린다.
     static func describe(_ error: Error) -> String {
         let text = switch error {
-        case SystemProxyError.commandFailed(let s), MacKeychainError.installFailed(let s), SimulatorsError.failed(let s): s
+        case SystemProxyError.commandFailed(let s), MacKeychainError.installFailed(let s), SimulatorsError.failed(let s),
+             CertificateExportError.openSSL(let s): s
+        case CertificateExportError.openSSLMissing: String(localized: "/usr/bin/openssl을 실행할 수 없습니다")
         case SystemProxyError.noActiveService: String(localized: "활성 네트워크 서비스를 찾지 못했습니다")
         case SystemProxyError.vpnProxyLeftover(let service):
             String(localized: "VPN 서비스(\(service))에 EyeProxy 프록시가 남아 있습니다 — VPN을 재연결하세요")

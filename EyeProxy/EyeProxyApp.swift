@@ -105,12 +105,12 @@ import SwiftUI
         }
         .windowResizability(.contentSize)
         .restorationBehavior(.disabled)
-        Window("기기", id: "devices") {
-            DevicesView()
+        Window("Certificate", id: "devices") {
+            CertificateWindow()
                 .environment(model)
-                .frame(minWidth: 640, minHeight: 600)
-                .systemErrorAlert(model, presenting: true)
+                .frame(minWidth: 640, minHeight: 480)
         }
+        .defaultSize(width: 860, height: 600)
     }
 }
 
