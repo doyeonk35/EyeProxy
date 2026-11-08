@@ -45,6 +45,8 @@ struct FilterBarView: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(verbatim: label))
+        .accessibilityAddTraits(selected ? .isSelected : [])
         .help(help)
     }
 
