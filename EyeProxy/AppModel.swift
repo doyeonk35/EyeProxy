@@ -345,8 +345,7 @@ final class AppModel {
 
     func openSession() async {
         let panel = NSOpenPanel()
-        // .har는 다른 앱(Proxyman 등)이 선언한 UTI로 풀릴 수 있어 확장자 .har를 주장하는 타입을 모두 받는다.
-        panel.allowedContentTypes = [Self.sessionType, Self.harType] + UTType.types(tag: "har", tagClass: .filenameExtension, conformingTo: nil)
+        panel.allowedContentTypes = [Self.sessionType] + Self.harTypes
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
@@ -412,6 +411,13 @@ final class AppModel {
     }
 
     func processKey(for flow: Flow) -> String? { processes.attribution[flow.id]?.groupKey }
+
+    /// 목록 Client 열과 Export가 같이 쓰는 이름: 프로세스 귀속 → (루프백이 아니면) 기기 이름 → 주소. 없으면 "".
+    func clientName(for flow: Flow) -> String {
+        if let identity = processes.attribution[flow.id] { return identity.displayName(runtimes: simulatorRuntimes) }
+        guard !FlowFilter.isLoopback(flow.clientAddress) else { return "" }
+        return devices.devices.first { $0.address == flow.clientAddress }?.displayName ?? flow.clientAddress
+    }
 
     var simulatorRuntimes: [String: String] {
         Dictionary(bootedSimulators.map { ($0.udid, $0.runtime) }, uniquingKeysWith: { a, _ in a })

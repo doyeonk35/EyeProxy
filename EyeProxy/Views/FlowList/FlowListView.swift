@@ -50,14 +50,15 @@ struct FlowListView: View {
                     .width(min: 200, ideal: 360)
                     .customizationID("url")
                     TableColumn("Client") { (row: FlowRow) in cell(row) {
+                        let name = model.clientName(for: row.flow)
                         if let identity = model.processes.attribution[row.id] {
                             HStack(spacing: 5) {
                                 AppIcon(path: identity.path)
-                                Text(identity.displayName(runtimes: model.simulatorRuntimes))
+                                Text(name)
                             }
                             .lineLimit(1)
-                        } else if !FlowFilter.isLoopback(row.flow.clientAddress) {
-                            Text(deviceNames[row.flow.clientAddress] ?? row.flow.clientAddress).lineLimit(1)
+                        } else if !name.isEmpty {
+                            Text(name).lineLimit(1)
                         }
                     }}
                     .width(min: 80, ideal: 130, max: 240)

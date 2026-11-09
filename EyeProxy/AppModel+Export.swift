@@ -9,11 +9,11 @@ extension AppModel {
     enum ExportFormat {
         case har, csv, session
 
-        var type: UTType {
+        var types: [UTType] {
             switch self {
-            case .har: AppModel.harType
-            case .csv: .commaSeparatedText
-            case .session: AppModel.sessionType
+            case .har: AppModel.harTypes
+            case .csv: [.commaSeparatedText]
+            case .session: [AppModel.sessionType]
             }
         }
 
@@ -26,21 +26,24 @@ extension AppModel {
         }
     }
 
-    /// 내보낼 항목. `scope`가 비어 있지 않으면 그중 보이는 행, 비었거나 nil이면 보이는 행 전체.
+    /// 내보낼 항목. `scope` 중 보이는 행이 있으면 그 행만, 없으면(nil·빈 값·전부 숨김) 보이는 행 전체(스펙 §8.4).
     /// 순서는 안정 번호 오름차순 — 목록 정렬 상태에 따라 파일 내용이 달라지지 않게.
     func exportItems(scope: Set<FlowID>?) -> [ExportItem] {
-        let runtimes = simulatorRuntimes
-        let deviceNames = Dictionary(devices.devices.map { ($0.address, $0.displayName) }, uniquingKeysWith: { a, _ in a })
-        // 목록 Client 열과 같은 문자열: 프로세스 귀속 → (루프백이 아니면) 기기 이름 → 주소.
-        func client(_ flow: Flow) -> String? {
-            if let identity = processes.attribution[flow.id] { return identity.displayName(runtimes: runtimes) }
-            return FlowFilter.isLoopback(flow.clientAddress) ? nil : deviceNames[flow.clientAddress] ?? flow.clientAddress
-        }
-        let scope = scope?.isEmpty == false ? scope : nil
-        return visibleFlows.filter { scope?.contains($0.id) ?? true }
-            .map { ExportItem(flow: $0, number: session.number($0.id) ?? 0, comment: session.comments[$0.id],
-                              highlight: session.highlights[$0.id], client: client($0)) }
+        let visible = visibleFlows
+        let chosen = visible.filter { scope?.contains($0.id) ?? false }
+        return (chosen.isEmpty ? visible : chosen)
+            .map { flow in
+                let client = clientName(for: flow)
+                return ExportItem(flow: flow, number: session.number(flow.id) ?? 0, comment: session.comments[flow.id],
+                                  highlight: session.highlights[flow.id], client: client.isEmpty ? nil : client)
+            }
             .sorted { $0.number < $1.number }
+    }
+
+    /// 선택 중 보이는 행. Save Requests의 대상·켜짐 판단(필터가 숨긴 선택은 저장하지 않는다).
+    var visibleSelectedFlowIDs: Set<FlowID> {
+        guard !selectedFlowIDs.isEmpty else { return [] }
+        return Set(visibleFlows.lazy.map(\.id).filter(selectedFlowIDs.contains))
     }
 
     /// Flow ▸ Export ▸ … 와 우클릭 ▸ Export ▸ …. 범위는 `exportItems(scope:)`.
@@ -48,7 +51,7 @@ extension AppModel {
         let items = exportItems(scope: scope)
         guard !items.isEmpty else { return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [format.type]
+        panel.allowedContentTypes = format.types
         let stamp = DateFormatter()
         stamp.locale = Locale(identifier: "en_US_POSIX")
         stamp.dateFormat = "yyyyMMdd-HHmmss"
@@ -64,7 +67,8 @@ extension AppModel {
             try await Task.detached {
                 switch format {
                 case .har: try FlowExport.har(items, version: version).write(to: url, options: .atomic)
-                case .csv: try Data(FlowExport.csv(items).utf8).write(to: url, options: .atomic)
+                // Mac용 Excel은 BOM이 없으면 UTF-8 CSV를 시스템 인코딩으로 읽어 한글이 깨진다 → 앱이 쓰는 파일에만 붙인다(Kit 출력은 그대로).
+                case .csv: try (Data([0xEF, 0xBB, 0xBF]) + Data(FlowExport.csv(items).utf8)).write(to: url, options: .atomic)
                 case .session:
                     try SessionDocument.save(
                         flows: items.map(\.flow), connectionLog: log, processes: attribution,
@@ -78,10 +82,11 @@ extension AppModel {
         }
     }
 
-    /// Flow ▸ Save Requests…: 선택한 행만 Prog 세션으로(Export ▸ as Prog Session과 같되 선택이 없으면 하지 않는다).
+    /// Flow ▸ Save Requests…: 선택 중 보이는 행만 Prog 세션으로(Export ▸ as Prog Session과 같되 그런 행이 없으면 하지 않는다).
     func saveRequests() async {
-        guard !selectedFlowIDs.isEmpty else { return }
-        await export(.session, scope: selectedFlowIDs)
+        let ids = visibleSelectedFlowIDs
+        guard !ids.isEmpty else { return }
+        await export(.session, scope: ids)
     }
 
     /// File ▸ 세션 열기의 HAR 경로(스펙 §8.5): 현재 세션을 교체. 번호·코멘트·Highlight를 복원하고 프로세스 귀속은 비운다.
@@ -98,4 +103,6 @@ extension AppModel {
 
     /// Info.plist의 UTImportedTypeDeclarations와 일치해야 한다.
     nonisolated static let harType = UTType(importedAs: "com.tv.eyeproxy.har", conformingTo: .json)
+    /// 저장·열기 패널용. .har는 다른 앱(Proxyman 등)이 선언한 UTI로 풀릴 수 있어 확장자 .har를 주장하는 타입을 모두 넣는다.
+    nonisolated static var harTypes: [UTType] { [harType] + UTType.types(tag: "har", tagClass: .filenameExtension, conformingTo: nil) }
 }

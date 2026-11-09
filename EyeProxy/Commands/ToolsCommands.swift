@@ -59,8 +59,9 @@ private struct FlowMenu: View {
         Button("Delete All") { model.deleteVisibleFlows() }
             .disabled((visibleCount ?? 0) == 0)
         Divider()
+        // 필터가 숨긴 선택은 저장하지 않는다 → 보이는 선택이 없으면 끈다.
         Button("Save Requests…") { Task { await model.saveRequests() } }
-            .disabled(ids.isEmpty)
+            .disabled(selection == nil || model.visibleSelectedFlowIDs.isEmpty)
         // 선택이 있으면 선택, 없으면 보이는 행 전체(스펙 §8.4).
         ExportMenu(model: model) { model.selectedFlowIDs }
             .disabled((visibleCount ?? 0) == 0)
