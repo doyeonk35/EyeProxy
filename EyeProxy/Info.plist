@@ -49,5 +49,26 @@
             </dict>
         </dict>
     </array>
+    <!-- HAR(HTTP Archive) — 세션 열기·Export as HAR. 공용 UTI가 없어 JSON 계열로 가져와 선언한다. -->
+    <key>UTImportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.tv.eyeproxy.har</string>
+            <key>UTTypeDescription</key>
+            <string>HTTP Archive</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.json</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>har</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
 </dict>
 </plist>

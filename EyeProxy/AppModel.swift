@@ -345,17 +345,24 @@ final class AppModel {
 
     func openSession() async {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [Self.sessionType]
+        // .har는 다른 앱(Proxyman 등)이 선언한 UTI로 풀릴 수 있어 확장자 .har를 주장하는 타입을 모두 받는다.
+        panel.allowedContentTypes = [Self.sessionType, Self.harType] + UTType.types(tag: "har", tagClass: .filenameExtension, conformingTo: nil)
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            let loaded = try await Task.detached { try SessionDocument.load(from: url) }.value
-            session.replace(flows: loaded.flows, connectionLog: loaded.connectionLog, comments: loaded.comments,
-                            highlights: loaded.highlights, numbers: loaded.numbers)
-            processes.replace(loaded.processes)
+            if url.pathExtension.lowercased() == "har" {
+                try await importHAR(from: url)
+            } else {
+                let loaded = try await Task.detached { try SessionDocument.load(from: url) }.value
+                session.replace(flows: loaded.flows, connectionLog: loaded.connectionLog, comments: loaded.comments,
+                                highlights: loaded.highlights, numbers: loaded.numbers)
+                processes.replace(loaded.processes)
+            }
             filter = FlowFilter()
             selectedFlowID = nil
             sidebarSelection = .allFlows
+        } catch FlowImportError.invalidHAR(let reason) {
+            systemError = String(localized: "HAR 파일을 열지 못했습니다: \(reason)")
         } catch {
             systemError = String(localized: "세션을 열지 못했습니다: \(error.localizedDescription)")
         }
@@ -368,7 +375,7 @@ final class AppModel {
     }
 
     /// Info.plist의 UTExportedTypeDeclarations와 일치해야 한다.
-    private static let sessionType = UTType(exportedAs: "com.tv.eyeproxy.session", conformingTo: .package)
+    nonisolated static let sessionType = UTType(exportedAs: "com.tv.eyeproxy.session", conformingTo: .package)
 
     // MARK: - 목록
 

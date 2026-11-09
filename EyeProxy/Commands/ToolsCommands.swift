@@ -58,6 +58,27 @@ private struct FlowMenu: View {
             .disabled((listSelection ?? []).isEmpty)
         Button("Delete All") { model.deleteVisibleFlows() }
             .disabled((visibleCount ?? 0) == 0)
+        Divider()
+        Button("Save Requests…") { Task { await model.saveRequests() } }
+            .disabled(ids.isEmpty)
+        // 선택이 있으면 선택, 없으면 보이는 행 전체(스펙 §8.4).
+        ExportMenu(model: model) { model.selectedFlowIDs }
+            .disabled((visibleCount ?? 0) == 0)
+    }
+}
+
+/// Flow ▸ Export와 목록 우클릭 ▸ Export(스펙 §8.4).
+struct ExportMenu: View {
+    let model: AppModel
+    /// 실행 시점에 읽는다(Flow 메뉴는 현재 선택, 우클릭은 클릭한 행). 비면 보이는 행 전체.
+    let ids: () -> Set<FlowID>
+
+    var body: some View {
+        Menu("Export") {
+            Button("as HAR (HTTP Archive)…") { Task { await model.export(.har, scope: ids()) } }
+            Button("as CSV…") { Task { await model.export(.csv, scope: ids()) } }
+            Button("as Prog Session…") { Task { await model.export(.session, scope: ids()) } }
+        }
     }
 }
 
