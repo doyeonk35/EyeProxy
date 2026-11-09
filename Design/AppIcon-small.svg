@@ -6,6 +6,8 @@
     </linearGradient>
     <clipPath id="squircle"><rect width="1024" height="1024" rx="230"/></clipPath>
   </defs>
+  <!-- macOS 앱 아이콘 격자: 1024 캔버스 가운데 824×824 본체(사방 100px 투명 여백), 모서리 반지름 230×0.8047≈185. 그림자 없음. -->
+  <g transform="translate(100 100) scale(0.8046875)">
   <g clip-path="url(#squircle)">
     <rect width="1024" height="1024" fill="url(#bg)"/>
     <!-- 머리 -->
@@ -19,5 +21,6 @@
     <circle cx="714" cy="465" r="64" fill="#0b2a16"/>
     <!-- 입 -->
     <path d="M320 720 C420 800, 604 800, 704 720" stroke="#0b2a16" stroke-width="64" fill="none" stroke-linecap="round"/>
+  </g>
   </g>
 </svg>
