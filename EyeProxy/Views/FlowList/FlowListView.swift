@@ -163,7 +163,7 @@ struct FlowListView: View {
                 }
                 if !ids.isEmpty {
                     Divider()
-                    HighlightMenu(model: model, ids: ids)
+                    HighlightMenu(model: model) { ids }
                     Button("Delete") { model.deleteFlows(ids) }
                 }
             }

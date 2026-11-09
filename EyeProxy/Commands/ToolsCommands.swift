@@ -29,13 +29,16 @@ private struct FlowMenu: View {
     @FocusedValue(\.visibleFlowCount) private var visibleCount
     @Environment(\.openWindow) private var openWindow
 
+    // 포커스 값은 켜짐·꺼짐 판단에만 쓴다. 대상은 실행 시점의 선택(`model.selectedFlowIDs`)이다 —
+    // Auto Select가 앱이 뒤에 있을 때도 선택을 바꾸므로 마지막 메뉴 렌더 때 잡힌 값은 낡을 수 있다.
     var body: some View {
         let ids = selection ?? []
-        Button("Repeat") { model.repeatFlows(ids) }
+        let current = { selection == nil ? [] : model.selectedFlowIDs }
+        Button("Repeat") { model.repeatFlows(current()) }
             .keyboardShortcut(.return, modifiers: .command)
             .disabled(ids.isEmpty)
         Button("Edit and Repeat…") {
-            guard let id = ids.first, let flow = model.session.flow(id) else { return }
+            guard let id = current().first, current().count == 1, let flow = model.session.flow(id) else { return }
             model.composeSeed = flow.request
             openWindow(id: "compose")
         }
@@ -46,12 +49,11 @@ private struct FlowMenu: View {
         Button(id.flatMap { model.session.comments[$0] } == nil ? "Add Comment…" : "Edit Comment…") { model.commentingFlowID = id }
             .disabled(id == nil)
         Divider()
-        HighlightMenu(model: model, ids: ids)
+        HighlightMenu(model: model, ids: current)
         Divider()
-        let listIDs = listSelection ?? []
-        Button("Delete") { model.deleteFlows(listIDs) }
+        Button("Delete") { if listSelection != nil { model.deleteFlows(model.selectedFlowIDs) } }
             .keyboardShortcut(.delete, modifiers: [])
-            .disabled(listIDs.isEmpty)
+            .disabled((listSelection ?? []).isEmpty)
         Button("Delete All") { model.deleteVisibleFlows() }
             .disabled((visibleCount ?? 0) == 0)
     }
@@ -60,21 +62,22 @@ private struct FlowMenu: View {
 /// Flow ▸ Highlight와 목록 우클릭 ▸ Highlight(스펙 §4). 색 ⌘1…⌘6, 취소선 ⇧⌘X(⌥⌘S는 사이드바 토글과 겹친다), 되돌리기 ⌘0.
 struct HighlightMenu: View {
     let model: AppModel
-    let ids: Set<FlowID>
+    /// 실행 시점에 읽는다(Flow 메뉴는 현재 선택, 우클릭은 클릭한 행).
+    let ids: () -> Set<FlowID>
 
     var body: some View {
         Menu("Highlight") {
             ForEach(Array(HighlightColor.allCases.enumerated()), id: \.element) { i, color in
-                Button(color.rawValue.capitalized) { model.session.setHighlight(color, for: ids) }
+                Button(color.rawValue.capitalized) { model.session.setHighlight(color, for: ids()) }
                     .keyboardShortcut(KeyEquivalent(Character(String(i + 1))))
             }
             Divider()
-            Button("Strikethrough") { model.session.toggleStrikethrough(for: ids) }
+            Button("Strikethrough") { model.session.toggleStrikethrough(for: ids()) }
                 .keyboardShortcut("x", modifiers: [.command, .shift])
-            Button("Reset") { model.session.resetHighlight(for: ids) }
+            Button("Reset") { model.session.resetHighlight(for: ids()) }
                 .keyboardShortcut("0")
         }
-        .disabled(ids.isEmpty)
+        .disabled(ids().isEmpty)
     }
 }
 
