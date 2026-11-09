@@ -9,6 +9,7 @@ struct FlowDetailView: View {
         if let id = model.selectedFlowID, let flow = model.session.flow(id) {
             VStack(spacing: 0) {
                 FlowHeaderBar(flow: flow)
+                SummaryView(flow: flow)
                 panes(flow)
             }
         } else {
@@ -34,7 +35,8 @@ struct FlowDetailView: View {
     private func request(_ flow: Flow) -> some View {
         MessagePane(title: "요청", headers: flow.request.headers, content: flow.request.body,
                     query: Self.query(flow.request.path),
-                    cookies: CookieParser.requestCookies(flow.request.header("Cookie") ?? ""), flowID: flow.id)
+                    cookies: CookieParser.requestCookies(flow.request.header("Cookie") ?? ""), flowID: flow.id,
+                    raw: { [r = flow.request] in RawMessage.request(r) })
     }
 
     private static func query(_ path: String) -> [HTTPHeader] {
@@ -46,7 +48,10 @@ struct FlowDetailView: View {
         if let response = flow.response {
             let setCookies = response.headers.filter { $0.name.caseInsensitiveCompare("Set-Cookie") == .orderedSame }.map(\.value)
             MessagePane(title: "응답", headers: response.headers, content: response.body, query: nil,
-                        cookies: CookieParser.responseCookies(setCookies), flowID: flow.id)
+                        cookies: CookieParser.responseCookies(setCookies), flowID: flow.id,
+                        raw: { RawMessage.response(response) },
+                        playlistURL: M3U8.isPlaylist(path: flow.request.path, contentType: response.header("Content-Type"))
+                            ? URL(string: flow.request.url) : nil)
         } else if let error = flow.error {
             ContentUnavailableView("실패", systemImage: "exclamationmark.triangle", description: Text(error))
         } else {
@@ -55,9 +60,9 @@ struct FlowDetailView: View {
     }
 }
 
-/// 요청·응답 한쪽(헤더·쿼리·본문·쿠키). Compose 창의 응답 쪽도 쓴다.
+/// 요청·응답 한쪽(헤더·쿼리·본문·쿠키·Raw, 재생목록이면 M3U8). Compose 창의 응답 쪽도 쓴다.
 struct MessagePane: View {
-    enum Tab: Hashable { case headers, query, body, cookies }
+    enum Tab: Hashable { case headers, query, body, cookies, raw, m3u8 }
 
     let title: LocalizedStringKey
     let headers: [HTTPHeader]
@@ -65,36 +70,68 @@ struct MessagePane: View {
     let query: [HTTPHeader]?
     let cookies: [HTTPHeader]
     let flowID: FlowID
+    let raw: @Sendable () -> String
+    /// 응답이 HLS 재생목록일 때 요청 URL(상대 URI 기준). nil이면 M3U8 탭을 숨긴다.
+    var playlistURL: URL?
     @State private var tab = Tab.headers
+    /// 재생목록이 아닌 흐름으로 옮기면 M3U8 대신 헤더를 보인다(고른 탭은 남겨 재생목록으로 돌아오면 다시 M3U8).
+    private var shownTab: Tab { tab == .m3u8 && playlistURL == nil ? .headers : tab }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(title).font(.headline)
                 Spacer()
-                Picker("", selection: $tab) {
+                Picker("", selection: Binding(get: { shownTab }, set: { tab = $0 })) {
                     Text("헤더").tag(Tab.headers)
                     if query != nil { Text("쿼리").tag(Tab.query) }
                     Text("본문").tag(Tab.body)
                     Text("쿠키").tag(Tab.cookies)
+                    Text("Raw").tag(Tab.raw)
+                    if playlistURL != nil { Text("M3U8").tag(Tab.m3u8) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .fixedSize()
+                .id(playlistURL != nil)  // 칸 수가 바뀌면 다시 만들어야 폭이 맞는다
             }
             .padding(8)
             Divider()
             // 내용 영역이 패널 높이를 꽉 채워야 머리글이 위에 고정된다(짧으면 가운데로 밀리고, NSTextView는 넘친다).
             Group {
-                switch tab {
+                switch shownTab {
                 case .headers: KeyValueTable(rows: headers, emptyTitle: "헤더 없음")
                 case .query: KeyValueTable(rows: query ?? [], emptyTitle: "쿼리 없음")
                 case .body: BodyView(data: content, headers: headers).id(flowID)
                 case .cookies: KeyValueTable(rows: cookies, emptyTitle: "쿠키 없음")
+                case .raw: RawView(make: raw).id(flowID)
+                case .m3u8: M3U8View(data: content, headers: headers, baseURL: playlistURL).id(flowID)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
+        }
+    }
+}
+
+/// Raw 탭. 원문은 흐름이 바뀔 때만 메인 밖에서 한 번 만든다(세션 이벤트마다 텍스트를 다시 넣으면 스크롤·선택이 풀린다).
+private struct RawView: View {
+    let make: @Sendable () -> String
+    @State private var text: NSAttributedString?
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Group {
+            if let text {
+                CodeTextView(text: text, wrap: model.settings.wrapLongLines)
+            } else {
+                ProgressView()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task {
+            let s = await Task.detached(operation: make).value
+            text = CodeTextView.base(s)
         }
     }
 }
