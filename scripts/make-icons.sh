@@ -33,7 +33,7 @@ for size in 16 32 128 256 512; do
         # 16·32px는 혀·패킷이 뭉개지므로 단순판을 쓴다
         svg="$DESIGN/AppIcon.svg"; (( px <= 32 )) && svg="$DESIGN/AppIcon-small.svg"
         render "$svg" "$px" "$ICONSET/$name"
-        CHECKS+=("$ICONSET/$name:$px")
+        CHECKS+=("$ICONSET/$name:${px}x${px}")
         images+="${images:+,}
     {\"filename\":\"$name\",\"idiom\":\"mac\",\"scale\":\"${scale}x\",\"size\":\"${size}x${size}\"}"
     done
@@ -46,14 +46,16 @@ cat > "$ICONSET/Contents.json" <<EOF
 }
 EOF
 
-# --- 상태 막대 템플릿 (18pt) ---
-for state in Open Closed Submerged; do
-    set_dir="$ASSETS/MenuBarFrog$state.imageset"
+# --- 상태 막대 템플릿 (22×18pt) ---
+# qlmanage는 흰 배경 정사각형 썸네일을 만들므로(템플릿이 통째로 칠해진다) 상태 막대는 sips로 그린다.
+# sips(CoreSVG)는 <mask>를 잘못 그리므로 원본의 구멍은 evenodd 경로로 둔다.
+for state in Open Closed Stopped; do
+    set_dir="$ASSETS/MenuBarEyes$state.imageset"
     base="$(echo "$state" | tr '[:upper:]' '[:lower:]')"
     mkdir -p "$set_dir"
-    render "$DESIGN/MenuBar-$state.svg" 18 "$set_dir/$base.png"
-    render "$DESIGN/MenuBar-$state.svg" 36 "$set_dir/$base@2x.png"
-    CHECKS+=("$set_dir/$base.png:18" "$set_dir/$base@2x.png:36")
+    sips -s format png -z 18 22 "$DESIGN/MenuBar-Eyes-$state.svg" --out "$set_dir/$base.png" >/dev/null
+    sips -s format png -z 36 44 "$DESIGN/MenuBar-Eyes-$state.svg" --out "$set_dir/$base@2x.png" >/dev/null
+    CHECKS+=("$set_dir/$base.png:22x18" "$set_dir/$base@2x.png:44x36")
     cat > "$set_dir/Contents.json" <<EOF
 {
   "images":[
@@ -72,7 +74,7 @@ for check in "${CHECKS[@]}"; do
     file="${check%:*}" want="${check##*:}"
     w="$(sips -g pixelWidth "$file" | awk '/pixelWidth/{print $2}')"
     h="$(sips -g pixelHeight "$file" | awk '/pixelHeight/{print $2}')"
-    if [[ "$w" == "$want" && "$h" == "$want" ]]; then
+    if [[ "${w}x${h}" == "$want" ]]; then
         echo "ok   ${w}x${h}  $file"
     else
         echo "FAIL ${w}x${h} (want ${want})  $file" >&2

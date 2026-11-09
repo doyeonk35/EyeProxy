@@ -242,10 +242,13 @@ final class AppModel {
         Task { await applySettingsToServer() }
     }
 
-    /// 메뉴 막대 개구리: 실행 중이면 기록 여부로 눈을 뜨고 감고, 멈춤·실패면 물결만.
-    var statusIconName: String {
-        guard runningPort != nil else { return "MenuBarFrogSubmerged" }
-        return settings.isRecording ? "MenuBarFrogOpen" : "MenuBarFrogClosed"
+    /// 상태 막대 눈: 실행 중이면 기록 여부로 뜨고 감고, 멈춤·실패면 빈 눈 + 사선.
+    /// 빨간 점은 손볼 일이 있을 때만 — 멈춘 Breakpoint, 서버 시작 실패, 규칙 파일 경고.
+    var statusIcon: StatusIcon {
+        let eyes: StatusIcon.Eyes = runningPort == nil ? .stopped : (settings.isRecording ? .open : .closed)
+        var failed = false
+        if case .failed = serverState { failed = true }
+        return StatusIcon(eyes: eyes, needsAttention: !breakpoints.pending.isEmpty || failed || !rules.loadWarnings.isEmpty)
     }
 
     func applySettingsToServer() async {

@@ -108,7 +108,8 @@ import SwiftUI
         MenuBarExtra(isInserted: Bindable(model.settings).showStatusItem) {
             StatusMenu().environment(model)
         } label: {
-            Image(model.statusIconName).accessibilityLabel("Prog")
+            let icon = model.statusIcon
+            Image(nsImage: StatusIconImage.make(icon)).accessibilityLabel(icon.accessibilityLabel)
         }
         .menuBarExtraStyle(.menu)
     }
