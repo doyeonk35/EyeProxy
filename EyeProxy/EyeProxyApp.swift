@@ -29,14 +29,18 @@ import SwiftUI
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("업데이트 확인…") { updaterController.checkForUpdates(nil) }
+                    .help("새 버전이 있는지 확인")
             }
             CommandGroup(after: .newItem) {
                 Button("세션 열기…") { Task { await model.openSession() } }
                     .keyboardShortcut("o")
+                    .help("세션·HAR 파일을 열어 현재 세션 교체 (⌘O)")
                 Button("세션 저장…") { Task { await model.saveSession() } }
                     .keyboardShortcut("s")
+                    .help("현재 세션 전체를 Prog 세션 파일로 저장 (⌘S)")
                 Button("세션 지우기") { model.clear() }
                     .keyboardShortcut("k")
+                    .help("세션의 모든 요청 지우기 (⌘K)")
             }
             CommandGroup(after: .pasteboard) {
                 CopyCurlButton(model: model)
@@ -44,6 +48,7 @@ import SwiftUI
             CommandGroup(after: .toolbar) {
                 LayoutPicker(model: model)
                 Toggle("Auto Select the Latest Request", isOn: Bindable(model.settings).autoSelectLatest)
+                    .help("새 요청이 오면 자동 선택 — 다른 행을 고르면 꺼짐")
             }
             ToolsCommands(model: model)
             CertificateCommands(model: model)
@@ -121,6 +126,7 @@ private struct CopyCurlButton: View {
         Button("cURL로 복사") { if let id = model.selectedFlowID { model.copyCurl(id) } }
             .keyboardShortcut("c", modifiers: [.command, .shift])
             .disabled(model.selectedFlowID == nil)
+            .help("선택한 요청을 cURL 명령으로 복사 (⇧⌘C)")
     }
 }
 
@@ -128,8 +134,8 @@ private struct LayoutPicker: View {
     let model: AppModel
     var body: some View {
         Picker("레이아웃", selection: Bindable(model.settings).layout) {
-            Text("레이아웃 A").tag(FlowLayout.classic)
-            Text("레이아웃 B").tag(FlowLayout.sideBySide)
+            Text("레이아웃 A").tag(FlowLayout.classic).help("상세 패널을 목록 아래에 두기")
+            Text("레이아웃 B").tag(FlowLayout.sideBySide).help("상세 패널을 목록 오른쪽에 두기")
         }
         .pickerStyle(.inline)
     }

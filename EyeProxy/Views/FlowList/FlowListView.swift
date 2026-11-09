@@ -138,35 +138,43 @@ struct FlowListView: View {
             .contextMenu(forSelectionType: FlowID.self) { ids in
                 if !ids.isEmpty {
                     Button("Repeat") { model.repeatFlows(ids) }
+                        .help("선택한 요청을 그대로 다시 보내기")
                 }
                 if ids.count == 1, let id = ids.first, let flow = model.session.flow(id) {
                     Button("Edit and Repeat…") {
                         model.composeSeed = flow.request
                         openWindow(id: "compose")
                     }
+                    .help("이 요청을 Compose에서 고쳐 보내기")
                     Divider()
                     Button("Enable SSL Proxying for \(flow.request.host)") {
                         Task { await model.enableSSLProxying(for: flow.request.host) }
                     }
+                    .help("이 호스트를 SSL Proxying List에 넣고 복호화 켜기")
                     Button(model.session.comments[id] == nil ? "Add Comment…" : "Edit Comment…") { model.commentingFlowID = id }
+                        .help("이 요청의 코멘트 쓰기·고치기")
                     Button("Copy as cURL") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(CurlExport.command(for: flow.request), forType: .string)
                     }
+                    .help("이 요청을 cURL 명령으로 복사")
                     Menu("Tools") {
                         ForEach(Self.toolWindows, id: \.id) { tool in
                             Button(tool.title) {
                                 model.pendingNewRule = PendingNewRule(windowID: tool.id, flow: flow)
                                 openWindow(id: tool.id)
                             }
+                            .help("이 요청 URL로 채운 새 규칙 열기")
                         }
                     }
+                    .help("이 요청으로 새 규칙 만들기")
                 }
                 if !ids.isEmpty {
                     Divider()
                     HighlightMenu(model: model) { ids }
                     ExportMenu(model: model) { ids }
                     Button("Delete") { model.deleteFlows(ids) }
+                        .help("선택한 요청을 목록에서 지우기")
                 }
             }
             // Flow ▸ Delete All에서 필터가 숨긴 행이 있을 때만(스펙 §5).

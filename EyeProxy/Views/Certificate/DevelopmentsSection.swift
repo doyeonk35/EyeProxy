@@ -48,6 +48,7 @@ struct DevelopmentsSection: View {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(guide.snippet, forType: .string)
                     }
+                    .help("위 설정 코드 복사")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

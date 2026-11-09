@@ -25,6 +25,7 @@ struct SimulatorSection: View {
                             }
                         }
                         .disabled(busy)
+                        .help("이 시뮬레이터에 Prog CA 설치")
                     }
                 } label: {
                     Text(sim.name)
@@ -38,7 +39,7 @@ struct SimulatorSection: View {
                 Button("새로고침", systemImage: "arrow.clockwise") { Task { await model.refreshSimulators() } }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.borderless)
-                    .help("새로고침")
+                    .help("부팅된 시뮬레이터 목록 새로고침")
             }
         } footer: {
             Text("설치 후 앱을 다시 실행하세요")

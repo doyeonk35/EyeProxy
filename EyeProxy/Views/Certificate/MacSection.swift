@@ -19,9 +19,11 @@ struct MacSection: View {
             }
             // 서버가 안 떠 있을 때 켜면 Mac 인터넷이 끊긴다. 끄기는 언제나 허용.
             .disabled(model.macCaptureBusy || (!captureShownOn && !serverRunning))
+            .help("macOS 시스템 프록시를 Prog로 바꾸기/되돌리기")
             if let error = model.systemError {
                 LabeledContent {
                     Button("지우기") { model.systemError = nil }
+                        .help("마지막 오류 메시지 지우기")
                 } label: {
                     Label("마지막 오류: \(error)", systemImage: "xmark.octagon.fill").foregroundStyle(.red)
                 }
@@ -40,6 +42,7 @@ struct MacSection: View {
             LabeledContent {
                 Button("Mac에 CA 설치") { model.runCAInstall(busy: $busy) { try await model.installCAOnMac() } }
                     .disabled(model.macCAInstalled || busy)
+                    .help("Prog CA를 이 Mac 로그인 키체인에 설치·신뢰")
             } label: {
                 Text("CA 인증서")
                 if model.macCAInstalled {

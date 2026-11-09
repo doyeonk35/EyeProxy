@@ -12,11 +12,11 @@ struct MainToolbar: ToolbarContent {
                 // Proxyman처럼 기록 중 ▶, 멈춤 ⏸ (녹화 심볼은 작게 보면 구분이 어렵다).
                 Label("기록", systemImage: settings.isRecording ? "play.fill" : "pause.fill")
             }
-            .help(settings.isRecording ? "기록 중 — 눌러서 일시정지 (⌘R)" : "일시정지됨 — 눌러서 기록 (⌘R)")
+            .help(settings.isRecording ? "새 요청 기록 일시정지 (⌘R)" : "새 요청 기록 다시 시작 (⌘R)")
             Button("지우기", systemImage: "trash") { model.clear() }
-                .help("목록 지우기 (⌘K)")
+                .help("세션의 모든 요청 지우기 (⌘K)")
             Button("Compose", systemImage: "square.and.pencil") { openWindow(id: "compose") }
-                .help("Compose Request (⌥⌘C)")
+                .help("요청을 직접 만들어 보내기 (⌥⌘C)")
         }
         ToolbarItem(placement: .status) {
             HStack(spacing: 8) {
@@ -29,7 +29,7 @@ struct MainToolbar: ToolbarContent {
                     Button("⚠︎ 규칙 경고 \(model.rules.loadWarnings.count)건") { model.showRuleWarnings = true }
                         .buttonStyle(.link)
                         .foregroundStyle(.red)
-                        .help("규칙 파일을 읽거나 저장하지 못했습니다 — 눌러서 보기")
+                        .help("규칙 파일을 읽거나 저장하지 못한 내용 보기")
                 }
             }
                 .font(.caption)
@@ -43,12 +43,13 @@ struct MainToolbar: ToolbarContent {
             Toggle(isOn: Binding(get: { settings.sslEnabled }, set: { model.setSSLEnabled($0) })) {
                 Label("SSL 프록싱", systemImage: settings.sslEnabled ? "lock.fill" : "lock.open")
             }
-            .help("SSL 프록싱 켜기/끄기")
+            .help("HTTPS 복호화(SSL 프록싱) 켜기/끄기")
             @Bindable var model = model
             Toggle(isOn: $model.filter.includeHidden) {
                 Label("숨긴 요청 보기", systemImage: model.filter.includeHidden ? "eye" : "eye.slash")
             }
             .toggleStyle(.button)
+            .help("Block List로 숨긴 요청도 목록에 보이기")
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Picker("레이아웃", selection: $settings.layout) {
@@ -56,7 +57,7 @@ struct MainToolbar: ToolbarContent {
                 Label("좌우", systemImage: "rectangle.split.2x1").tag(FlowLayout.sideBySide)
             }
             .pickerStyle(.segmented)
-            .help("레이아웃 전환")
+            .help("상세 패널을 목록 아래 또는 오른쪽에 두기")
         }
     }
 
@@ -74,6 +75,7 @@ struct MainToolbar: ToolbarContent {
             HStack(spacing: 8) {
                 Label(message, systemImage: "exclamationmark.triangle.fill").labelStyle(.titleAndIcon).foregroundStyle(.red)
                 Button("다시 시도") { Task { await model.startServer() } }
+                    .help("프록시 서버 다시 시작")
             }
         }
     }
@@ -89,7 +91,7 @@ private struct PendingBreakpointsButton: View {
             Button("⏸ \(count)건 대기") { openWindow(id: "breakpoints") }
                 .buttonStyle(.link)
                 .foregroundStyle(.orange)
-                .help("Breakpoint 창 열기")
+                .help("멈춘 요청을 처리할 Breakpoint 창 열기")
         }
     }
 }

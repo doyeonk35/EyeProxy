@@ -37,6 +37,7 @@ private struct FlowMenu: View {
         Button("Repeat") { model.repeatFlows(current()) }
             .keyboardShortcut(.return, modifiers: .command)
             .disabled(ids.isEmpty)
+            .help("선택한 요청을 그대로 다시 보내기 (⌘↩)")
         Button("Edit and Repeat…") {
             guard let id = current().first, current().count == 1, let flow = model.session.flow(id) else { return }
             model.composeSeed = flow.request
@@ -44,24 +45,29 @@ private struct FlowMenu: View {
         }
         .keyboardShortcut(.return, modifiers: [.command, .option])
         .disabled(ids.count != 1)
+        .help("선택한 요청을 Compose에서 고쳐 보내기 (⌥⌘↩)")
         Divider()
         let id = model.selectedFlowID
         Button(id.flatMap { model.session.comments[$0] } == nil ? "Add Comment…" : "Edit Comment…") {
             if selection != nil, let id = model.selectedFlowID { model.commentingFlowID = id }
         }
         .disabled(ids.count != 1)
+        .help("선택한 요청의 코멘트 쓰기·고치기")
         Divider()
         HighlightMenu(model: model, ids: current)
         Divider()
         Button("Delete") { if listSelection != nil { model.deleteFlows(model.selectedFlowIDs) } }
             .keyboardShortcut(.delete, modifiers: [])
             .disabled((listSelection ?? []).isEmpty)
+            .help("선택한 요청을 목록에서 지우기 (⌫)")
         Button("Delete All") { model.deleteVisibleFlows() }
             .disabled((visibleCount ?? 0) == 0)
+            .help("목록에 보이는 요청 모두 지우기(숨은 요청은 남김)")
         Divider()
         // 필터가 숨긴 선택은 저장하지 않는다 → 보이는 선택이 없으면 끈다.
         Button("Save Requests…") { Task { await model.saveRequests() } }
             .disabled(selection == nil || model.visibleSelectedFlowIDs.isEmpty)
+            .help("선택한 요청을 Prog 세션 파일로 저장")
         // 선택이 있으면 선택, 없으면 보이는 행 전체(스펙 §8.4).
         ExportMenu(model: model) { model.selectedFlowIDs }
             .disabled((visibleCount ?? 0) == 0)
@@ -77,9 +83,13 @@ struct ExportMenu: View {
     var body: some View {
         Menu("Export") {
             Button("as HAR (HTTP Archive)…") { Task { await model.export(.har, scope: ids()) } }
+                .help("HAR 1.2 파일로 저장")
             Button("as CSV…") { Task { await model.export(.csv, scope: ids()) } }
+                .help("CSV 표 파일로 저장(Excel에서 열림)")
             Button("as Prog Session…") { Task { await model.export(.session, scope: ids()) } }
+                .help("Prog 세션 파일로 저장")
         }
+        .help("선택한 요청(없으면 보이는 요청 전체)을 파일로 내보내기")
     }
 }
 
@@ -94,14 +104,18 @@ struct HighlightMenu: View {
             ForEach(Array(HighlightColor.allCases.enumerated()), id: \.element) { i, color in
                 Button(color.rawValue.capitalized) { model.session.setHighlight(color, for: ids()) }
                     .keyboardShortcut(KeyEquivalent(Character(String(i + 1))))
+                    .help("요청 행을 \(color.rawValue.capitalized) 색으로 표시 (⌘\(i + 1))")
             }
             Divider()
             Button("Strikethrough") { model.session.toggleStrikethrough(for: ids()) }
                 .keyboardShortcut("x", modifiers: [.command, .shift])
+                .help("요청 행에 취소선 긋기/지우기 (⇧⌘X)")
             Button("Reset") { model.session.resetHighlight(for: ids()) }
                 .keyboardShortcut("0")
+                .help("색과 취소선 모두 지우기 (⌘0)")
         }
         .disabled(ids().isEmpty)
+        .help("요청 행에 색·취소선 표시")
     }
 }
 
@@ -116,53 +130,72 @@ private struct ToolsMenu: View {
             model.settingsTab = .ssl
             openSettings()
         }
+        .help("HTTPS를 복호화할 호스트 목록 설정 열기")
         Button("Compose Request…") { openWindow(id: "compose") }
             .keyboardShortcut("c", modifiers: [.command, .option])
+            .help("요청을 직접 만들어 보내기 (⌥⌘C)")
         Divider()
         Menu("Breakpoint") {
             Button("Rules…") { openWindow(id: "tool-breakpoint-rules") }
+                .help("멈출 요청을 정하는 규칙 편집")
             Button("Breakpoints…") { openWindow(id: "breakpoints") }
+                .help("멈춘 요청·응답을 보고 고쳐 보내기")
             Button("Breakpoint Templates…") { openWindow(id: "breakpoint-templates") }
+                .help("Breakpoint에서 불러 쓸 템플릿 관리")
         }
+        .help("요청·응답을 멈춰 고치는 Breakpoint 도구")
         Button("Map Local…") { openWindow(id: "tool-map-local") }
             .keyboardShortcut("l", modifiers: [.command, .option])
+            .help("요청에 로컬 파일로 응답하는 규칙 (⌥⌘L)")
         Button("Map Remote…") { openWindow(id: "tool-map-remote") }
             .keyboardShortcut("r", modifiers: [.command, .option])
+            .help("요청을 다른 주소로 보내는 규칙 (⌥⌘R)")
         Button("Block List…") { openWindow(id: "tool-block") }
             .keyboardShortcut("[", modifiers: [.command, .option])
+            .help("요청을 막거나 목록에서 숨기는 규칙 (⌥⌘[)")
         Button("Allow List…") { openWindow(id: "tool-allow") }
             .keyboardShortcut("]", modifiers: [.command, .option])
+            .help("규칙에 맞는 요청만 기록하는 규칙 (⌥⌘])")
         Toggle("No Caching", isOn: $settings.toolSwitches.noCaching)
             .keyboardShortcut("n", modifiers: [.command, .option])
+            .help("캐시를 끄고 늘 서버에서 새로 받기 (⌥⌘N)")
         Divider()
         Button("Network Conditions…") { openWindow(id: "tool-network") }
             .keyboardShortcut("j", modifiers: [.command, .option])
+            .help("느린 네트워크를 흉내 내는 규칙 (⌥⌘J)")
         Divider()
         Menu("Enable/Disable Tools") {
-            Toggle("Breakpoint", isOn: $settings.toolSwitches.breakpoint)
-            Toggle("Map Local", isOn: $settings.toolSwitches.mapLocal)
-            Toggle("Map Remote", isOn: $settings.toolSwitches.mapRemote)
-            Toggle("Block List", isOn: $settings.toolSwitches.blockList)
-            Toggle("Allow List", isOn: $settings.toolSwitches.allowList)
-            Toggle("Network Conditions", isOn: $settings.toolSwitches.networkConditions)
+            Toggle("Breakpoint", isOn: $settings.toolSwitches.breakpoint).help("Breakpoint 규칙 전체 켜기/끄기")
+            Toggle("Map Local", isOn: $settings.toolSwitches.mapLocal).help("Map Local 규칙 전체 켜기/끄기")
+            Toggle("Map Remote", isOn: $settings.toolSwitches.mapRemote).help("Map Remote 규칙 전체 켜기/끄기")
+            Toggle("Block List", isOn: $settings.toolSwitches.blockList).help("Block List 규칙 전체 켜기/끄기")
+            Toggle("Allow List", isOn: $settings.toolSwitches.allowList).help("Allow List 규칙 전체 켜기/끄기")
+            Toggle("Network Conditions", isOn: $settings.toolSwitches.networkConditions).help("Network Conditions 규칙 전체 켜기/끄기")
         }
+        .help("규칙은 둔 채 도구별로 켜고 끄기")
         Divider()
         Menu("Import Settings") {
             Button("From Proxyman…") { openWindow(id: "import-proxyman") }
+                .help("Proxyman의 규칙·설정 가져오기")
         }
+        .help("다른 앱의 규칙·설정 가져오기")
         Divider()
         Menu("Proxy Settings") {
             Toggle("Record Traffic", isOn: $settings.isRecording)
                 .keyboardShortcut("r")
+                .help("새 요청 기록 켜기/끄기 (⌘R)")
             MacProxyOverrideToggle(title: "Override macOS Proxy", model: model)
             Divider()
             Button("Restart Server") { Task { await model.restartServer() } }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
+                .help("프록시 서버 다시 시작 (⇧⌘R)")
             Button("Bypass Proxy Settings…") {
                 model.settingsTab = .bypass
                 openSettings()
             }
+            .help("프록시를 거치지 않을 호스트 설정 열기")
         }
+        .help("기록·시스템 프록시·서버 설정")
     }
 }
 
@@ -175,5 +208,6 @@ struct MacProxyOverrideToggle: View {
         Toggle(title, isOn: Binding(get: { model.macCaptureEnabled || model.effectiveProxyLeftover },
                                     set: { on in Task { await model.setMacCapture(on) } }))
             .disabled(model.macCaptureBusy)
+            .help("macOS 시스템 프록시를 Prog로 바꾸기/되돌리기")
     }
 }

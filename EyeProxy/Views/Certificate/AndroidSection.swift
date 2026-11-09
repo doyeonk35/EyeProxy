@@ -28,6 +28,7 @@ struct AndroidSection: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .help("Android 기기 종류별 안내 전환")
         }
         switch model.androidTab {
         case .device: deviceSection
@@ -46,6 +47,7 @@ struct AndroidSection: View {
                 Text("3. 설정 ▸ 보안 ▸ 암호화 및 사용자 인증 정보 ▸ 인증서 설치 ▸ CA 인증서 → 내려받은 파일을 선택합니다.")
             }
             Button("CA 저장(.crt)…") { model.exportCACrt() }
+                .help("Prog CA를 Prog-CA.crt 파일로 저장")
         }
     }
 
@@ -59,7 +61,9 @@ struct AndroidSection: View {
             }
             if adb != nil {
                 adbButton("adb로 프록시 설정 + CA 복사") { await model.adbSetProxyAndPushCA(host: "10.0.2.2") }
+                    .help("에뮬레이터 프록시를 Prog로 설정하고 CA를 Download로 복사")
                 adbButton("adb로 프록시 해제") { await model.runADB(AndroidSetup.clearProxyArguments) }
+                    .help("기기의 프록시 설정 지우기")
                 adbResult
             } else {
                 commandText(AndroidSetup.commandLines(adb: "adb", host: "10.0.2.2", port: port, crt: savedCRT))
@@ -80,9 +84,13 @@ struct AndroidSection: View {
             if adb != nil {
                 adbButton("adb connect") { await model.runADB(AndroidSetup.connectArguments(tvIP)) }
                     .disabled(tvIP.isEmpty || running)
+                    .help("입력한 TV IP로 adb 연결")
                 adbButton("adb로 프록시 설정 + CA 복사") { await model.adbSetProxyAndPushCA(host: macIP) }
+                    .help("TV 프록시를 Prog로 설정하고 CA를 Download로 복사")
                 adbButton("adb로 프록시 해제") { await model.runADB(AndroidSetup.clearProxyArguments) }
+                    .help("기기의 프록시 설정 지우기")
                 adbButton("인증서 설치 화면 열기") { await model.runADB(AndroidSetup.installIntentArguments) }
+                    .help("기기에 인증서 설치 화면 띄우기")
                 adbResult
             } else {
                 commandText(AndroidSetup.tvCommandLines(adb: "adb", tvIP: tvIP.isEmpty ? "<TV IP>" : tvIP,
@@ -102,6 +110,7 @@ struct AndroidSection: View {
                 .font(.caption.monospaced())
                 .textSelection(.enabled)
             Button("XML 복사") { copy(AndroidSetup.networkSecurityConfigXML) }
+                .help("network_security_config XML 복사")
         }
         .font(.callout)
     }
@@ -111,6 +120,7 @@ struct AndroidSection: View {
             HStack {
                 Text(verbatim: "\(host):\(String(port))").monospaced().textSelection(.enabled)
                 Button("복사") { copy("\(host):\(String(port))") }
+                    .help("프록시 주소(호스트:포트) 복사")
             }
         }
     }
@@ -128,7 +138,9 @@ struct AndroidSection: View {
             Text(verbatim: text).font(.caption.monospaced()).textSelection(.enabled)
             HStack {
                 Button("명령 복사") { copy(text) }
+                    .help("위 adb 명령 복사")
                 Button("CA 저장(.crt)…") { model.exportCACrt() }
+                    .help("Prog CA를 Prog-CA.crt 파일로 저장")
             }
         }
     }

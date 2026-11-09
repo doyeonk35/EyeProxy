@@ -33,6 +33,7 @@ struct ProfileFormView: View {
                 if needsPassword { confirmingPlaintext = true } else { save() }
             }
             .disabled(ssid.isEmpty || effectiveHost.isEmpty)
+            .help("Wi-Fi·프록시 설정 프로필(.mobileconfig) 저장")
         }
         .alert("이 파일에 Wi-Fi 비밀번호가 평문으로 들어 있습니다", isPresented: $confirmingPlaintext) {
             Button("계속") { save() }

@@ -23,7 +23,7 @@ struct FilterBarView: View {
                 }
                 Divider().frame(height: 14)
                 ForEach(1...5, id: \.self) { c in
-                    chip("\(c)xx", selected: model.filter.statusClasses.contains(c), help: "응답 상태 코드 \(c)00–\(c)99") {
+                    chip("\(c)xx", selected: model.filter.statusClasses.contains(c), help: "상태 코드 \(c)xx 응답만 보기") {
                         model.filter.statusClasses.formSymmetricDifference([c])
                     }
                 }
@@ -52,22 +52,22 @@ struct FilterBarView: View {
 
     private static func help(_ p: FlowProtocol) -> String {
         switch p {
-        case .http: "scheme이 https가 아닌 요청"
-        case .https: "scheme이 https인 요청(복호화 안 한 터널 포함)"
+        case .http: "https가 아닌 요청만 보기"
+        case .https: "https 요청만 보기(복호화 안 한 터널 포함)"
         }
     }
 
     private static func help(_ kind: ContentKind) -> String {
         switch kind {
-        case .json: "응답 Content-Type에 json 포함"
-        case .form: "요청 Content-Type이 x-www-form-urlencoded 또는 multipart/form-data"
-        case .xml: "응답 Content-Type에 xml 포함"
-        case .js: "응답 Content-Type에 javascript 또는 ecmascript 포함"
-        case .css: "응답 Content-Type이 text/css"
-        case .graphql: "요청 경로에 graphql 포함 또는 요청 Content-Type이 application/graphql"
-        case .document: "응답 Content-Type이 html·plain·pdf·markdown·csv"
-        case .media: "응답 Content-Type이 이미지·영상·오디오·폰트·HLS"
-        case .other: "그 밖의 응답(Content-Type 없음, octet-stream, 터널 등)"
+        case .json: "Content-Type이 json인 응답만 보기"
+        case .form: "form-urlencoded·multipart 요청만 보기"
+        case .xml: "Content-Type이 xml인 응답만 보기"
+        case .js: "JavaScript 응답만 보기"
+        case .css: "CSS(text/css) 응답만 보기"
+        case .graphql: "GraphQL 요청만 보기(경로·Content-Type)"
+        case .document: "html·텍스트·pdf·markdown·csv 응답만 보기"
+        case .media: "이미지·영상·오디오·폰트·HLS 응답만 보기"
+        case .other: "그 밖의 응답만 보기(octet-stream·터널 등)"
         }
     }
 }
