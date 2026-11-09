@@ -43,6 +43,7 @@ import SwiftUI
             }
             CommandGroup(after: .toolbar) {
                 LayoutPicker(model: model)
+                Toggle("Auto Select the Latest Request", isOn: Bindable(model.settings).autoSelectLatest)
             }
             ToolsCommands(model: model)
             CertificateCommands(model: model)

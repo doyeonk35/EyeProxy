@@ -50,3 +50,12 @@ import Testing
     s.showStatusItem = false
     #expect(!AppSettings(defaults: d).showStatusItem)
 }
+
+@Test @MainActor func settingPersists() {
+    let d = UserDefaults(suiteName: UUID().uuidString)!
+    let s = AppSettings(defaults: d)
+    #expect(!s.autoSelectLatest)
+    s.autoSelectLatest = true
+    #expect(AppSettings(defaults: d).autoSelectLatest)
+    #expect(d.bool(forKey: "eyeproxy.autoSelectLatest"))
+}

@@ -386,6 +386,24 @@ final class AppModel {
         visibleFlows.map { FlowRow(flow: $0, number: session.number($0.id) ?? 0) }.sorted(using: sortOrder)
     }
 
+    /// View ▸ Auto Select(스펙 §6): 켜져 있으면 보이는 행 중 최신을 선택하고 그 id를 돌려준다(목록이 스크롤한다).
+    func selectLatestIfAuto() -> FlowID? {
+        guard settings.autoSelectLatest, let id = AutoSelect.latest(in: visibleRows) else { return nil }
+        selectedFlowID = id
+        return id
+    }
+
+    /// 목록에서 사용자가 바꾼 선택(클릭·키보드). 이 경로만 Auto Select를 끈다 —
+    /// Delete·세션 열기·Auto Select 같은 프로그램 선택은 `selectedFlowIDs`에 바로 쓰므로 끄지 않는다.
+    func userSelect(_ ids: Set<FlowID>) {
+        // 행이 바뀔 때 Table이 같은 선택을 다시 써도 사용자 변경으로 보지 않는다.
+        guard ids != selectedFlowIDs else { return }
+        if settings.autoSelectLatest, AutoSelect.shouldDisable(userSelected: ids, autoSelected: AutoSelect.latest(in: visibleRows)) {
+            settings.autoSelectLatest = false
+        }
+        selectedFlowIDs = ids
+    }
+
     func processKey(for flow: Flow) -> String? { processes.attribution[flow.id]?.groupKey }
 
     var simulatorRuntimes: [String: String] {

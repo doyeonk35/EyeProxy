@@ -26,6 +26,8 @@ public final class AppSettings {
     public var mapLocalDefaultFolder: String? { didSet { defaults.set(mapLocalDefaultFolder, forKey: "eyeproxy.mapLocalDefaultFolder") } }
     /// 메뉴 막대 상태 아이콘 표시.
     public var showStatusItem: Bool { didSet { defaults.set(showStatusItem, forKey: "eyeproxy.showStatusItem") } }
+    /// View ▸ Auto Select the Latest Request(스펙 §6). 사용자가 목록에서 다른 행을 고르면 꺼진다.
+    public var autoSelectLatest: Bool { didSet { defaults.set(autoSelectLatest, forKey: "eyeproxy.autoSelectLatest") } }
     /// 저장하지 않는다 (실행할 때마다 기록 중으로 시작).
     public var isRecording = true
 
@@ -43,6 +45,7 @@ public final class AppSettings {
         appearance = defaults.string(forKey: "eyeproxy.appearance").flatMap(Appearance.init(rawValue:)) ?? .system
         mapLocalDefaultFolder = defaults.string(forKey: "eyeproxy.mapLocalDefaultFolder")
         showStatusItem = defaults.object(forKey: "eyeproxy.showStatusItem") as? Bool ?? true
+        autoSelectLatest = defaults.bool(forKey: "eyeproxy.autoSelectLatest")
         toolSwitches = defaults.data(forKey: "eyeproxy.toolSwitches").flatMap { try? JSONDecoder().decode(ToolSwitches.self, from: $0) } ?? ToolSwitches()
     }
 
