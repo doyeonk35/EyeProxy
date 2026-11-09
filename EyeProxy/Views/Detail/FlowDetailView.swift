@@ -153,6 +153,8 @@ private struct RawView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: source.key) {
             let s = await Task.detached(operation: source.make).value
+            // 키가 바뀌어 이 작업이 취소됐으면 늦게 끝난 옛 결과로 새 Raw를 덮지 않는다.
+            if Task.isCancelled { return }
             text = CodeTextView.base(s)
         }
     }
