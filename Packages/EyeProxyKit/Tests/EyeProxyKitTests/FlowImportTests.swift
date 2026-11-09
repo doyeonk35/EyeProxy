@@ -112,11 +112,16 @@ private func urls(_ f: Flow) -> (original: String?, sent: String?) {
         {"startedDateTime": "2026-11-09T01:02:06.000Z", "time": 1,
          "request": {"method": "GET", "url": "https://example.com/weird", "headers": []},
          "response": {"status": 204, "statusText": "No Content", "headers": [],
-                      "content": {"mimeType": "text/plain", "text": "plain", "encoding": "quoted-printable"}}}
+                      "content": {"mimeType": "text/plain", "text": "plain", "encoding": "quoted-printable"}}},
+        {"startedDateTime": "2026-11-09T10:02:07+0900", "time": 0,
+         "request": {"method": "GET", "url": "wss://example.com/socket", "headers": []},
+         "response": {"status": 101, "statusText": "Switching Protocols", "headers": []}},
+        {"startedDateTime": "어제쯤", "time": 0,
+         "request": {"method": "GET", "url": "ws://example.com/x", "headers": []}}
       ]}}
     """#
     let fs = try FlowImport.har(Data(har.utf8))
-    #expect(fs.count == 4)
+    #expect(fs.count == 6)
     for f in fs {
         #expect(f.number == nil && f.comment == nil && f.highlight == nil && f.client == nil)
         #expect(f.flow.isTunnel == false && f.flow.error == nil && f.flow.annotations.isEmpty)
@@ -145,6 +150,52 @@ private func urls(_ f: Flow) -> (original: String?, sent: String?) {
 
     // 모르는 encoding → text를 UTF-8로
     #expect(fs[3].flow.response?.body == Data("plain".utf8))
+
+    // 콜론 없는 오프셋, ws·wss 기본 포트
+    let w = fs[4].flow
+    #expect(w.startedAt == Date(timeIntervalSince1970: 1_794_186_127))
+    #expect(w.request.port == 443 && w.request.url == "wss://example.com/socket" && w.response?.status == 101 && w.response?.body.isEmpty == true)
+    // 읽을 수 없는 시각 → 앞 항목의 시작 시각
+    let x = fs[5].flow
+    #expect(x.startedAt == w.startedAt && x.response == nil)
+    #expect(x.request.port == 80 && x.request.url == "ws://example.com/x")
+}
+
+@Test func malformedEntriesAreSkippedOrDefaulted() throws {
+    let har = #"""
+    {"log": {"entries": [
+      {"startedDateTime": "2026-11-09T01:02:03.250Z", "time": "slow",
+       "request": {"method": "GET", "url": "https://example.com/ok",
+                   "headers": [{"name": "X-Null", "value": null}, {"name": "X-Num", "value": 3}, {"value": "no name"}, {"name": "X-A", "value": "1"}]},
+       "response": {"status": "200", "headers": []},
+       "_prog": {"number": 3, "comment": "메모", "client": "iPhone"}},
+      {"startedDateTime": "2026-11-09T01:02:04Z", "request": {"method": "GET"}},
+      {"startedDateTime": "2026-11-09T01:02:05Z", "time": 5,
+       "request": {"method": "GET", "url": "https://example.com/broken", "headers": "nope"},
+       "response": {"status": 204, "statusText": "No Content", "headers": [], "content": {"text": 7}},
+       "_prog": "not an object"},
+      "garbage"
+    ]}}
+    """#
+    let fs = try FlowImport.har(Data(har.utf8))
+    #expect(fs.count == 2)
+    let ok = fs[0]
+    // _prog 필드는 하나씩: 빠진 isTunnel·isDecrypted 등이 있어도 나머지는 살린다
+    #expect(ok.number == 3 && ok.comment == "메모" && ok.client == "iPhone" && ok.flow.isDecrypted && !ok.flow.isTunnel)
+    #expect(ok.flow.request.headers == [HTTPHeader(name: "X-Null", value: ""), HTTPHeader(name: "X-Num", value: ""), HTTPHeader(name: "X-A", value: "1")])
+    #expect(ok.flow.response == nil)  // status 형식 오류 → 응답 없음
+    #expect(ok.flow.completedAt == ok.flow.startedAt)  // time 형식 오류 → 0
+    let broken = fs[1]
+    #expect(broken.number == nil && broken.comment == nil && broken.flow.annotations.isEmpty && broken.flow.isDecrypted)
+    #expect(broken.flow.request.url == "https://example.com/broken" && broken.flow.request.headers.isEmpty)
+    #expect(broken.flow.response?.status == 204 && broken.flow.response?.body.isEmpty == true)
+
+    // 항목은 있는데 하나도 못 읽으면 빈 세션 대신 오류
+    #expect(throws: FlowImportError.self) { try FlowImport.har(Data(#"{"log": {"entries": [{"request": {}}, 1]}}"#.utf8)) }
+    // 첫 항목 시각을 못 읽으면 가져온 시각
+    let before = Date()
+    let first = try FlowImport.har(Data(#"{"log": {"entries": [{"request": {"method": "GET", "url": "https://example.com/"}}]}}"#.utf8))
+    #expect(first[0].flow.startedAt >= before && first[0].flow.startedAt <= Date())
 }
 
 @Test func duplicateNumbersAreDropped() throws {

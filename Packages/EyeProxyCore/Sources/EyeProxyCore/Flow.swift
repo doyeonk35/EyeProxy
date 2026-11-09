@@ -33,9 +33,9 @@ public struct FlowRequest: Equatable, Codable, Sendable {
         self.body = body
     }
 
-    /// 기본 포트(http 80, https 443)면 포트를 생략한다.
+    /// 기본 포트(http·ws 80, https·wss 443)면 포트를 생략한다.
     public var url: String {
-        let isDefault = (scheme == "http" && port == 80) || (scheme == "https" && port == 443)
+        let isDefault = (["http", "ws"].contains(scheme) && port == 80) || (["https", "wss"].contains(scheme) && port == 443)
         return "\(scheme)://\(host)\(isDefault ? "" : ":\(port)")\(path)"
     }
 

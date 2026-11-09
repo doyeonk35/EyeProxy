@@ -18,6 +18,9 @@ struct ShortCircuit: RequestInterceptor {
 @Test func requestURLOmitsDefaultPort() {
     #expect(FlowRequest(method: "GET", scheme: "https", host: "a", port: 443, path: "/p?q=1", headers: [], body: Data()).url == "https://a/p?q=1")
     #expect(FlowRequest(method: "GET", scheme: "http", host: "a", port: 8080, path: "/", headers: [], body: Data()).url == "http://a:8080/")
+    #expect(FlowRequest(method: "GET", scheme: "ws", host: "a", port: 80, path: "/x", headers: [], body: Data()).url == "ws://a/x")
+    #expect(FlowRequest(method: "GET", scheme: "wss", host: "a", port: 443, path: "/x", headers: [], body: Data()).url == "wss://a/x")
+    #expect(FlowRequest(method: "GET", scheme: "ws", host: "a", port: 443, path: "/x", headers: [], body: Data()).url == "ws://a:443/x")
 }
 @Test func headerLookupIsCaseInsensitive() {
     #expect(FlowRequest.get("http://a/").with(headers: [.init(name: "Content-Type", value: "x")]).header("content-type") == "x")
