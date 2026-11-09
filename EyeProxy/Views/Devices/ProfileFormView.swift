@@ -26,6 +26,7 @@ struct ProfileFormView: View {
             ForEach(addresses, id: \.self) { Text(verbatim: $0).tag($0) }
         }
         .disabled(addresses.isEmpty)
+        .help("기기가 프록시로 쓸 이 Mac의 LAN 주소")
         LabeledContent("포트") { Text(verbatim: String(model.runningPort ?? model.settings.port)) }
         HStack {
             Spacer()
