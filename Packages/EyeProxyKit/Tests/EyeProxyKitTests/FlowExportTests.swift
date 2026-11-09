@@ -51,7 +51,7 @@ private func entries(_ data: Data) throws -> [[String: Any]] {
     #expect(res["redirectURL"] as? String == "https://api.example.com/v1/items/9" && res["bodySize"] as? Int == 8)
     let content = try #require(res["content"] as? [String: Any])
     #expect(content["size"] as? Int == 8 && content["mimeType"] as? String == "application/json" && content["text"] as? String == #"{"id":9}"#)
-    #expect(content["encoding"] == nil)
+    #expect(content["encoding"] == nil && content["compression"] == nil)
 
     let prog = try #require(e["_prog"] as? [String: Any])
     #expect(prog["number"] as? Int == 7 && prog["comment"] as? String == "메모" && prog["client"] as? String == "iPhone")
@@ -60,7 +60,7 @@ private func entries(_ data: Data) throws -> [[String: Any]] {
     #expect(prog["isTunnel"] as? Bool == false && prog["isDecrypted"] as? Bool == true)
     #expect(prog["originalURL"] as? String == "https://old.example.com/v1/items")
     // 없는 선택 필드는 null 대신 생략
-    for key in ["sentURL", "error", "incomplete"] { #expect(prog[key] == nil) }
+    for key in ["sentURL", "error", "incomplete", "rawRequestBody", "rawResponseBody"] { #expect(prog[key] == nil) }
 
     // 키 순서 고정(sortedKeys) + 슬래시 이스케이프 없음 → 같은 입력은 같은 바이트
     #expect(FlowExport.har([item], version: "1.2.3") == data)
@@ -108,6 +108,47 @@ private func entries(_ data: Data) throws -> [[String: Any]] {
     let content = try JSONDecoder().decode(HARFile.self, from: FlowExport.har([ExportItem(flow: h, number: 3)], version: "1"))
         .log.entries[0].response.content
     #expect(content.encoding == nil && Data(content.text.utf8) == h.response?.body)
+}
+
+@Test func harDecodesCompressedBodiesAndKeepsRaw() throws {
+    let korean = #"{"msg":"안녕하세요"}"#
+    let gz = try gzip(Data(korean.utf8))
+    var f = completedFlow()
+    f.request.headers.append(HTTPHeader(name: "Content-Encoding", value: "gzip"))
+    f.request.body = gz
+    f.response?.headers.append(HTTPHeader(name: "Content-Encoding", value: "gzip"))
+    f.response?.body = gz
+    let e = try #require(try entries(FlowExport.har([ExportItem(flow: f, number: 1)], version: "1")).first)
+    let req = try #require(e["request"] as? [String: Any]), res = try #require(e["response"] as? [String: Any])
+    let post = try #require(req["postData"] as? [String: Any]), content = try #require(res["content"] as? [String: Any])
+    let decodedCount = Data(korean.utf8).count
+
+    #expect(post["text"] as? String == korean && post["encoding"] == nil && post["size"] == nil && post["compression"] == nil)
+    #expect(req["bodySize"] as? Int == gz.count)
+    #expect(content["text"] as? String == korean && content["encoding"] == nil)
+    #expect(content["size"] as? Int == decodedCount && res["bodySize"] as? Int == gz.count)
+    #expect(content["compression"] as? Int == decodedCount - gz.count)
+    // 헤더는 기록 그대로(Content-Encoding 유지)
+    #expect((res["headers"] as? [[String: String]])?.contains(["name": "Content-Encoding", "value": "gzip"]) == true)
+    let prog = try #require(e["_prog"] as? [String: Any])
+    #expect(Data(base64Encoded: try #require(prog["rawResponseBody"] as? String)) == gz)
+    #expect(Data(base64Encoded: try #require(prog["rawRequestBody"] as? String)) == gz)
+
+    // 풀 수 없는 본문(gzip이라 했지만 아님)은 기록 그대로, compression·raw 없음
+    var bad = completedFlow()
+    bad.response?.headers.append(HTTPHeader(name: "Content-Encoding", value: "gzip"))
+    let b = try #require(try entries(FlowExport.har([ExportItem(flow: bad, number: 2)], version: "1")).first)
+    let bc = try #require((b["response"] as? [String: Any])?["content"] as? [String: Any])
+    #expect(bc["text"] as? String == #"{"id":9}"# && bc["compression"] == nil)
+    #expect((b["_prog"] as? [String: Any])?["rawResponseBody"] == nil)
+}
+
+@Test func harQueryStringSplitsUnparseableURLs() {
+    let url = "https://example.com/s?q=a b|c&f={x}&q=%ED%95%9C&p=1+2&flag#frag"
+    // macOS 15의 URLComponents는 이 URL을 받아들이지만 %ED%95%9C를 풀지 않는다 → 직접 분해
+    let q = HAREntry.queryString(url).map { [$0.name, $0.value] }
+    #expect(q == [["q", "a b|c"], ["f", "{x}"], ["q", "한"], ["p", "1+2"], ["flag", ""]])
+    #expect(HAREntry.queryString("https://example.com/a b").isEmpty)
 }
 
 @Test func harMarksFailedAndIncompleteFlows() throws {

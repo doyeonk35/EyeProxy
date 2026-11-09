@@ -67,13 +67,24 @@ struct HARLog: Codable { var version: String; var creator: HARCreator; var entri
 struct HARCreator: Codable { var name: String; var version: String }
 struct HARNameValue: Codable { var name: String; var value: String }
 
-/// request.postData(size 없음)와 response.content(size 있음) 공용.
+/// request.postData(size 없음)와 response.content(size 있음) 공용. text는 Content-Encoding을 푼 본문.
 struct HARBody: Codable {
     var size: Int?
+    /// 푼 크기 − 기록된 크기. 풀어서 바이트가 바뀐 응답에만.
+    var compression: Int?
     var mimeType: String
     var text: String
     /// 바이너리(UTF-8로 안 읽히는 본문)면 "base64"
     var encoding: String?
+
+    /// Content-Encoding대로 풀어(실패하면 기록 그대로) 담고, 바이트가 바뀌었으면 기록된 원본의 base64를 돌려준다.
+    static func make(_ recorded: Data, contentEncoding: String?, mimeType: String?, sized: Bool) -> (body: HARBody, raw: String?) {
+        let decoded = BodyDecoder.decompressed(body: recorded, contentEncoding: contentEncoding) ?? recorded
+        let changed = decoded != recorded
+        var body = HARBody(size: sized ? decoded.count : nil, mimeType: mimeType, data: decoded)
+        if sized && changed { body.compression = decoded.count - recorded.count }
+        return (body, changed ? recorded.base64EncodedString() : nil)
+    }
 
     init(size: Int?, mimeType: String?, data: Data) {
         self.size = size
@@ -115,6 +126,8 @@ struct HARResponse: Codable {
 struct HARTimings: Codable { var send = 0; var wait: Int; var receive = 0 }
 
 /// HAR 규칙의 `_` 접두 확장. 값이 없는 선택 필드는 생략.
+/// `rawRequestBody`·`rawResponseBody`: 압축을 풀어 text에 담았을 때만 기록된 원본 바이트(base64).
+/// `FlowImport.har`는 이 값이 있으면 text 대신 이것을 본문으로 써야 바이트 왕복이 맞는다(헤더의 Content-Encoding은 그대로 둔다).
 struct HARProg: Codable {
     var number: Int
     var comment: String?
@@ -127,6 +140,8 @@ struct HARProg: Codable {
     var sentURL: String?
     var error: String?
     var incomplete: Bool?
+    var rawRequestBody: String?
+    var rawResponseBody: String?
 }
 
 struct HAREntry: Codable {
@@ -145,22 +160,36 @@ struct HAREntry: Codable {
         time = max(row.durationMS, 0)
         timings = HARTimings(wait: time)
         let headers = { (h: [HTTPHeader]) in h.map { HARNameValue(name: $0.name, value: $0.value) } }
+        let post = HARBody.make(f.request.body, contentEncoding: f.request.header("Content-Encoding"),
+                                mimeType: f.request.header("Content-Type"), sized: false)
         request = HARRequest(
             method: f.request.method, url: f.request.url, headers: headers(f.request.headers),
-            queryString: URLComponents(string: f.request.url)?.queryItems?.map { HARNameValue(name: $0.name, value: $0.value ?? "") } ?? [],
-            postData: f.request.body.isEmpty ? nil : HARBody(size: nil, mimeType: f.request.header("Content-Type"), data: f.request.body),
-            bodySize: f.request.body.count)
+            queryString: Self.queryString(f.request.url),
+            postData: f.request.body.isEmpty ? nil : post.body, bodySize: f.request.body.count)
         let r = f.response
+        let content = HARBody.make(r?.body ?? Data(), contentEncoding: r?.header("Content-Encoding"), mimeType: r?.header("Content-Type"), sized: true)
         response = HARResponse(
             status: r?.status ?? 0, statusText: r?.reason ?? "", headers: headers(r?.headers ?? []),
-            content: HARBody(size: r?.body.count ?? 0, mimeType: r?.header("Content-Type"), data: r?.body ?? Data()),
-            redirectURL: r?.header("Location") ?? "", bodySize: r?.body.count ?? -1)
+            content: content.body, redirectURL: r?.header("Location") ?? "", bodySize: r?.body.count ?? -1)
         _prog = HARProg(
             number: item.number, comment: item.comment, highlight: item.highlight,
             tools: row.editedMarks.isEmpty ? nil : row.editedMarks.map(\.rawValue), client: item.client,
             isTunnel: f.isTunnel, isDecrypted: f.isDecrypted,
             originalURL: f.annotations.lazy.compactMap { if case .originalURL(let u) = $0 { u } else { nil } }.first,
             sentURL: f.annotations.lazy.compactMap { if case .sentURL(let u) = $0 { u } else { nil } }.first,
-            error: f.error, incomplete: f.completedAt == nil ? true : nil)
+            error: f.error, incomplete: f.completedAt == nil ? true : nil,
+            rawRequestBody: post.raw, rawResponseBody: content.raw)
+    }
+
+    /// `?` 뒤(`#` 앞)를 `&`·첫 `=`로 나눠 퍼센트 디코딩(실패하면 원문). 반복 키는 순서대로, `+`는 공백으로 바꾸지 않는다.
+    /// URLComponents는 쓰지 않는다: macOS 15에서 날 공백·`|`·`{}`가 섞인 URL도 nil 없이 받아들이지만 그때는 `%ED%95%9C` 같은 유효한 이스케이프를 풀지 않는다.
+    static func queryString(_ url: String) -> [HARNameValue] {
+        guard let q = url.split(separator: "?", maxSplits: 1).dropFirst().first?.split(separator: "#", omittingEmptySubsequences: false).first
+        else { return [] }
+        func decode(_ s: Substring) -> String { s.removingPercentEncoding ?? String(s) }
+        return q.split(separator: "&").map {
+            let kv = $0.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            return HARNameValue(name: decode(kv[0]), value: kv.count > 1 ? decode(kv[1]) : "")
+        }
     }
 }
