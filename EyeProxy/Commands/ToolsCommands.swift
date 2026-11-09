@@ -17,6 +17,8 @@ extension FocusedValues {
     @Entry var flowSelection: Set<FlowID>?
     /// 목록 자체에 포커스가 있을 때의 선택. 맨 ⌫(Delete)가 검색창·시트의 글자 지우기를 빼앗지 않게 한다.
     @Entry var flowListSelection: Set<FlowID>?
+    /// 메인 창이 key일 때 목록에 보이는 행 수. 다른 창이 앞이면 nil.
+    @Entry var visibleFlowCount: Int?
 }
 
 /// 선택된 흐름에 적용하는 항목(스펙 §5.8·§6.1).
@@ -24,6 +26,7 @@ private struct FlowMenu: View {
     let model: AppModel
     @FocusedValue(\.flowSelection) private var selection
     @FocusedValue(\.flowListSelection) private var listSelection
+    @FocusedValue(\.visibleFlowCount) private var visibleCount
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -50,7 +53,7 @@ private struct FlowMenu: View {
             .keyboardShortcut(.delete, modifiers: [])
             .disabled(listIDs.isEmpty)
         Button("Delete All") { model.deleteVisibleFlows() }
-            .disabled(model.session.flows.isEmpty)
+            .disabled((visibleCount ?? 0) == 0)
     }
 }
 

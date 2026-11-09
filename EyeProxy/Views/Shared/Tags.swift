@@ -102,13 +102,18 @@ struct RowHighlight: ViewModifier {
     let color: HighlightColor?
     @Environment(\.colorScheme) private var colorScheme
 
+    /// SwiftUI Table 열 사이 간격(macOS 15 실측).
+    static let columnGap: CGFloat = 17
+    /// 행이 잘라 주므로 셀 높이보다 넉넉하면 된다.
+    static let verticalBleed: CGFloat = 4
+
     func body(content: Content) -> some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .background {
                 if let color {
                     color.swiftUIColor.opacity(colorScheme == .dark ? 0.28 : 0.18)
-                        .padding(.horizontal, -8.5).padding(.vertical, -4)
+                        .padding(.horizontal, -Self.columnGap / 2).padding(.vertical, -Self.verticalBleed)
                 }
             }
     }

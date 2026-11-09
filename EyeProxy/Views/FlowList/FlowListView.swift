@@ -14,18 +14,19 @@ struct FlowListView: View {
         let rows = model.visibleRows
         let deviceNames = Dictionary(model.devices.devices.map { ($0.address, $0.displayName) }, uniquingKeysWith: { a, _ in a })
         let comments = model.session.comments
-        let highlights = model.session.highlights
 
         // Proxyman 메인 목록과 같은 열·순서(Task 15b). 선택 열은 숨김 기본값.
         Table(rows, selection: $model.selectedFlowIDs, sortOrder: $model.sortOrder, columnCustomization: $columnCustomization) {
             Group {
                 TableColumn("", value: \.state) { (row: FlowRow) in cell(row) {
                     Circle().fill(FlowColors.state(row.state)).frame(width: 8, height: 8)
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .help(Self.stateText(row.state))
-                        // 선택 행은 시스템 선택색이 배경을 덮으므로 Highlight 색을 막대로도 보인다(스펙 §4).
+                        // 선택 행은 배경 대신 시스템 선택색이 보이므로 Highlight 색은 셀 높이만 한 막대로 보인다(스펙 §4).
                         .overlay(alignment: .leading) {
-                            if let color = highlights[row.id]?.color { color.swiftUIColor.frame(width: 3) }
+                            if let color = model.session.highlights[row.id]?.color {
+                                color.swiftUIColor.frame(width: 3).padding(.vertical, -RowHighlight.verticalBleed)
+                            }
                         }
                 }}
                 .width(16)
@@ -37,7 +38,7 @@ struct FlowListView: View {
                 .width(min: 32, ideal: 48, max: 80)
                 .customizationID("id")
                 TableColumn("URL", value: \.url) { (row: FlowRow) in cell(row) {
-                    let struck = highlights[row.id]?.strikethrough ?? false
+                    let struck = model.session.highlights[row.id]?.strikethrough ?? false
                     (Text(row.host).foregroundStyle(struck ? .secondary : .primary).strikethrough(struck)
                         + Text(row.flow.request.path).foregroundStyle(.secondary).strikethrough(struck))
                         .lineLimit(1).truncationMode(.middle)
@@ -124,6 +125,8 @@ struct FlowListView: View {
         .focusedSceneValue(\.flowSelection, model.selectedFlowIDs.isEmpty ? nil : model.selectedFlowIDs)
         // Flow ▸ Delete(⌫)는 목록에 포커스가 있을 때만 켜진다 → 검색창·코멘트 시트의 ⌫를 빼앗지 않는다.
         .focusedValue(\.flowListSelection, model.selectedFlowIDs)
+        // Flow ▸ Delete All은 메인 창이 key이고 보이는 행이 있을 때만 → 창이 닫힌 뒤 확인 알림이 남지 않는다.
+        .focusedSceneValue(\.visibleFlowCount, rows.count)
         .contextMenu(forSelectionType: FlowID.self) { ids in
             if !ids.isEmpty {
                 Button("Repeat") { model.repeatFlows(ids) }
@@ -166,9 +169,10 @@ struct FlowListView: View {
         }
     }
 
-    /// 모든 셀에 행 Highlight 배경을 깐다.
+    /// 모든 셀에 행 Highlight 배경을 깐다. 선택 행은 시스템 선택색이 우선이라 깔지 않는다(스펙 §4).
     private func cell(_ row: FlowRow, @ViewBuilder _ content: () -> some View) -> some View {
-        content().modifier(RowHighlight(color: model.session.highlights[row.id]?.color))
+        let color = model.selectedFlowIDs.contains(row.id) ? nil : model.session.highlights[row.id]?.color
+        return content().modifier(RowHighlight(color: color))
     }
 
     /// 우클릭 ▸ Tools ▸ … (스펙 §6.1). 선택 요청으로 미리 채운 새 규칙 편집기를 연다.

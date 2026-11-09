@@ -299,10 +299,12 @@ final class AppModel {
         }
     }
 
-    /// Flow ▸ Delete(스펙 §5). 선택이 지워지면 지운 행 바로 아래 보이는 행으로(없으면 위) 옮긴다.
+    /// Flow ▸ Delete(스펙 §5). 보이는 행만 지운다 — 선택에 남은, 필터·사이드바가 숨긴 행은 몰래 지우지 않는다.
+    /// 선택이 지워지면 지운 행 바로 아래 보이는 행으로(없으면 위) 옮긴다.
     func deleteFlows(_ ids: Set<FlowID>) {
-        guard !ids.isEmpty else { return }
         let order = visibleRows.map(\.id)
+        let ids = ids.intersection(order)
+        guard !ids.isEmpty else { return }
         let next = order.lastIndex(where: ids.contains).flatMap { last in
             order[(last + 1)...].first { !ids.contains($0) } ?? order[..<last].last { !ids.contains($0) }
         }
