@@ -81,3 +81,35 @@ struct EditedTag: View {
         Text(mark.rawValue).modifier(Capsuled(color: Color("StatusRedirect"), selected: selected))
     }
 }
+
+extension HighlightColor {
+    var swiftUIColor: Color {
+        switch self {
+        case .red: .red
+        case .yellow: .yellow
+        case .green: .green
+        case .blue: .blue
+        case .purple: .purple
+        case .gray: .gray
+        }
+    }
+}
+
+/// 목록 행 Highlight(스펙 §4): 셀을 꽉 채운 옅은 배경(라이트 18%·다크 28%).
+/// 셀 사이 틈(Table 열 간격 17pt, 실측)이 비지 않게 배경을 양옆 절반씩 넓힌다. 더 넓히면 이웃 셀과 겹쳐 진해진다.
+/// 위아래는 행이 잘라 주므로 넉넉히 넓힌다.
+struct RowHighlight: ViewModifier {
+    let color: HighlightColor?
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .background {
+                if let color {
+                    color.swiftUIColor.opacity(colorScheme == .dark ? 0.28 : 0.18)
+                        .padding(.horizontal, -8.5).padding(.vertical, -4)
+                }
+            }
+    }
+}

@@ -15,12 +15,15 @@ struct ToolsCommands: Commands {
 extension FocusedValues {
     /// 메인 창이 key일 때의 목록 선택. 다른 창(Compose·Breakpoint 등)이 앞이면 nil → Repeat ⌘↩가 그 창의 ⌘↩를 가로채지 않는다.
     @Entry var flowSelection: Set<FlowID>?
+    /// 목록 자체에 포커스가 있을 때의 선택. 맨 ⌫(Delete)가 검색창·시트의 글자 지우기를 빼앗지 않게 한다.
+    @Entry var flowListSelection: Set<FlowID>?
 }
 
 /// 선택된 흐름에 적용하는 항목(스펙 §5.8·§6.1).
 private struct FlowMenu: View {
     let model: AppModel
     @FocusedValue(\.flowSelection) private var selection
+    @FocusedValue(\.flowListSelection) private var listSelection
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -39,6 +42,36 @@ private struct FlowMenu: View {
         let id = model.selectedFlowID
         Button(id.flatMap { model.session.comments[$0] } == nil ? "Add Comment…" : "Edit Comment…") { model.commentingFlowID = id }
             .disabled(id == nil)
+        Divider()
+        HighlightMenu(model: model, ids: ids)
+        Divider()
+        let listIDs = listSelection ?? []
+        Button("Delete") { model.deleteFlows(listIDs) }
+            .keyboardShortcut(.delete, modifiers: [])
+            .disabled(listIDs.isEmpty)
+        Button("Delete All") { model.deleteVisibleFlows() }
+            .disabled(model.session.flows.isEmpty)
+    }
+}
+
+/// Flow ▸ Highlight와 목록 우클릭 ▸ Highlight(스펙 §4). 색 ⌘1…⌘6, 취소선 ⇧⌘X(⌥⌘S는 사이드바 토글과 겹친다), 되돌리기 ⌘0.
+struct HighlightMenu: View {
+    let model: AppModel
+    let ids: Set<FlowID>
+
+    var body: some View {
+        Menu("Highlight") {
+            ForEach(Array(HighlightColor.allCases.enumerated()), id: \.element) { i, color in
+                Button(color.rawValue.capitalized) { model.session.setHighlight(color, for: ids) }
+                    .keyboardShortcut(KeyEquivalent(Character(String(i + 1))))
+            }
+            Divider()
+            Button("Strikethrough") { model.session.toggleStrikethrough(for: ids) }
+                .keyboardShortcut("x", modifiers: [.command, .shift])
+            Button("Reset") { model.session.resetHighlight(for: ids) }
+                .keyboardShortcut("0")
+        }
+        .disabled(ids.isEmpty)
     }
 }
 

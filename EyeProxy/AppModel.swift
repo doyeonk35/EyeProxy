@@ -57,6 +57,8 @@ final class AppModel {
     var developmentPlatform: DevPlatform = .httpClients
     /// Android 섹션의 탭. Certificate 메뉴가 바꾼 뒤 창을 연다.
     var androidTab: AndroidTab = .device
+    /// Flow ▸ Delete All 확인 대기(필터가 숨긴 행이 있을 때만). 목록이 alert를 띄운다.
+    var pendingDeleteAll: (ids: Set<FlowID>, hiddenCount: Int)?
     /// Flow ▸ Add Comment…로 코멘트를 편집 중인 흐름. 메인 창이 시트를 띄운다.
     var commentingFlowID: FlowID?
     /// Edit and Repeat…로 Compose 창에 채울 요청. Compose 창이 꺼내 쓴다.
@@ -295,6 +297,26 @@ final class AppModel {
         case .host, .scope: sidebarSelection = .allFlows
         case .allFlows, nil: break
         }
+    }
+
+    /// Flow ▸ Delete(스펙 §5). 선택이 지워지면 지운 행 바로 아래 보이는 행으로(없으면 위) 옮긴다.
+    func deleteFlows(_ ids: Set<FlowID>) {
+        guard !ids.isEmpty else { return }
+        let order = visibleRows.map(\.id)
+        let next = order.lastIndex(where: ids.contains).flatMap { last in
+            order[(last + 1)...].first { !ids.contains($0) } ?? order[..<last].last { !ids.contains($0) }
+        }
+        session.remove(ids: ids)
+        for id in ids { processes.remove(id) }
+        if !selectedFlowIDs.isDisjoint(with: ids) { selectedFlowID = next }
+    }
+
+    /// Flow ▸ Delete All: 보이는 행만 지운다. 필터·사이드바가 숨긴 행이 있으면 확인부터 받는다.
+    func deleteVisibleFlows() {
+        let visible = Set(visibleFlows.map(\.id))
+        guard !visible.isEmpty else { return }
+        let hidden = session.flows.count - visible.count
+        if hidden > 0 { pendingDeleteAll = (visible, hidden) } else { deleteFlows(visible) }
     }
 
     // MARK: - 세션 파일 · cURL
