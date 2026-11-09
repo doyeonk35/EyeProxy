@@ -35,25 +35,28 @@ struct MainToolbar: ToolbarContent {
                 .font(.caption)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
         }
+        // 보기 스위치 묶음: SSL 자물쇠 + 숨긴 요청 보기.
         ToolbarItemGroup(placement: .primaryAction) {
             Toggle(isOn: Binding(get: { settings.sslEnabled }, set: { model.setSSLEnabled($0) })) {
                 Label("SSL 프록싱", systemImage: settings.sslEnabled ? "lock.fill" : "lock.open")
             }
             .help("SSL 프록싱 켜기/끄기")
+            @Bindable var model = model
+            Toggle(isOn: $model.filter.includeHidden) {
+                Label("숨긴 요청 보기", systemImage: model.filter.includeHidden ? "eye" : "eye.slash")
+            }
+            .toggleStyle(.button)
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
             Picker("레이아웃", selection: $settings.layout) {
                 Label("위아래", systemImage: "rectangle.split.1x2").tag(FlowLayout.classic)
                 Label("좌우", systemImage: "rectangle.split.2x1").tag(FlowLayout.sideBySide)
             }
             .pickerStyle(.segmented)
             .help("레이아웃 전환")
-            // 검색 칸(.searchable) 바로 앞에 놓인다.
-            @Bindable var model = model
-            Toggle("숨김 포함", isOn: $model.filter.includeHidden)
-                .toggleStyle(.checkbox)
-                .help("Block List로 숨긴 요청도 목록에 보이기")
         }
     }
 
