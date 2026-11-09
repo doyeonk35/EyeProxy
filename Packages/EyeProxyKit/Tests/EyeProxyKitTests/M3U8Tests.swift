@@ -104,3 +104,15 @@ import Testing
     #expect(!M3U8.isPlaylist(path: "/seg1.ts", contentType: "video/mp2t"))
     #expect(!M3U8.isPlaylist(path: "/m3u8/data.json", contentType: "application/json"))
 }
+
+@Test func mediaPlaylistToleratesBOMAndMalformedLines() throws {
+    let text = "\u{FEFF}#EXTM3U\n#EXT-X-DISCONTINUITY\n#EXT-X-BYTERANGE:500@0\nstray.ts\n#EXTINF:10.0 ,t\na.ts\n#EXTINF:-1 tvg-id=\"x\",Title\nb.ts\n"
+    guard case .media(let m) = try #require(M3U8.parse(text, baseURL: nil)) else {
+        Issue.record("media 아님"); return
+    }
+    #expect(m.segments.map(\.uri) == ["a.ts", "b.ts"])
+    #expect(m.segments.map(\.duration) == [10.0, -1])
+    #expect(m.segments.map(\.title) == ["t", "Title"])
+    #expect(m.segments.map(\.byteRange) == [nil, nil])
+    #expect(m.segments.map(\.discontinuity) == [false, false])
+}

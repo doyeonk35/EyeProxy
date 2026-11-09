@@ -67,7 +67,8 @@ public enum M3U8 {
 
     /// 첫 줄이 `#EXTM3U`가 아니면 nil. `#EXT-X-STREAM-INF`가 하나라도 있으면 master, 아니면 media. 모르는 태그는 무시.
     public static func parse(_ text: String, baseURL: URL?) -> M3U8Playlist? {
-        let lines = text.split(whereSeparator: \.isNewline)
+        let body = text.first == "\u{FEFF}" ? text.dropFirst() : Substring(text)
+        let lines = body.split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
         guard lines.first?.hasPrefix("#EXTM3U") == true else { return nil }
@@ -94,10 +95,12 @@ public enum M3U8 {
                             uri: line, absoluteURL: resolve(line)))
                     }
                     streamInf = nil
-                } else if let inf = extinf {
-                    media.segments.append(.init(
-                        index: media.segments.count, duration: inf.duration, title: inf.title,
-                        uri: line, absoluteURL: resolve(line), byteRange: byteRange, discontinuity: discontinuity))
+                } else {
+                    if let inf = extinf {
+                        media.segments.append(.init(
+                            index: media.segments.count, duration: inf.duration, title: inf.title,
+                            uri: line, absoluteURL: resolve(line), byteRange: byteRange, discontinuity: discontinuity))
+                    }
                     extinf = nil; byteRange = nil; discontinuity = false
                 }
                 continue
@@ -119,7 +122,9 @@ public enum M3U8 {
             case "#EXTINF":
                 let f = value.split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false)
                 let title = f.count > 1 ? f[1].trimmingCharacters(in: .whitespaces) : ""
-                extinf = (Double(f.first ?? "") ?? 0, title.isEmpty ? nil : title)
+                // 쉼표 앞 첫 숫자 토큰만 ("10.0 ", "-1 tvg-id=...").
+                let number = (f.first ?? "").trimmingCharacters(in: .whitespaces).prefix { "0123456789.+-".contains($0) }
+                extinf = (Double(number) ?? 0, title.isEmpty ? nil : title)
             case "#EXT-X-BYTERANGE": byteRange = String(value)
             case "#EXT-X-DISCONTINUITY": discontinuity = true
             case "#EXT-X-KEY":
