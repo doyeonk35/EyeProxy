@@ -22,3 +22,12 @@ private func h(_ n: String, _ v: String) -> HTTPHeader { .init(name: n, value: v
     // 본문은 풀어서, 헤더는 원래 값 그대로.
     #expect(RawMessage.response(r) == "HTTP/1.1 404 Not Found\nContent-Encoding: gzip\n\n안녕 hello")
 }
+
+@Test func rawFallsBackToOriginalBytesAndKeepsHeaderOrder() {
+    // gzip이라 했지만 gzip이 아닌 본문 → 원래 바이트 그대로.
+    let bad = FlowResponse(status: 200, reason: "OK", headers: [h("Content-Encoding", "gzip")], body: Data("plain".utf8))
+    #expect(RawMessage.response(bad) == "HTTP/1.1 200 OK\nContent-Encoding: gzip\n\nplain")
+    // 같은 이름 헤더는 받은 순서대로.
+    let dup = FlowResponse(status: 200, reason: "OK", headers: [h("Set-Cookie", "a=1"), h("X", "y"), h("Set-Cookie", "b=2")], body: Data())
+    #expect(RawMessage.response(dup) == "HTTP/1.1 200 OK\nSet-Cookie: a=1\nX: y\nSet-Cookie: b=2\n\n")
+}

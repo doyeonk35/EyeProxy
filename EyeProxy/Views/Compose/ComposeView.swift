@@ -168,7 +168,7 @@ struct ComposeView: View {
                 MessagePane(title: "", headers: result.response.headers, content: result.response.body, query: nil,
                             cookies: CookieParser.responseCookies(result.response.headers
                                 .filter { $0.name.caseInsensitiveCompare("Set-Cookie") == .orderedSame }.map(\.value)),
-                            flowID: result.id, raw: { [r = result.response] in RawMessage.response(r) })
+                            flowID: result.id, raw: .response(result.response))
                     .id(result.id)
             } else {
                 ContentUnavailableView("No Response Data", systemImage: "tray").frame(maxHeight: .infinity)

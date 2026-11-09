@@ -77,14 +77,18 @@ import Testing
     #EXT-X-UNKNOWN-TAG:FOO=1
     #EXTINF:6.0,
     b.ts
+    #EXT-X-KEY:METHOD=SAMPLE-AES,URI="../keys/k2"
     #EXTINF:6.0,
     c.ts
     """
-    guard case .media(let m) = try #require(M3U8.parse(text, baseURL: URL(string: "https://example.com/p.m3u8"))) else {
+    guard case .media(let m) = try #require(M3U8.parse(text, baseURL: URL(string: "https://example.com/vod/p.m3u8"))) else {
         Issue.record("media 아님"); return
     }
     #expect(m.segments.map(\.discontinuity) == [false, true, false])
-    #expect(m.keys == [.init(method: "AES-128", uri: "https://keys.example.com/k1"), .init(method: "NONE", uri: nil)])
+    #expect(m.keys.map(\.method) == ["AES-128", "NONE", "SAMPLE-AES"])
+    #expect(m.keys.map(\.uri) == ["https://keys.example.com/k1", nil, "../keys/k2"])
+    // 키 URI도 세그먼트처럼 재생목록 URL 기준 절대 URL로 푼다.
+    #expect(m.keys.map { $0.absoluteURL?.absoluteString } == ["https://keys.example.com/k1", nil, "https://example.com/keys/k2"])
     #expect(!m.hasEndList && m.mediaSequence == nil && m.playlistType == nil)
 }
 

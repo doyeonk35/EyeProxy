@@ -36,7 +36,7 @@ struct FlowDetailView: View {
         MessagePane(title: "요청", headers: flow.request.headers, content: flow.request.body,
                     query: Self.query(flow.request.path),
                     cookies: CookieParser.requestCookies(flow.request.header("Cookie") ?? ""), flowID: flow.id,
-                    raw: { [r = flow.request] in RawMessage.request(r) })
+                    raw: .request(flow.request))
     }
 
     private static func query(_ path: String) -> [HTTPHeader] {
@@ -49,7 +49,7 @@ struct FlowDetailView: View {
             let setCookies = response.headers.filter { $0.name.caseInsensitiveCompare("Set-Cookie") == .orderedSame }.map(\.value)
             MessagePane(title: "응답", headers: response.headers, content: response.body, query: nil,
                         cookies: CookieParser.responseCookies(setCookies), flowID: flow.id,
-                        raw: { RawMessage.response(response) },
+                        raw: .response(response),
                         playlistURL: M3U8.isPlaylist(path: flow.request.path, contentType: response.header("Content-Type"))
                             ? URL(string: flow.request.url) : nil)
         } else if let error = flow.error {
@@ -70,7 +70,7 @@ struct MessagePane: View {
     let query: [HTTPHeader]?
     let cookies: [HTTPHeader]
     let flowID: FlowID
-    let raw: @Sendable () -> String
+    let raw: RawSource
     /// 응답이 HLS 재생목록일 때 요청 URL(상대 URI 기준). nil이면 M3U8 탭을 숨긴다.
     var playlistURL: URL?
     @State private var tab = Tab.headers
@@ -104,7 +104,7 @@ struct MessagePane: View {
                 case .query: KeyValueTable(rows: query ?? [], emptyTitle: "쿼리 없음")
                 case .body: BodyView(data: content, headers: headers).id(flowID)
                 case .cookies: KeyValueTable(rows: cookies, emptyTitle: "쿠키 없음")
-                case .raw: RawView(make: raw).id(flowID)
+                case .raw: RawView(source: raw).id(flowID)
                 case .m3u8: M3U8View(data: content, headers: headers, baseURL: playlistURL).id(flowID)
                 }
             }
@@ -114,9 +114,31 @@ struct MessagePane: View {
     }
 }
 
-/// Raw 탭. 원문은 흐름이 바뀔 때만 메인 밖에서 한 번 만든다(세션 이벤트마다 텍스트를 다시 넣으면 스크롤·선택이 풀린다).
-private struct RawView: View {
+/// Raw 탭 원문과 다시 만들지 정하는 싼 키(시작 줄 + 헤더 + 본문 길이 — 본문 전체 비교는 비싸다).
+/// Breakpoint Execute·Map Remote로 같은 흐름의 요청이 바뀌면 키가 바뀌어 다시 만든다.
+struct RawSource {
+    let key: Int
     let make: @Sendable () -> String
+
+    static func request(_ r: FlowRequest) -> RawSource {
+        RawSource(key: key(r.method, r.url, r.headers, r.body.count)) { RawMessage.request(r) }
+    }
+
+    static func response(_ r: FlowResponse) -> RawSource {
+        RawSource(key: key(r.status, r.reason, r.headers, r.body.count)) { RawMessage.response(r) }
+    }
+
+    private static func key(_ a: some Hashable, _ b: String, _ headers: [HTTPHeader], _ count: Int) -> Int {
+        var h = Hasher()
+        h.combine(a); h.combine(b); h.combine(count)
+        for x in headers { h.combine(x.name); h.combine(x.value) }
+        return h.finalize()
+    }
+}
+
+/// Raw 탭. 원문은 키가 바뀔 때만 메인 밖에서 만든다(세션 이벤트마다 텍스트를 다시 넣으면 스크롤·선택이 풀린다).
+private struct RawView: View {
+    let source: RawSource
     @State private var text: NSAttributedString?
     @Environment(AppModel.self) private var model
 
@@ -129,8 +151,8 @@ private struct RawView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task {
-            let s = await Task.detached(operation: make).value
+        .task(id: source.key) {
+            let s = await Task.detached(operation: source.make).value
             text = CodeTextView.base(s)
         }
     }

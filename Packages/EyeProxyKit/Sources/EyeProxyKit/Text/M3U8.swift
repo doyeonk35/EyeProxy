@@ -52,6 +52,7 @@ public enum M3U8Playlist: Equatable, Sendable {
     public struct Key: Equatable, Sendable {
         public var method: String
         public var uri: String?
+        public var absoluteURL: URL?
     }
 }
 
@@ -129,7 +130,7 @@ public enum M3U8 {
             case "#EXT-X-DISCONTINUITY": discontinuity = true
             case "#EXT-X-KEY":
                 let a = attributes(value)
-                media.keys.append(.init(method: a["METHOD"] ?? "", uri: a["URI"]))
+                media.keys.append(.init(method: a["METHOD"] ?? "", uri: a["URI"], absoluteURL: a["URI"].flatMap(resolve)))
             default: break
             }
         }

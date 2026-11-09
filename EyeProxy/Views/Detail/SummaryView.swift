@@ -41,7 +41,7 @@ struct SummaryView: View {
             ("소요 시간", FlowRow.durationText(ms: row.durationMS)),
             ("요청 크기", ByteSize.format(row.requestSize)),
             ("응답 크기", flow.response == nil ? "-" : ByteSize.format(row.responseSize)),
-            ("SSL", row.isSSL ? "복호화함" : "아니요"),
+            ("SSL", row.isSSL ? "복호화함" : request.scheme == "http" && !flow.isTunnel ? "평문 HTTP" : "복호화 안 함"),
             ("적용된 도구", row.edited.isEmpty ? "-" : row.edited),
             ("원래 URL", mapped ? original ?? request.url : "-"),
             ("실제 전송 URL", mapped ? sent ?? request.url : "-"),
