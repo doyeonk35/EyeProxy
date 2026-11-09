@@ -46,8 +46,10 @@ private struct FlowMenu: View {
         .disabled(ids.count != 1)
         Divider()
         let id = model.selectedFlowID
-        Button(id.flatMap { model.session.comments[$0] } == nil ? "Add Comment…" : "Edit Comment…") { model.commentingFlowID = id }
-            .disabled(id == nil)
+        Button(id.flatMap { model.session.comments[$0] } == nil ? "Add Comment…" : "Edit Comment…") {
+            if selection != nil, let id = model.selectedFlowID { model.commentingFlowID = id }
+        }
+        .disabled(ids.count != 1)
         Divider()
         HighlightMenu(model: model, ids: current)
         Divider()
