@@ -397,7 +397,7 @@ final class AppModel {
 
     /// View ▸ Auto Select(스펙 §6): 켜져 있으면 보이는 행 중 최신을 선택하고 그 id를 돌려준다(목록이 스크롤한다).
     func selectLatestIfAuto() -> FlowID? {
-        guard settings.autoSelectLatest, let id = AutoSelect.latest(in: visibleRows) else { return nil }
+        guard settings.autoSelectLatest, let id = AutoSelect.latest(in: visibleFlows, number: { session.number($0) ?? 0 }) else { return nil }
         selectedFlowID = id
         return id
     }
@@ -407,7 +407,7 @@ final class AppModel {
     func userSelect(_ ids: Set<FlowID>) {
         // 행이 바뀔 때 Table이 같은 선택을 다시 써도 사용자 변경으로 보지 않는다.
         guard ids != selectedFlowIDs else { return }
-        if settings.autoSelectLatest, AutoSelect.shouldDisable(userSelected: ids, autoSelected: AutoSelect.latest(in: visibleRows)) {
+        if settings.autoSelectLatest, AutoSelect.shouldDisable(userSelected: ids, autoSelected: AutoSelect.latest(in: visibleFlows, number: { session.number($0) ?? 0 })) {
             settings.autoSelectLatest = false
         }
         selectedFlowIDs = ids

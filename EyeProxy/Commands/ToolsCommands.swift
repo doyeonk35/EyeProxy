@@ -54,7 +54,7 @@ private struct FlowMenu: View {
         .disabled(ids.count != 1)
         .help("선택한 요청의 코멘트 쓰기·고치기")
         Divider()
-        HighlightMenu(model: model, ids: current)
+        HighlightMenu(model: model) { selection == nil ? [] : model.visibleSelectedFlowIDs }
         Divider()
         Button("Delete") { if listSelection != nil { model.deleteFlows(model.selectedFlowIDs) } }
             .keyboardShortcut(.delete, modifiers: [])

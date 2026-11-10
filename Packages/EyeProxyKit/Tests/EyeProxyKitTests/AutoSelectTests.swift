@@ -18,6 +18,10 @@ private func row(_ number: Int, at seconds: TimeInterval) -> FlowRow {
     // 같은 시각이면 번호가 큰 행.
     #expect(AutoSelect.latest(in: [tieHigh, old, tieLow]) == tieHigh.id)
     #expect(AutoSelect.latest(in: [tieLow, tieHigh, new]) == tieHigh.id)
+    // 흐름 버전도 같은 규칙.
+    let numbers = Dictionary(uniqueKeysWithValues: [old, new, tieLow, tieHigh].map { ($0.id, $0.number) })
+    #expect(AutoSelect.latest(in: [tieLow.flow, old.flow, tieHigh.flow, new.flow]) { numbers[$0]! } == tieHigh.id)
+    #expect(AutoSelect.latest(in: [Flow]()) { _ in 0 } == nil)
 }
 
 @Test func userSelectionDisablesAutoSelect() {

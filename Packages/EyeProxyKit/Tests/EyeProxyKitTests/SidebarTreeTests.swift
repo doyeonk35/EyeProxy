@@ -24,3 +24,7 @@ private func flow(_ client: String, _ url: String) -> Flow { var f = Flow.fixtur
     let t = SidebarTree.build(flows: [flow("::1", "https://a/"), flow("127.0.0.1", "https://a/")], attribution: [:], devices: [], pinned: [], runtimes: [:])
     #expect(t.devices.count == 1 && t.devices[0].address == "127.0.0.1" && t.devices[0].count == 2)
 }
+@Test func treeNamesImportedFlowsWithoutClient() {
+    let t = SidebarTree.build(flows: [flow("", "https://a/")], attribution: [:], devices: [], pinned: [], runtimes: [:])
+    #expect(t.devices.count == 1 && t.devices[0].displayName == "가져온 요청" && t.devices[0].kind == .unknown)
+}

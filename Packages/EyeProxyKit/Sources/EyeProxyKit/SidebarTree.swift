@@ -54,7 +54,7 @@ public struct SidebarTree: Sendable {
             let known = devices.first { FlowFilter.sameDevice($0.address, address) }
             let isMac = FlowFilter.isLoopback(address)
             let kind = known?.kind ?? (isMac ? .thisMac : .unknown)
-            let name = known?.displayName ?? (isMac ? "이 Mac" : address)
+            let name = known?.displayName ?? (isMac ? "이 Mac" : address.isEmpty ? "가져온 요청" : address)
             var apps: [AppNode] = []
             if kind == .thisMac {
                 let byApp = Dictionary(grouping: flows) { attribution[$0.id]?.groupKey ?? FlowFilter.unknownProcessKey }

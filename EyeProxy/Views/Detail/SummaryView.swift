@@ -36,7 +36,7 @@ struct SummaryView: View {
             ("URL", request.url),
             ("메서드", request.method),
             ("상태", status),
-            ("클라이언트", client),
+            ("클라이언트", model.clientName(for: flow).isEmpty ? "-" : model.clientName(for: flow)),
             ("시작 시각", flow.startedAt.formatted(Self.timeFormat)),
             ("소요 시간", FlowRow.durationText(ms: row.durationMS)),
             ("요청 크기", ByteSize.format(row.requestSize)),
@@ -49,12 +49,6 @@ struct SummaryView: View {
             ("Highlight", highlight ?? "-"),
         ]
         return pairs.map { HTTPHeader(name: $0.0, value: $0.1) }
-    }
-
-    /// 목록 Client 열과 같은 출처: 프로세스 귀속 → 기기 이름 → 주소.
-    private var client: String {
-        if let identity = model.processes.attribution[flow.id] { return identity.displayName(runtimes: model.simulatorRuntimes) }
-        return model.devices.devices.first { $0.address == flow.clientAddress }?.displayName ?? flow.clientAddress
     }
 
     private static let timeFormat = Date.VerbatimFormatStyle(
