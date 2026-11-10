@@ -4,6 +4,10 @@ import SwiftUI
 
 struct FlowDetailView: View {
     @Environment(AppModel.self) private var model
+    /// 패널 상태는 여기서 쥔다 — 응답 쪽이 HTTPS 안내·실패·대기로 갈래가 바뀌어 MessagePane이 새로 만들어져도
+    /// 마지막으로 고른 탭·표 거르기 보임·옵션이 흐름을 바꿔도 남는다(스펙 §7).
+    @State private var requestPane = PaneState()
+    @State private var responsePane = PaneState()
 
     var body: some View {
         if let id = model.selectedFlowID, let flow = model.session.flow(id) {
@@ -41,10 +45,9 @@ struct FlowDetailView: View {
     }
 
     private func request(_ flow: Flow) -> some View {
-        let playlist = Self.playlistURL(flow)
-        return MessagePane(title: "요청", tabs: DetailTabs.request(flow.request, isPlaylist: playlist != nil),
-                           headers: flow.request.headers, content: flow.request.body, flowID: flow.id, raw: .request(flow.request),
-                           query: Self.query(flow.request.path), summary: SummaryView.rows(flow, model: model), playlistURL: playlist)
+        MessagePane(title: "Request", tabs: DetailTabs.request(flow.request), state: $requestPane,
+                    headers: flow.request.headers, content: flow.request.body, flowID: flow.id, raw: .request(flow.request),
+                    query: Self.query(flow.request.path), summary: SummaryView.rows(flow, model: model))
     }
 
     private static func query(_ path: String) -> [HTTPHeader] {
@@ -57,7 +60,7 @@ struct FlowDetailView: View {
             HTTPSNotice(flow: flow)
         } else if let response = flow.response {
             let playlist = Self.playlistURL(flow)
-            MessagePane(title: "응답", tabs: DetailTabs.response(response, isPlaylist: playlist != nil),
+            MessagePane(title: "Response", tabs: DetailTabs.response(response, isPlaylist: playlist != nil), state: $responsePane,
                         headers: response.headers, content: response.body, flowID: flow.id, raw: .response(response),
                         playlistURL: playlist)
         } else if let error = flow.error {
@@ -105,10 +108,19 @@ private struct HTTPSNotice: View {
     }
 }
 
+/// 패널 하나의 고른 탭·표 거르기 상태. 패널 밖(상세 화면·Compose)이 쥔다.
+struct PaneState {
+    /// 마지막으로 고른 탭. 이 흐름에 없는 탭이면 Header를 보인다(돌아오면 다시 그 탭).
+    var tab = DetailTab.header
+    var filterVisible = false
+    var filterOptions = TableFilter()
+}
+
 /// 요청·응답 한쪽 패널. 탭 줄 `Header · … │ … · JSON`(묶음은 `DetailTabs`) + 오른쪽 `≡`(표 거르기). Compose 창의 응답 쪽도 쓴다.
 struct MessagePane: View {
     let title: LocalizedStringKey
     let tabs: [[DetailTab]]
+    @Binding var state: PaneState
     let headers: [HTTPHeader]
     let content: Data
     let flowID: FlowID
@@ -117,11 +129,7 @@ struct MessagePane: View {
     var summary: [HTTPHeader] = []
     /// 응답이 HLS 재생목록일 때 요청 URL(상대 URI 기준).
     var playlistURL: URL?
-    /// 마지막으로 고른 탭. 흐름을 바꿔도 남고, 이 흐름에 없는 탭이면 Header를 보인다(돌아오면 다시 그 탭).
-    @State private var tab = DetailTab.header
-    @State private var filterVisible = false
-    @State private var filterOptions = TableFilter()
-    private var shownTab: DetailTab { DetailTabs.shown(tab, in: tabs) }
+    private var shownTab: DetailTab { DetailTabs.shown(state.tab, in: tabs) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -135,11 +143,11 @@ struct MessagePane: View {
                         }
                     }
                 }
-                Button { filterVisible.toggle() } label: {
+                Button { state.filterVisible.toggle() } label: {
                     Label("표 거르기", systemImage: "line.3.horizontal").labelStyle(.iconOnly)
                 }
                 .buttonStyle(.borderless)
-                .foregroundStyle(filterVisible && shownTab.isTable ? Color.accentColor : .secondary)
+                .foregroundStyle(state.filterVisible && shownTab.isTable ? Color.accentColor : .secondary)
                 .disabled(!shownTab.isTable)
                 .help("표 거르기 (⌘F)")
             }
@@ -156,7 +164,7 @@ struct MessagePane: View {
 
     private func tabButton(_ t: DetailTab) -> some View {
         let on = t == shownTab
-        return Button { tab = t } label: {
+        return Button { state.tab = t } label: {
             Text(verbatim: t.title)
                 .font(.system(size: 12, weight: on ? .semibold : .regular))
                 .foregroundStyle(on ? .primary : .secondary)
@@ -173,7 +181,7 @@ struct MessagePane: View {
     }
 
     private func table(_ rows: [HTTPHeader], _ empty: LocalizedStringKey) -> some View {
-        KeyValueTable(rows: rows, emptyTitle: empty, filterVisible: $filterVisible, options: $filterOptions)
+        KeyValueTable(rows: rows, emptyTitle: empty, filterVisible: $state.filterVisible, options: $state.filterOptions)
     }
 
     @ViewBuilder

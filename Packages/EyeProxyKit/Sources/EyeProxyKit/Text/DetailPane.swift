@@ -11,15 +11,16 @@ public enum DetailTab: String, CaseIterable, Sendable {
     public var isTable: Bool { [.header, .query, .form, .cookies, .auth, .setCookie, .summary].contains(self) }
 }
 
-/// 탭 묶음: `[구분선 앞, 구분선 뒤]`. 괄호 탭(Form·Cookies·Auth·Set-Cookie)은 내용이 있을 때만, M3U8은 재생목록일 때만.
+/// 탭 묶음: `[구분선 앞, 구분선 뒤]`. 괄호 탭(Form·Cookies·Auth·Set-Cookie)은 내용이 있을 때만,
+/// M3U8은 응답 쪽에서 재생목록일 때만(요청 본문은 재생목록이 아니다).
 public enum DetailTabs {
-    public static func request(_ r: FlowRequest, isPlaylist: Bool) -> [[DetailTab]] {
+    public static func request(_ r: FlowRequest) -> [[DetailTab]] {
         var first: [DetailTab] = [.header, .query, .body]
         if !r.body.isEmpty, FormFields.isForm(r.header("Content-Type")) { first.append(.form) }
         if !(r.header("Cookie") ?? "").trimmingCharacters(in: .whitespaces).isEmpty { first.append(.cookies) }
         if r.header("Authorization") != nil { first.append(.auth) }
         first.append(.raw)
-        return [first, [.summary, .treeview] + (isPlaylist ? [.m3u8] : []) + [.json]]
+        return [first, [.summary, .treeview, .json]]
     }
 
     public static func response(_ r: FlowResponse, isPlaylist: Bool) -> [[DetailTab]] {

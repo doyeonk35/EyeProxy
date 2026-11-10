@@ -10,15 +10,16 @@ private func req(_ headers: [HTTPHeader] = [], body: String = "", method: String
 }
 
 @Test func requestTabsShowConditionalOnesOnlyWithContent() {
-    #expect(DetailTabs.request(req(), isPlaylist: false) == [[.header, .query, .body, .raw], [.summary, .treeview, .json]])
+    #expect(DetailTabs.request(req()) == [[.header, .query, .body, .raw], [.summary, .treeview, .json]])
     let all = [h("content-type", "application/x-www-form-urlencoded; charset=utf-8"), h("Cookie", "a=1"), h("authorization", "Bearer x")]
-    #expect(DetailTabs.request(req(all, body: "a=1"), isPlaylist: true)
-        == [[.header, .query, .body, .form, .cookies, .auth, .raw], [.summary, .treeview, .m3u8, .json]])
-    #expect(DetailTabs.request(req([h("Content-Type", "multipart/form-data; boundary=x")], body: "--x--"), isPlaylist: false)[0].contains(.form))
+    // 요청 쪽은 M3U8 탭이 없다(재생목록은 응답 본문) — 판정 R13.
+    #expect(DetailTabs.request(req(all, body: "a=1"))
+        == [[.header, .query, .body, .form, .cookies, .auth, .raw], [.summary, .treeview, .json]])
+    #expect(DetailTabs.request(req([h("Content-Type", "multipart/form-data; boundary=x")], body: "--x--"))[0].contains(.form))
     // 폼 Content-Type이어도 본문이 비면, JSON 본문이면, 빈 Cookie 헤더면 탭이 없다.
-    #expect(!DetailTabs.request(req(all), isPlaylist: false)[0].contains(.form))
-    #expect(!DetailTabs.request(req([h("Content-Type", "application/json")], body: "{}"), isPlaylist: false)[0].contains(.form))
-    #expect(!DetailTabs.request(req([h("Cookie", " ")]), isPlaylist: false)[0].contains(.cookies))
+    #expect(!DetailTabs.request(req(all))[0].contains(.form))
+    #expect(!DetailTabs.request(req([h("Content-Type", "application/json")], body: "{}"))[0].contains(.form))
+    #expect(!DetailTabs.request(req([h("Cookie", " ")]))[0].contains(.cookies))
     #expect(DetailTab.allCases.map(\.title) == ["Header", "Query", "Body", "Form", "Cookies", "Auth", "Set-Cookie", "Raw",
                                                 "Summary", "Treeview", "M3U8", "JSON"])
 }
@@ -31,7 +32,7 @@ private func req(_ headers: [HTTPHeader] = [], body: String = "", method: String
 }
 
 @Test func chosenTabFallsBackToHeaderWhenAbsent() {
-    let tabs = DetailTabs.request(req(), isPlaylist: false)
+    let tabs = DetailTabs.request(req())
     #expect(DetailTabs.shown(.summary, in: tabs) == .summary)
     #expect(DetailTabs.shown(.auth, in: tabs) == .header)
     #expect(DetailTabs.shown(.m3u8, in: tabs) == .header)

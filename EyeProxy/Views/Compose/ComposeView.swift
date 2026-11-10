@@ -9,6 +9,7 @@ struct ComposeView: View {
     @State private var draft = BreakpointDraft(request: ComposeView.emptyRequest)
     @State private var urlText = ""
     @State private var result: ComposeResult?
+    @State private var responseTabs = PaneState()
     @State private var error: String?
     @State private var sending: Task<Void, Never>?
     @State private var timeout: TimeInterval? = 60
@@ -165,7 +166,7 @@ struct ComposeView: View {
                 ContentUnavailableView("요청 실패", systemImage: "exclamationmark.triangle", description: Text(error))
                     .frame(maxHeight: .infinity)
             } else if let result {
-                MessagePane(title: "", tabs: DetailTabs.response(result.response, isPlaylist: false),
+                MessagePane(title: "", tabs: DetailTabs.response(result.response, isPlaylist: false), state: $responseTabs,
                             headers: result.response.headers, content: result.response.body,
                             flowID: result.id, raw: .response(result.response))
                     .id(result.id)
