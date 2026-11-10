@@ -29,6 +29,8 @@ extension AppModel {
     /// 내보낼 항목. `scope` 중 보이는 행이 있으면 그 행만, 없으면(nil·빈 값·전부 숨김) 보이는 행 전체(스펙 §8.4).
     /// 순서는 안정 번호 오름차순 — 목록 정렬 상태에 따라 파일 내용이 달라지지 않게.
     func exportItems(scope: Set<FlowID>?) -> [ExportItem] {
+        // 묶어 둔 목록은 트래픽 중 최대 250 ms 늦다 — 막 도착한 응답 본문까지 담도록 지금 맞춘다.
+        refreshVisibleRows()
         let visible = visibleFlows
         let chosen = visible.filter { scope?.contains($0.id) ?? false }
         return (chosen.isEmpty ? visible : chosen)
@@ -86,6 +88,7 @@ extension AppModel {
 
     /// Flow ▸ Save Requests…: 선택 중 보이는 행만 Prog 세션으로(Export ▸ as Prog Session과 같되 그런 행이 없으면 하지 않는다).
     func saveRequests() async {
+        refreshVisibleRows()
         let ids = visibleSelectedFlowIDs
         guard !ids.isEmpty else { return }
         await export(.session, scope: ids)

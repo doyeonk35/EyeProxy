@@ -148,6 +148,12 @@ struct FlowListView: View {
             .defaultFocus($tableFocused, true)
             // AppKit이 창을 처음 key로 만들며 키 뷰 순서의 첫 검색칸에 포커스를 주므로, 그 뒤에 목록으로 되돌린다.
             .task { tableFocused = true }
+            // 필터 막대를 숨기면(막대에 포커스가 있었을 때) 목록으로 돌아온다.
+            .onChange(of: model.focusFlowList) { _, on in
+                guard on else { return }
+                model.focusFlowList = false
+                tableFocused = true
+            }
             // 최신 행이 바뀔 때만 따라간다 — 응답 도착 같은 행 갱신으로 선택을 다시 쓰지 않는다. 켜면 바로 최신을 고른다.
             .onChange(of: latest) { followLatest(proxy) }
             .onChange(of: model.settings.autoSelectLatest, initial: true) { followLatest(proxy) }

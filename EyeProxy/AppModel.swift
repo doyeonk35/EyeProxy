@@ -39,7 +39,14 @@ final class AppModel {
         }
     }
     /// 목록 위 필터 막대(스펙 §4). 숨겨도 켜진 규칙은 계속 적용된다.
-    var isFilterBarVisible = false
+    var isFilterBarVisible = false {
+        // 막대 안에 포커스가 있었는데 숨기면(Esc·하단 Filter 버튼) 포커스를 목록으로 돌려 ⌫·화살표가 바로 동작하게.
+        didSet { if !isFilterBarVisible, filterBarHasFocus { filterBarHasFocus = false; focusFlowList = true } }
+    }
+    /// 필터 막대 안에 포커스가 있다(막대가 알린다). 그리기에는 쓰지 않는다.
+    @ObservationIgnored var filterBarHasFocus = false
+    /// 목록 표에 포커스를 달라는 한 번짜리 요청. 목록이 받아서 끈다.
+    var focusFlowList = false
     /// ⌘F가 막대를 보이면 막대가 현재 규칙 검색칸에 포커스를 주고 끈다.
     var focusFilterBar = false
     /// 켜진(적용되는) 규칙이 있다 — 하단 바 Filter 버튼 강조.
@@ -51,6 +58,8 @@ final class AppModel {
     @ObservationIgnored private var bodyMatchRules: [FilterRule] = []
     @ObservationIgnored private var bodyJob: Task<Void, Never>?
     @ObservationIgnored private var bodyJobGeneration = 0
+    /// 돌고 있는 `bodyJob`이 새 규칙 전체 판정인가(아니면 새 흐름만 보는 부분 판정).
+    @ObservationIgnored private var bodyJobIsFull = false
     @ObservationIgnored private var rulesDebounce: Task<Void, Never>?
     /// 목록 선택(여러 건 가능 — Repeat). 상세·코멘트 등 한 건용 동작은 `selectedFlowID`를 쓴다.
     var selectedFlowIDs: Set<FlowID> = []
@@ -361,12 +370,15 @@ final class AppModel {
         selectedFlowID = nil
         // 지우면 목록이 비어 선택된 행이 사라진다 → 보이지 않는 필터가 남지 않게.
         if let s = sidebarSelection, s != .allFlows { sidebarSelection = .allFlows }
+        bodyMatches = [:]
         refreshVisibleRows()
     }
 
     /// Flow ▸ Delete(스펙 §5). 보이는 행만 지운다 — 선택에 남은, 필터·사이드바가 숨긴 행은 몰래 지우지 않는다.
     /// 선택이 지워지면 지운 행 바로 아래 보이는 행으로(없으면 위) 옮긴다.
     func deleteFlows(_ ids: Set<FlowID>) {
+        // 트래픽 중 묶어 둔 목록은 최대 250 ms 늦다 — 지우기 전에 지금 화면과 같게 맞춘다.
+        refreshVisibleRows()
         let order = visibleRows.map(\.id)
         let ids = ids.intersection(order)
         guard !ids.isEmpty else { return }
@@ -374,13 +386,14 @@ final class AppModel {
             order[(last + 1)...].first { !ids.contains($0) } ?? order[..<last].last { !ids.contains($0) }
         }
         session.remove(ids: ids)
-        for id in ids { processes.remove(id) }
+        for id in ids { processes.remove(id); bodyMatches[id] = nil }
         refreshVisibleRows()
         if !selectedFlowIDs.isDisjoint(with: ids) { selectedFlowID = next }
     }
 
     /// Flow ▸ Delete All: 보이는 행만 지운다. 필터·사이드바가 숨긴 행이 있으면 확인부터 받는다.
     func deleteVisibleFlows() {
+        refreshVisibleRows()
         let visible = Set(visibleFlows.map(\.id))
         guard !visible.isEmpty else { return }
         let hidden = session.flows.count - visible.count
@@ -500,11 +513,16 @@ final class AppModel {
         settings.filterRules = filter
         rulesDebounce?.cancel()
         rulesDebounce = nil
-        bodyJob?.cancel()
-        bodyJob = nil
-        bodyJobGeneration += 1
         let body = filter.activeBodyRules
-        if body == bodyMatchRules { appliedRules = filter; return }
+        if body == bodyMatchRules {
+            // 본문 규칙은 그대로다. 되돌린 입력의 새 전체 판정만 버리고(새 흐름 부분 판정은 계속),
+            // 꺼진·빈 규칙만 바뀌었으면 목록은 그대로 둔다.
+            if bodyJobIsFull { cancelBodyJob() }
+            if filter.rules.filter(\.isActive) != appliedRules.rules.filter(\.isActive)
+                || filter.combineWithOr != appliedRules.combineWithOr { appliedRules = filter }
+            return
+        }
+        cancelBodyJob()
         if body.isEmpty {
             (bodyMatches, bodyMatchRules) = ([:], [])
             appliedRules = filter
@@ -518,10 +536,18 @@ final class AppModel {
         }
     }
 
+    private func cancelBodyJob() {
+        bodyJob?.cancel()
+        bodyJob = nil
+        bodyJobIsFull = false
+        bodyJobGeneration += 1
+    }
+
     /// 본문 규칙을 메인 밖에서 판정한다. full이면 모든 흐름을 새 규칙으로, 아니면 아직 판정하지 않은 흐름만.
     /// 가장 최근에 시작한 작업의 결과만 반영한다(이전 작업은 취소).
     private func startBodyMatching(_ rules: FlowFilter, full: Bool) {
         bodyJob?.cancel()
+        bodyJobIsFull = full
         bodyJobGeneration += 1
         let generation = bodyJobGeneration
         let flows = full ? session.flows : session.flows.filter { bodyMatches[$0.id]?.sizes != Self.bodySizes($0) }
@@ -539,6 +565,7 @@ final class AppModel {
     private func applyBodyMatches(_ result: [FlowID: BodyMatch], rules: FlowFilter, full: Bool, generation: Int) {
         guard generation == bodyJobGeneration else { return }
         bodyJob = nil
+        bodyJobIsFull = false
         guard full else { bodyMatches.merge(result) { $1 }; return }
         // 그사이 가벼운 규칙·AND/OR만 바뀌었을 수 있다(본문 규칙이 바뀌었으면 generation이 달라 여기 오지 않는다).
         bodyMatches = result
@@ -763,12 +790,14 @@ final class AppModel {
     func now() {
         pending?.cancel()
         pending = nil
-        lastRun = .now
         generation += 1
         let g = generation
         withObservationTracking { compute() } onChange: { [weak self] in
             Task { @MainActor in self?.changed(g) }
         }
+        // 계산이 끝난 뒤부터 잰다 — 한 번 계산이 interval보다 길어도 다음 계산 전에 늘 interval만큼 쉰다.
+        // ponytail: 트래픽 중 갱신 상한은 1/(계산 시간 + 250 ms); 수만 건에서 더 필요하면 증분 갱신으로.
+        lastRun = .now
     }
 
     /// 그사이 `now()`로 이미 다시 계산했으면(generation이 다름) 무시한다.

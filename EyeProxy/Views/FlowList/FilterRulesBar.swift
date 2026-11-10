@@ -50,7 +50,10 @@ struct FilterRulesBar: View {
         .focusedValue(\.filterBar, FilterBarActions(id: actionsID, perform: perform))
         .onExitCommand { model.isFilterBarVisible = false }
         .onAppear { if model.filter.rules.isEmpty { model.filter.rules = [FilterRule()] } }
-        .onChange(of: focused) { _, id in if let id { current = id } }
+        .onChange(of: focused) { _, id in
+            if let id { current = id }
+            model.filterBarHasFocus = id != nil
+        }
         .onChange(of: model.focusFilterBar, initial: true) { _, on in
             guard on else { return }
             model.focusFilterBar = false
