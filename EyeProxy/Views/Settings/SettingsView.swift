@@ -207,9 +207,9 @@ private struct AdvancedSettings: View {
                 Toggle("Hide Unnecessary Apple Requests from iOS Simulators", isOn: $settings.hideAppleSimulatorRequests)
                     .help("시뮬레이터가 보내는 apple.com·icloud.com 요청을 숨기기 — 하단 눈 토글로 볼 수 있음")
                 Toggle("Stay On Top", isOn: $settings.stayOnTop)
-                    .help("메인 창을 항상 다른 창 위에 두기")
+                    .help("Prog 창을 항상 다른 앱 창 위에 두기")
                 Toggle("Show Invisible Characters", isOn: $settings.showInvisibleCharacters)
-                    .help("헤더 값의 공백을 ·로 보이기(복사는 원래 값)")
+                    .help("헤더 탭 값의 공백을 ·로 보이기 — 켜 있는 동안 글자 선택은 꺼지고, 우클릭 복사는 원래 값")
             }
         }
         .formStyle(.grouped)

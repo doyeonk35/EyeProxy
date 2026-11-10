@@ -180,14 +180,15 @@ struct MessagePane: View {
         headers.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?.value
     }
 
-    private func table(_ rows: [HTTPHeader], _ empty: LocalizedStringKey) -> some View {
-        KeyValueTable(rows: rows, emptyTitle: empty, filterVisible: $state.filterVisible, options: $state.filterOptions)
+    private func table(_ rows: [HTTPHeader], _ empty: LocalizedStringKey, marksSpaces: Bool = false) -> some View {
+        KeyValueTable(rows: rows, emptyTitle: empty, filterVisible: $state.filterVisible, options: $state.filterOptions,
+                      marksSpaces: marksSpaces)
     }
 
     @ViewBuilder
     private func content(_ tab: DetailTab) -> some View {
         switch tab {
-        case .header: table(headers, "헤더 없음")
+        case .header: table(headers, "헤더 없음", marksSpaces: true)
         case .query: table(query, "쿼리 없음")
         case .body: BodyView(data: content, headers: headers)
         case .form:

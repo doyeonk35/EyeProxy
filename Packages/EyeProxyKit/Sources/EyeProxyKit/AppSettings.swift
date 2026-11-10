@@ -73,9 +73,9 @@ public final class AppSettings {
     public var showResourceUsage: Bool { didSet { defaults.set(showResourceUsage, forKey: "eyeproxy.showResourceUsage") } }
     /// Advanced ▸ Hide Unnecessary Apple Requests from iOS Simulators(`SimulatorNoise`).
     public var hideAppleSimulatorRequests: Bool { didSet { defaults.set(hideAppleSimulatorRequests, forKey: "eyeproxy.hideAppleSimulatorRequests") } }
-    /// Advanced ▸ Stay On Top: 메인 창 항상 위.
+    /// Advanced ▸ Stay On Top: Prog 창 항상 위.
     public var stayOnTop: Bool { didSet { defaults.set(stayOnTop, forKey: "eyeproxy.stayOnTop") } }
-    /// Advanced ▸ Show Invisible Characters: 이름·값 표 값의 공백을 `·`로(보이기만, 복사는 원래 값).
+    /// Advanced ▸ Show Invisible Characters: 헤더 탭(요청·응답) 값의 공백을 `·`로(보이기만, 복사는 원래 값).
     public var showInvisibleCharacters: Bool { didSet { defaults.set(showInvisibleCharacters, forKey: "eyeproxy.showInvisibleCharacters") } }
 
     /// Compose·Repeat에 넘기는 타임아웃. 0이면 nil(제한 없음).

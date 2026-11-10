@@ -10,6 +10,8 @@ struct KeyValueTable: View {
     let emptyTitle: LocalizedStringKey
     @Binding var filterVisible: Bool
     @Binding var options: TableFilter
+    /// Advanced ▸ Show Invisible Characters를 따를 표인지(헤더 탭만, 스펙 §10).
+    var marksSpaces = false
     @Environment(AppModel.self) private var model
     @State private var hovered: Int?
     @State private var query = ""
@@ -112,9 +114,16 @@ struct KeyValueTable: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(header.name).fontWeight(.semibold).foregroundStyle(.secondary)
                 .frame(width: 160, alignment: .leading)
-            // Advanced ▸ Show Invisible Characters: 공백을 `·`로 보이기만 한다(우클릭 복사는 원래 값).
-            Text(model.settings.showInvisibleCharacters ? header.value.replacingOccurrences(of: " ", with: "·") : header.value)
-                .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+            // Advanced ▸ Show Invisible Characters(헤더 표만): 공백을 `·`로 보이기만 한다. 글자 선택·⌘C가 `·`를 복사하지
+            // 않게 그동안은 글자 선택을 끈다 — 복사는 우클릭 "값 복사"(원래 값)로.
+            Group {
+                if marksSpaces && model.settings.showInvisibleCharacters {
+                    Text(header.value.replacingOccurrences(of: " ", with: "·"))
+                } else {
+                    Text(header.value).textSelection(.enabled)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 5)

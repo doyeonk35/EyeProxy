@@ -15,7 +15,11 @@ struct MainWindow: View {
             BottomBar()
         }
         .toolbar { MainToolbar(model: model) }
-        .background(StayOnTop(on: model.settings.stayOnTop))
+        // Advanced ▸ Stay On Top: 켤 때·끌 때, 그리고 창이 새로 열려 앞으로 올 때마다 Prog 창 전체에 맞춘다.
+        .onChange(of: model.settings.stayOnTop, initial: true) { _, on in StayOnTop.apply(on) }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            StayOnTop.apply(model.settings.stayOnTop)
+        }
         .focusedSceneValue(\.flowSearch, DetailFind(id: searchFindID, open: { model.showFilterBar() }))
         .sheet(isPresented: Binding(get: { model.commentingFlowID != nil }, set: { if !$0 { model.commentingFlowID = nil } })) {
             if let id = model.commentingFlowID { CommentSheet(id: id) }
@@ -94,12 +98,17 @@ private struct CommentSheet: View {
     }
 }
 
-/// Advanced ▸ Stay On Top: 메인 창을 다른 앱 창 위에(floating). 창이 붙은 다음 바꾼다.
-private struct StayOnTop: NSViewRepresentable {
-    let on: Bool
-    func makeNSView(context: Context) -> NSView { NSView() }
-    func updateNSView(_ view: NSView, context: Context) {
+/// Advanced ▸ Stay On Top: Prog의 일반 창(메인·Breakpoint·Compose·도구·Certificate·Settings)을 모두 floating으로 —
+/// 메인 창만 올리면 새로 멈춘 Breakpoint 창이나 설정 창이 그 뒤에 가린다. 패널(저장·알림)·시트·메뉴 막대 창은
+/// 자기 수준을 스스로 정하므로 건드리지 않는다(제목 막대가 있는 NSWindow이고 수준이 normal·floating인 것만).
+enum StayOnTop {
+    @MainActor static func apply(_ on: Bool) {
         let level: NSWindow.Level = on ? .floating : .normal
-        DispatchQueue.main.async { view.window?.level = level }
+        DispatchQueue.main.async {
+            for w in NSApp.windows where !(w is NSPanel) && w.sheetParent == nil && w.styleMask.contains(.titled)
+                && (w.level == .normal || w.level == .floating) {
+                w.level = level
+            }
+        }
     }
 }
