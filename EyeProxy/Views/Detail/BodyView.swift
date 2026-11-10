@@ -33,6 +33,9 @@ struct BodyView: View {
     @State private var loaded: Loaded?
     @State private var mode = Mode.pretty
     @State private var tree: [JSONTreeNode]?
+    @State private var treeExpanded: Set<Int> = []
+    /// 트리 찾기 막대. Task 3의 ⌘F가 이 값을 켠다.
+    @State private var treeFindVisible = false
 
     private var encoding: String? {
         headers.first { $0.name.caseInsensitiveCompare("Content-Encoding") == .orderedSame }?.value
@@ -54,6 +57,15 @@ struct BodyView: View {
                     }
                     .pickerStyle(.segmented).labelsHidden().fixedSize()
                 }
+                if mode == .tree, let tree {
+                    Button { treeExpanded = JSONTreeSearch.containerIDs(in: tree) } label: { Image(systemName: "rectangle.expand.vertical") }
+                        .help("트리 모두 펼치기")
+                    Button { treeExpanded = [] } label: { Image(systemName: "rectangle.compress.vertical") }
+                        .help("트리 모두 접기")
+                    Toggle(isOn: $treeFindVisible) { Image(systemName: "magnifyingglass") }
+                        .toggleStyle(.button)
+                        .help("트리에서 찾기·거르기")
+                }
                 Spacer()
                 Toggle("줄바꿈", isOn: $settings.wrapLongLines).toggleStyle(.checkbox)
                 Text(verbatim: summary).font(.caption).foregroundStyle(.secondary)
@@ -69,6 +81,8 @@ struct BodyView: View {
             var image: NSImage?
             if case .image(let img) = p.decoded { image = NSImage(data: img) }
             tree = nil
+            treeExpanded = []
+            treeFindVisible = false
             loaded = Loaded(
                 decoded: p.decoded, display: Self.highlighted(p.display, p.tokens), truncated: p.truncated,
                 raw: p.raw.map { CodeTextView.base($0) }, rawTruncated: p.rawTruncated, image: image)
@@ -139,7 +153,7 @@ struct BodyView: View {
             case .pretty: CodeBody(text: l.display, truncated: l.truncated)
             case .raw: CodeBody(text: l.raw ?? l.display, truncated: l.rawTruncated)
             case .tree:
-                if let tree { JSONTreeView(nodes: tree) } else {
+                if let tree { JSONTreeView(nodes: tree, expanded: $treeExpanded, findVisible: $treeFindVisible) } else {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                         .task { tree = await Task.detached { JSONTreeNode.parse(pretty: pretty) }.value }
                 }
