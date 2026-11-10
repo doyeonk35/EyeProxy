@@ -2,10 +2,16 @@ import AppKit
 import SwiftUI
 
 /// 상세 창의 SwiftUI 보기(헤더·쿼리·쿠키 표, JSON 트리)가 포커스를 가질 때 ⌘F·⌘G를 받는 동작.
-struct DetailFind {
+/// 비교는 보기 인스턴스 `id`와 `step` 유무만 — 클로저는 매 갱신 새로 만들어지므로, 같은 보기면 같은 값으로 보아
+/// 마우스 움직임·키 입력마다 포커스 값이 다시 퍼져 Find 메뉴가 새로 그려지지 않게 한다.
+/// 클로저는 보기의 @State 저장소를 가리키므로 처음 값의 것을 계속 써도 최신 상태에 작용한다.
+struct DetailFind: Equatable {
+    let id: UUID
     let open: @MainActor () -> Void
     /// 다음(+1)·이전(-1) 일치. 없으면 ⌘G는 그냥 지나간다.
     var step: (@MainActor (Int) -> Void)?
+
+    static func == (a: Self, b: Self) -> Bool { a.id == b.id && (a.step == nil) == (b.step == nil) }
 }
 
 extension FocusedValues {
@@ -16,7 +22,7 @@ extension FocusedValues {
 
 /// Edit ▸ Find. SwiftUI `Window` 장면은 Find 항목을 넣지 않아 직접 둔다(⌘F 단축키는 여기 하나뿐).
 /// 라우팅: ① 본문·Raw 텍스트 뷰가 응답자면 내장 찾기 막대(NSTextFinder) ② 표·트리가 포커스면 그 막대
-/// ③ 메인 창(시트 아님)이면 툴바 검색칸 ④ 그 밖은 표준 응답자 체인.
+/// ③ 메인 창(시트 아님)의 목록·사이드바면 툴바 검색칸 ④ 그 밖은 표준 응답자 체인.
 struct FindCommands: Commands {
     var body: some Commands {
         CommandGroup(after: .pasteboard) { FindMenu() }
@@ -45,7 +51,11 @@ private struct FindMenu: View {
     private func find() {
         if textFinder(.showFindInterface) { return }
         if let detail { detail.open(); return }
-        if let flowSearch, NSApp.keyWindow?.sheetParent == nil { flowSearch.open(); return }
+        // 툴바 검색칸은 목록·사이드바(표 보기)나 아무것도 포커스가 없을 때만. 찾기 막대에 입력 중(필드 편집기)이거나
+        // 상세의 값 글자를 골라 둔 상태면 표준 체인에 맡겨 포커스를 빼앗지 않는다.
+        let responder = NSApp.keyWindow?.firstResponder
+        let listArea = responder == nil || responder is NSTableView || responder is NSWindow
+        if let flowSearch, listArea, NSApp.keyWindow?.sheetParent == nil { flowSearch.open(); return }
         sendTextFinder(.showFindInterface)
     }
 

@@ -12,6 +12,7 @@ struct SummaryView: View {
         VStack(spacing: 0) {
             DisclosureGroup("요약", isExpanded: $expanded) {
                 KeyValueTable(rows: rows, emptyTitle: "").frame(height: 220)
+                    .id(flow.id)  // 흐름을 바꾸면 거르기 칸·검색어를 비운다
             }
             .padding(.horizontal, 12).padding(.vertical, 4)
             Divider()

@@ -17,6 +17,7 @@ struct JSONTreeView: View {
     @State private var filtered: [JSONTreeNode]?
     @State private var savedExpanded: Set<Int> = []
     @FocusState private var fieldFocused: Bool
+    @State private var findID = UUID()
 
     private struct Row: Identifiable {
         let node: JSONTreeNode
@@ -63,7 +64,7 @@ struct JSONTreeView: View {
             }
         }
         // 트리·막대 어디에 포커스가 있어도: ⌘F는 막대를 열고(열려 있으면 검색칸으로), ⌘G·⇧⌘G는 Search 이동, Esc는 닫기.
-        .focusedValue(\.detailFind, DetailFind(open: { findVisible = true; fieldFocused = true }, step: step))
+        .focusedValue(\.detailFind, DetailFind(id: findID, open: { findVisible = true; Task { @MainActor in fieldFocused = true } }, step: step))
         .onExitCommand { if findVisible { findVisible = false } }
         .onChange(of: findVisible) { _, open in
             // 막대가 그려진 다음 칸에 포커스를 준다(목록이 포커스를 쥐고 있으면 같은 갱신 안에서는 안 옮겨진다).

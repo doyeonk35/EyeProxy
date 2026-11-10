@@ -10,7 +10,7 @@ struct KeyValueTable: View {
     @State private var filterVisible = false
     @State private var query = ""
     @FocusState private var fieldFocused: Bool
-    @FocusState private var tableFocused: Bool
+    @State private var findID = UUID()
 
     private var shown: [HTTPHeader] {
         query.isEmpty ? rows : rows.filter { $0.name.localizedCaseInsensitiveContains(query) || $0.value.localizedCaseInsensitiveContains(query) }
@@ -33,14 +33,14 @@ struct KeyValueTable: View {
                         }
                     }
                 }
-                // 클릭하면 표가 포커스를 받아 ⌘F가 이 표로 온다. focusable만으로는 클릭이 포커스를 늘 옮기지 않았다(실측).
+                // 이름 칸·행 빈 곳을 클릭하면 표가 포커스를 받아 ⌘F가 이 표로 온다. 값 글자 클릭은 글자 선택이 가져간다
+                // (탭 제스처로 포커스를 주면 더블클릭 단어 선택·⌘C가 깨져서 쓰지 않는다 — 실측).
                 .focusable(interactions: .edit)
                 .focusEffectDisabled()
-                .focused($tableFocused)
-                .simultaneousGesture(TapGesture().onEnded { tableFocused = true })
             }
         }
-        .focusedValue(\.detailFind, DetailFind(open: { filterVisible = true; fieldFocused = true }))
+        // 칸이 그려진 다음 포커스를 준다(같은 갱신 안에서는 아직 칸이 없다).
+        .focusedValue(\.detailFind, DetailFind(id: findID, open: { filterVisible = true; Task { @MainActor in fieldFocused = true } }))
         .onExitCommand { close() }
     }
 
