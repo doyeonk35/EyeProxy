@@ -76,20 +76,65 @@ public struct FlowFilter: Equatable, Sendable, Codable {
         (isLoopback(a) && isLoopback(b)) || a == b
     }
 
+    /// 켜진(isActive) 규칙이 하나라도 있는가 — 하단 바 Filter 버튼 강조.
+    public var hasActiveRules: Bool { rules.contains(where: \.isActive) }
+
+    /// 켜진 본문 규칙. 비어 있지 않으면 앱은 본문 판정을 메인 밖에서 한다.
+    public var activeBodyRules: [FilterRule] { rules.filter { $0.isActive && $0.needsBody } }
+
     public func matches(_ flow: Flow, process: String? = nil) -> Bool { matches(FilterSubject(flow: flow), process: process) }
 
     /// process: 그 흐름의 groupKey(귀속 없으면 nil).
-    public func matches(_ subject: FilterSubject, process: String? = nil) -> Bool {
+    public func matches(_ subject: FilterSubject, process: String? = nil) -> Bool { prepared().matches(subject, process: process) }
+
+    /// 여러 흐름을 거를 때 한 번 만든다: 켜진 규칙과 그 정규식을 흐름마다가 아니라 한 번만 준비한다.
+    public func prepared() -> PreparedFilter { PreparedFilter(self) }
+}
+
+/// 한 번의 거르기 동안 쓰는 `FlowFilter`. 켜진 규칙·정규식은 만들 때 한 번만 계산한다.
+public struct PreparedFilter {
+    public let filter: FlowFilter
+    /// body: 본문 규칙이면 `bodyRules` 안의 자리.
+    private let active: [(rule: FilterRule, regex: NSRegularExpression?, body: Int?)]
+    /// 켜진 본문 규칙(순서대로). `bodyHits`·`matches(bodyHits:)`의 배열이 이 순서를 따른다.
+    public let bodyRules: [FilterRule]
+
+    init(_ filter: FlowFilter) {
+        self.filter = filter
+        var active: [(rule: FilterRule, regex: NSRegularExpression?, body: Int?)] = []
+        var bodyRules: [FilterRule] = []
+        for r in filter.rules where r.isEnabled && !r.text.isEmpty {
+            let regex = r.regex
+            // 정규식 매칭인데 컴파일되지 않으면(isInvalid) 뺀다 — 흐름마다 다시 컴파일하지 않는다.
+            if regex == nil, [.matchRegex, .notMatchRegex].contains(r.match) { continue }
+            active.append((r, regex, r.needsBody ? bodyRules.count : nil))
+            if r.needsBody { bodyRules.append(r) }
+        }
+        self.active = active
+        self.bodyRules = bodyRules
+    }
+
+    /// 본문 규칙만 판정한다(메인 밖에서 부른다). 결과는 `bodyRules` 순서.
+    public func bodyHits(_ subject: FilterSubject) -> [Bool] {
+        active.filter { $0.body != nil }.map { $0.rule.matches(subject, regex: $0.regex) }
+    }
+
+    /// bodyHits: 미리 판정한 본문 규칙 결과(`bodyRules` 순서). nil이면 본문 규칙도 여기서 판정한다.
+    public func matches(_ subject: FilterSubject, process: String? = nil, bodyHits: [Bool]? = nil) -> Bool {
         let flow = subject.flow
-        if !includeHidden, flow.annotations.contains(.hidden) { return false }
-        if let device, !Self.sameDevice(flow.clientAddress, device) { return false }
-        if let wanted = self.process, (process ?? Self.unknownProcessKey) != wanted { return false }
-        if let host, flow.request.host != host { return false }
-        if !protocols.isEmpty, !protocols.contains(FlowProtocol.of(flow)) { return false }
-        if !contentKinds.isEmpty, !contentKinds.contains(ContentKind.of(flow)) { return false }
-        if !statusClasses.isEmpty, !(flow.response.map { statusClasses.contains($0.status / 100) } ?? false) { return false }
-        let active = rules.filter(\.isActive)
+        let f = filter
+        if !f.includeHidden, flow.annotations.contains(.hidden) { return false }
+        if let device = f.device, !FlowFilter.sameDevice(flow.clientAddress, device) { return false }
+        if let wanted = f.process, (process ?? FlowFilter.unknownProcessKey) != wanted { return false }
+        if let host = f.host, flow.request.host != host { return false }
+        if !f.protocols.isEmpty, !f.protocols.contains(FlowProtocol.of(flow)) { return false }
+        if !f.contentKinds.isEmpty, !f.contentKinds.contains(ContentKind.of(flow)) { return false }
+        if !f.statusClasses.isEmpty, !(flow.response.map { f.statusClasses.contains($0.status / 100) } ?? false) { return false }
         if active.isEmpty { return true }
-        return combineWithOr ? active.contains { $0.matches(subject) } : active.allSatisfy { $0.matches(subject) }
+        let hit = { (e: (rule: FilterRule, regex: NSRegularExpression?, body: Int?)) -> Bool in
+            guard let i = e.body, let bodyHits else { return e.rule.matches(subject, regex: e.regex) }
+            return i < bodyHits.count && bodyHits[i]
+        }
+        return f.combineWithOr ? active.contains(where: hit) : active.allSatisfy(hit)
     }
 }

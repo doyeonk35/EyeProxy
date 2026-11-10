@@ -59,3 +59,17 @@ import Testing
     #expect(AppSettings(defaults: d).autoSelectLatest)
     #expect(d.bool(forKey: "eyeproxy.autoSelectLatest"))
 }
+
+@Test @MainActor func filterRulesPersist() {
+    let d = UserDefaults(suiteName: UUID().uuidString)!
+    let s = AppSettings(defaults: d)
+    #expect(s.filterRules.rules.isEmpty && !s.filterRules.combineWithOr)
+    var f = FlowFilter(host: "not-saved")
+    f.rules = [FilterRule(key: .responseBody, match: .matchWildcard, text: "*tok?n*"), FilterRule(isEnabled: false, text: "a")]
+    f.combineWithOr = true
+    s.filterRules = f
+    let again = AppSettings(defaults: d).filterRules
+    #expect(again.rules == f.rules && again.combineWithOr && again.host == nil)
+    d.set(Data("x".utf8), forKey: "eyeproxy.filterRules")
+    #expect(AppSettings(defaults: d).filterRules.rules.isEmpty)
+}

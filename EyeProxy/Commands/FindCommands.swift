@@ -16,13 +16,14 @@ struct DetailFind: Equatable {
 
 extension FocusedValues {
     @Entry var detailFind: DetailFind?
-    /// 메인 창 툴바 검색칸(목록 거르기)에 포커스를 주는 동작(`open`).
+    /// 메인 창 필터 막대를 보이고 현재 규칙 검색칸에 포커스를 주는 동작(`open`).
     @Entry var flowSearch: DetailFind?
 }
 
 /// Edit ▸ Find. SwiftUI `Window` 장면은 Find 항목을 넣지 않아 직접 둔다(⌘F 단축키는 여기 하나뿐).
 /// 라우팅: ① 본문·Raw 텍스트 뷰가 응답자면 내장 찾기 막대(NSTextFinder) ② 표·트리가 포커스면 그 막대
-/// ③ 메인 창(시트 아님)의 목록·사이드바면 툴바 검색칸 ④ 그 밖은 표준 응답자 체인.
+/// ③ 메인 창(시트 아님)의 목록·사이드바면 필터 막대 ④ 그 밖은 표준 응답자 체인.
+/// 필터 막대 단축키(⌘N·⇧⌘N·⌘↑·⌘↓·⌘B)는 막대 안에 포커스가 있을 때만 켜진다 — 다른 곳의 같은 키를 빼앗지 않는다.
 struct FindCommands: Commands {
     var body: some Commands {
         CommandGroup(after: .pasteboard) { FindMenu() }
@@ -32,26 +33,41 @@ struct FindCommands: Commands {
 private struct FindMenu: View {
     @FocusedValue(\.detailFind) private var detail
     @FocusedValue(\.flowSearch) private var flowSearch
+    @FocusedValue(\.filterBar) private var filterBar
 
     var body: some View {
         Divider()
         Menu("Find") {
             Button("Find…") { find() }
                 .keyboardShortcut("f")
-                .help("포커스된 보기에서 찾기·거르기, 목록이면 검색칸 (⌘F)")
+                .help("포커스된 보기에서 찾기·거르기, 목록이면 필터 막대 (⌘F)")
             Button("Find Next") { step(1) }
                 .keyboardShortcut("g")
                 .help("다음 일치 (⌘G)")
             Button("Find Previous") { step(-1) }
                 .keyboardShortcut("g", modifiers: [.command, .shift])
                 .help("이전 일치 (⇧⌘G)")
+            Divider()
+            filterItem("New Filter", .add, "n", help: "필터 막대에 규칙 추가 (⌘N)")
+            filterItem("Remove Filter", .remove, "n", [.command, .shift], help: "필터 막대의 이 규칙 지우기 (⇧⌘N)")
+            filterItem("Previous Filter", .up, .upArrow, help: "필터 막대 위 규칙으로 (⌘↑)")
+            filterItem("Next Filter", .down, .downArrow, help: "필터 막대 아래 규칙으로 (⌘↓)")
+            filterItem("Toggle Filter", .toggle, "b", help: "필터 막대의 이 규칙 켜기·끄기 (⌘B)")
         }
+    }
+
+    private func filterItem(_ title: LocalizedStringKey, _ command: FilterBarCommand, _ key: KeyEquivalent,
+                            _ modifiers: EventModifiers = .command, help: LocalizedStringKey) -> some View {
+        Button(title) { filterBar?.perform(command) }
+            .keyboardShortcut(key, modifiers: modifiers)
+            .disabled(filterBar == nil)
+            .help(help)
     }
 
     private func find() {
         if textFinder(.showFindInterface) { return }
         if let detail { detail.open(); return }
-        // 툴바 검색칸은 목록·사이드바(표 보기)나 아무것도 포커스가 없을 때만. 찾기 막대에 입력 중(필드 편집기)이거나
+        // 필터 막대는 목록·사이드바(표 보기)나 아무것도 포커스가 없을 때만. 찾기 막대에 입력 중(필드 편집기)이거나
         // 상세의 값 글자를 골라 둔 상태면 표준 체인에 맡겨 포커스를 빼앗지 않는다.
         let responder = NSApp.keyWindow?.firstResponder
         let listArea = responder == nil || responder is NSTableView || responder is NSWindow

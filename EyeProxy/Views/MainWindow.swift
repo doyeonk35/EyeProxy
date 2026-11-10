@@ -1,12 +1,10 @@
 import AppKit
 import EyeProxyCore
-import EyeProxyKit
 import SwiftUI
 
 struct MainWindow: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
-    @FocusState private var searchFocused: Bool
     @State private var searchFindID = UUID()
 
     var body: some View {
@@ -18,6 +16,10 @@ struct MainWindow: View {
             VStack(spacing: 0) {
                 FilterBarView()
                 Divider()
+                if model.isFilterBarVisible {
+                    FilterRulesBar()
+                    Divider()
+                }
                 if model.settings.layout == .classic {
                     VSplitView {
                         FlowListView().frame(maxWidth: .infinity, minHeight: 160, maxHeight: .infinity)
@@ -32,12 +34,7 @@ struct MainWindow: View {
             }
         }
         .toolbar { MainToolbar(model: model) }
-        // Task 3 replaces this: 툴바 검색칸은 URL·Contains 규칙 하나를 읽고 쓴다.
-        .searchable(text: Binding(get: { model.filter.rules.first?.text ?? "" },
-                                  set: { model.filter.rules = $0.isEmpty ? [] : [FilterRule(key: .url, match: .contains, text: $0)] }),
-                    placement: .toolbar, prompt: Text("URL 검색"))
-        .searchFocused($searchFocused)
-        .focusedSceneValue(\.flowSearch, DetailFind(id: searchFindID, open: { searchFocused = true }))
+        .focusedSceneValue(\.flowSearch, DetailFind(id: searchFindID, open: { model.showFilterBar() }))
         .sheet(isPresented: Binding(get: { model.commentingFlowID != nil }, set: { if !$0 { model.commentingFlowID = nil } })) {
             if let id = model.commentingFlowID { CommentSheet(id: id) }
         }

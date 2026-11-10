@@ -51,7 +51,10 @@ public struct FilterRule: Codable, Equatable, Sendable, Identifiable {
     /// 실제로 거르는 규칙: 켜져 있고, 검색어가 있고, 정규식이 올바르다.
     public var isActive: Bool { isEnabled && !text.isEmpty && !isInvalid }
 
-    public func matches(_ row: FilterSubject) -> Bool {
+    public func matches(_ row: FilterSubject) -> Bool { matches(row, regex: regex) }
+
+    /// `regex`: 미리 컴파일한 패턴(`PreparedFilter`가 거르기 한 번에 한 번만 만든다).
+    func matches(_ row: FilterSubject, regex: NSRegularExpression?) -> Bool {
         if match.isNumericOnly {
             guard key.isNumeric, let n = row.numericValue(for: key), let t = Double(text.trimmingCharacters(in: .whitespaces)) else { return false }
             return match == .lessThan ? n < t : n >= t
@@ -74,7 +77,7 @@ public struct FilterRule: Codable, Equatable, Sendable, Identifiable {
     }
 
     /// Wildcard(`*`·`?`, 전체 일치)와 Regex(부분 일치)를 대소문자 무시 정규식으로. 그 밖의 매칭이나 잘못된 패턴은 nil.
-    private var regex: NSRegularExpression? {
+    var regex: NSRegularExpression? {
         let pattern: String
         switch match {
         case .matchRegex, .notMatchRegex: pattern = text

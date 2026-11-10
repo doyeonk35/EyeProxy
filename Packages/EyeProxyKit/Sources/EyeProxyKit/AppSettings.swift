@@ -28,6 +28,10 @@ public final class AppSettings {
     public var showStatusItem: Bool { didSet { defaults.set(showStatusItem, forKey: "eyeproxy.showStatusItem") } }
     /// View ▸ Auto Select the Latest Request(스펙 §6). 사용자가 목록에서 다른 행을 고르면 꺼진다.
     public var autoSelectLatest: Bool { didSet { defaults.set(autoSelectLatest, forKey: "eyeproxy.autoSelectLatest") } }
+    /// 마지막 필터 막대 규칙과 AND/OR(Proxyman "remembers your last filter settings"). `FlowFilter`는 이 둘만 저장된다.
+    public var filterRules: FlowFilter {
+        didSet { defaults.set(try? JSONEncoder().encode(filterRules), forKey: "eyeproxy.filterRules") }
+    }
     /// 저장하지 않는다 (실행할 때마다 기록 중으로 시작).
     public var isRecording = true
 
@@ -46,6 +50,7 @@ public final class AppSettings {
         mapLocalDefaultFolder = defaults.string(forKey: "eyeproxy.mapLocalDefaultFolder")
         showStatusItem = defaults.object(forKey: "eyeproxy.showStatusItem") as? Bool ?? true
         autoSelectLatest = defaults.bool(forKey: "eyeproxy.autoSelectLatest")
+        filterRules = defaults.data(forKey: "eyeproxy.filterRules").flatMap { try? JSONDecoder().decode(FlowFilter.self, from: $0) } ?? FlowFilter()
         toolSwitches = defaults.data(forKey: "eyeproxy.toolSwitches").flatMap { try? JSONDecoder().decode(ToolSwitches.self, from: $0) } ?? ToolSwitches()
     }
 

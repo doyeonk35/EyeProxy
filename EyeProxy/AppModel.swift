@@ -34,7 +34,24 @@ final class AppModel {
     /// 새로 만든 CA를 저장하지 못했으면 그 이유. 매 실행 새 루트 CA가 되므로 Task 15 인증서 화면에서 표시한다.
     let caSaveError: String?
     private(set) var serverState: ServerState = .stopped
-    var filter = FlowFilter()
+    /// 목록 필터. 규칙·AND/OR가 바뀌면 저장하고 목록에 반영한다(`filterRulesChanged`).
+    var filter = FlowFilter() {
+        didSet { if filter.rules != oldValue.rules || filter.combineWithOr != oldValue.combineWithOr { filterRulesChanged() } }
+    }
+    /// 목록 위 필터 막대(스펙 §4). 숨겨도 켜진 규칙은 계속 적용된다.
+    var isFilterBarVisible = false
+    /// ⌘F가 막대를 보이면 막대가 현재 규칙 검색칸에 포커스를 주고 끈다.
+    var focusFilterBar = false
+    /// 켜진(적용되는) 규칙이 있다 — 하단 바 Filter 버튼 강조.
+    var hasActiveFilterRules: Bool { filter.hasActiveRules }
+    /// 목록에 실제로 적용 중인 규칙·AND/OR. 본문 규칙이 바뀌면 백그라운드 판정이 끝난 뒤에 바뀐다(그동안 이전 결과 유지).
+    private var appliedRules = FlowFilter()
+    /// 본문 규칙(`bodyMatchRules`) 판정 결과. 흐름 id → 판정한 본문 크기·규칙마다 결과.
+    private var bodyMatches: [FlowID: BodyMatch] = [:]
+    @ObservationIgnored private var bodyMatchRules: [FilterRule] = []
+    @ObservationIgnored private var bodyJob: Task<Void, Never>?
+    @ObservationIgnored private var bodyJobGeneration = 0
+    @ObservationIgnored private var rulesDebounce: Task<Void, Never>?
     /// 목록 선택(여러 건 가능 — Repeat). 상세·코멘트 등 한 건용 동작은 `selectedFlowID`를 쓴다.
     var selectedFlowIDs: Set<FlowID> = []
     /// 정확히 한 건이 선택됐을 때 그 흐름.
@@ -123,6 +140,11 @@ final class AppModel {
             .flatMap { ProxymanImporter.isSafeWriteTarget($0) ? $0 : nil }
         observeTools()
         observeBreakpoints()
+        // 마지막 필터 규칙을 되살린다. 켜진 규칙이 있으면 막대를 보인 채로 시작한다.
+        filter = settings.filterRules
+        appliedRules = filter
+        bodyMatchRules = filter.activeBodyRules
+        isFilterBarVisible = filter.hasActiveRules
         // 백업 없이 VPN 복사본만 남은 경우(종료 때 관리자 인증 취소 등)도 시작 시 알린다.
         Task { await refreshEffectiveProxyWarning() }
     }
@@ -365,7 +387,10 @@ final class AppModel {
                                 highlights: loaded.highlights, numbers: loaded.numbers)
                 processes.replace(loaded.processes)
             }
-            filter = FlowFilter()
+            // 칩·숨김 보기는 처음으로, 필터 막대 규칙은 남긴다(저장된 마지막 설정).
+            var fresh = FlowFilter()
+            (fresh.rules, fresh.combineWithOr) = (filter.rules, filter.combineWithOr)
+            filter = fresh
             selectedFlowID = nil
             sidebarSelection = .allFlows
         } catch FlowImportError.invalidHAR(let reason) {
@@ -388,18 +413,94 @@ final class AppModel {
 
     var visibleFlows: [Flow] {
         var f = filter
+        (f.rules, f.combineWithOr) = (appliedRules.rules, appliedRules.combineWithOr)
         switch sidebarSelection {
         case .scope(let s): (f.device, f.process, f.host) = (s.device, s.process, s.host)
         case .host(let host): f.host = host
         case .allFlows, nil: break
         }
+        let p = f.prepared()
         // Client 이름은 계산이 무거워 Client 규칙이 있을 때만 만든다.
         let needsClient = f.rules.contains { $0.isActive && $0.key == .client }
-        return session.flows.filter {
+        // 본문 규칙은 여기서 풀지 않고 백그라운드 판정 결과를 쓴다. 아직 판정 전(새 흐름·본문이 바뀐 흐름)이면 맞지 않음으로 두고 판정을 건다.
+        let usesBody = !p.bodyRules.isEmpty
+        var unmatched = false
+        let flows = session.flows.filter {
+            var hits: [Bool]?
+            if usesBody {
+                let cached = bodyMatches[$0.id]
+                if cached?.sizes != Self.bodySizes($0) { unmatched = true }
+                hits = cached?.hits ?? []
+            }
             let subject = FilterSubject(flow: $0, number: session.number($0.id) ?? 0, comment: session.comments[$0.id],
                                         highlight: session.highlights[$0.id], client: needsClient ? clientName(for: $0) : "")
-            return f.matches(subject, process: processKey(for: $0))
+            return p.matches(subject, process: processKey(for: $0), bodyHits: hits)
         }
+        if unmatched, bodyJob == nil, rulesDebounce == nil { startBodyMatching(appliedRules, full: false) }
+        return flows
+    }
+
+    // MARK: - 필터 막대
+
+    /// ⌘F(목록 쪽 포커스): 막대를 보이고 현재 규칙 검색칸에 포커스.
+    func showFilterBar() {
+        isFilterBarVisible = true
+        focusFilterBar = true
+    }
+
+    /// 판정한 흐름의 본문 크기. 바뀌면(응답 도착 등) 다시 판정한다.
+    private struct BodyMatch { let sizes: [Int]; let hits: [Bool] }
+    nonisolated private static func bodySizes(_ flow: Flow) -> [Int] { [flow.request.body.count, flow.response?.body.count ?? -1] }
+
+    /// 규칙이 바뀌었다: 저장하고, 가벼운 규칙만 바뀌었으면 바로, 본문 규칙이 바뀌었으면 디바운스 뒤 백그라운드에서 판정한다(스펙 §4 성능).
+    private func filterRulesChanged() {
+        settings.filterRules = filter
+        rulesDebounce?.cancel()
+        rulesDebounce = nil
+        bodyJob?.cancel()
+        bodyJob = nil
+        bodyJobGeneration += 1
+        let body = filter.activeBodyRules
+        if body == bodyMatchRules { appliedRules = filter; return }
+        if body.isEmpty {
+            (bodyMatches, bodyMatchRules) = ([:], [])
+            appliedRules = filter
+            return
+        }
+        rulesDebounce = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled, let self else { return }
+            rulesDebounce = nil
+            startBodyMatching(filter, full: true)
+        }
+    }
+
+    /// 본문 규칙을 메인 밖에서 판정한다. full이면 모든 흐름을 새 규칙으로, 아니면 아직 판정하지 않은 흐름만.
+    /// 가장 최근에 시작한 작업의 결과만 반영한다(이전 작업은 취소).
+    private func startBodyMatching(_ rules: FlowFilter, full: Bool) {
+        bodyJob?.cancel()
+        bodyJobGeneration += 1
+        let generation = bodyJobGeneration
+        let flows = full ? session.flows : session.flows.filter { bodyMatches[$0.id]?.sizes != Self.bodySizes($0) }
+        bodyJob = Task.detached(priority: .userInitiated) { [weak self] in
+            let p = rules.prepared()
+            var result: [FlowID: BodyMatch] = [:]
+            for flow in flows {
+                if Task.isCancelled { return }
+                result[flow.id] = BodyMatch(sizes: Self.bodySizes(flow), hits: p.bodyHits(FilterSubject(flow: flow)))
+            }
+            await self?.applyBodyMatches(result, rules: rules, full: full, generation: generation)
+        }
+    }
+
+    private func applyBodyMatches(_ result: [FlowID: BodyMatch], rules: FlowFilter, full: Bool, generation: Int) {
+        guard generation == bodyJobGeneration else { return }
+        bodyJob = nil
+        guard full else { bodyMatches.merge(result) { $1 }; return }
+        // 그사이 가벼운 규칙·AND/OR만 바뀌었을 수 있다(본문 규칙이 바뀌었으면 generation이 달라 여기 오지 않는다).
+        bodyMatches = result
+        bodyMatchRules = rules.activeBodyRules
+        appliedRules = filter
     }
 
     var visibleRows: [FlowRow] {

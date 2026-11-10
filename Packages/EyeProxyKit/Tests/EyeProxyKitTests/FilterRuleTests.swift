@@ -185,3 +185,23 @@ private func subject(_ url: String, method: String = "GET", status: Int = 200) -
     print("bodyRuleMatchingRunsOffMain: \(ContinuousClock.now - start) for \(subjects.count) flows")
     #expect(Set(matched) == expected && matched.count == 1_500)
 }
+
+@Test func preparedFilterUsesPrecomputedBodyHits() {
+    var flow = Flow.fixture(url: "https://api.example.com/v2", method: "GET", status: 200)
+    flow.response?.body = Data(#"{"token":"abc"}"#.utf8)
+    let s = FilterSubject(flow: flow)
+    var f = FlowFilter()
+    f.rules = [rule(.host, .contains, "api"), rule(.responseBody, .contains, "nope"), rule(.url, .matchRegex, "(["),
+               rule(.requestBody, .notContains, "x"), rule(.responseBody, .contains, "TOKEN", enabled: false)]
+    #expect(f.hasActiveRules && f.activeBodyRules.map(\.key) == [.responseBody, .requestBody])
+    let p = f.prepared()
+    #expect(p.bodyRules == f.activeBodyRules)  // 꺼진·잘못된 규칙은 빠진다
+    #expect(p.bodyHits(s) == [false, true])
+    #expect(!p.matches(s) && !p.matches(s, bodyHits: [false, true]))
+    // 미리 판정한 결과를 그대로 쓴다(본문을 다시 보지 않는다).
+    #expect(p.matches(s, bodyHits: [true, true]))
+    #expect(!p.matches(s, bodyHits: []))  // 판정 전 흐름은 본문 규칙에 맞지 않는다
+    f.combineWithOr = true
+    #expect(f.prepared().matches(s, bodyHits: []))  // OR: 가벼운 규칙(Host)만으로 통과
+    #expect(!FlowFilter().hasActiveRules && FlowFilter().activeBodyRules.isEmpty)
+}
