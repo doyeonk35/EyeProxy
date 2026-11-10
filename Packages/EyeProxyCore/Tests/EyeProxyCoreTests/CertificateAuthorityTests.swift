@@ -11,6 +11,7 @@ import Crypto
     #expect(cert.issuer == cert.subject)
     #expect(cert.subject == (try DistinguishedName { CommonName("Prog Root CA"); OrganizationName("Prog") }))
     #expect(try cert.extensions.basicConstraints == .isCertificateAuthority(maxPathLength: nil))
+    #expect(ca.validity == cert.notValidBefore...cert.notValidAfter && ca.validity.contains(Date()))
 }
 @Test func leafIsSignedByCAAndHasSAN() throws {
     let ca = try CertificateAuthority.generate()

@@ -61,10 +61,10 @@ struct BodyView: View {
             Divider()
             if let loaded { content(loaded) } else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
         }
-        // 디코드는 본문이 바뀔 때만 (세션 이벤트마다 다시 하지 않음), 메인 밖에서.
-        .task(id: data.count) {
-            let (b, h) = (data, headers)
-            let p = await Task.detached { Self.prepare(b, h) }.value
+        // 디코드는 본문·Tab Width가 바뀔 때만 (세션 이벤트마다 다시 하지 않음), 메인 밖에서.
+        .task(id: [data.count, settings.tabWidth]) {
+            let (b, h, indent) = (data, headers, settings.tabWidth)
+            let p = await Task.detached { Self.prepare(b, h, indent: indent) }.value
             var image: NSImage?
             if case .image(let img) = p.decoded { image = NSImage(data: img) }
             loaded = Loaded(
@@ -77,8 +77,8 @@ struct BodyView: View {
     private nonisolated static let hexLimit = 64 * 1024
     nonisolated static let highlightLimit = 256_000
 
-    private nonisolated static func prepare(_ body: Data, _ headers: [HTTPHeader]) -> Prepared {
-        let d = BodyDecoder.decode(body: body, headers: headers)
+    private nonisolated static func prepare(_ body: Data, _ headers: [HTTPHeader], indent: Int) -> Prepared {
+        let d = BodyDecoder.decode(body: body, headers: headers, indent: indent)
         var p = Prepared(decoded: d)
         switch d {
         case .empty: break
@@ -159,7 +159,7 @@ struct CodeBody: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CodeTextView(text: text, wrap: model.settings.wrapLongLines)
+            CodeTextView(text: text, wrap: model.settings.wrapLongLines, fontSize: CGFloat(model.settings.fontSize), showInvisibles: model.settings.showInvisibles)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)  // NSScrollView의 fitting 크기(문서 높이)로 커지지 않게
             if truncated { Text("… (2MB까지만 표시)").foregroundStyle(.secondary).padding(6) }
         }

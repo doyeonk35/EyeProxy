@@ -12,7 +12,10 @@ import SwiftUI
             MainWindow()
                 .environment(model)
                 .frame(minWidth: 1100, minHeight: 700)
-                .task { await model.startServer() }
+                .task {
+                    await model.startServer()
+                    await model.autoOverrideSystemProxyAtLaunch()
+                }
                 // 앱 전체(설정·기기 창 포함)에 적용되도록 NSApp 수준에서 바꾼다.
                 .onChange(of: model.settings.appearance, initial: true) { _, appearance in
                     NSApp.appearance = switch appearance {

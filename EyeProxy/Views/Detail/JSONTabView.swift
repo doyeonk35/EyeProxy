@@ -15,6 +15,7 @@ struct JSONTabView: View {
     private enum Prepared: Sendable { case notJSON, pretty(String, [JSONToken], truncated: Bool), tree([JSONTreeNode]) }
     private enum Loaded { case notJSON, pretty(NSAttributedString, truncated: Bool), tree([JSONTreeNode]) }
 
+    @Environment(AppModel.self) private var model
     @State private var loaded: Loaded?
     @State private var expanded: Set<Int> = []
     @State private var findVisible = false
@@ -45,11 +46,11 @@ struct JSONTabView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // 본문이 바뀔 때만(세션 이벤트마다가 아니라), 메인 밖에서 정렬·색 토큰·트리를 만든다.
-        .task(id: data.count) {
-            let (body, headers, tree) = (data, headers, tree)
+        // 본문(JSON 탭은 Tab Width도)이 바뀔 때만(세션 이벤트마다가 아니라), 메인 밖에서 정렬·색 토큰·트리를 만든다.
+        .task(id: [data.count, tree ? 0 : model.settings.tabWidth]) {
+            let (body, headers, tree, indent) = (data, headers, tree, model.settings.tabWidth)
             let p = await Task.detached { () -> Prepared in
-                guard let pretty = BodyDecoder.json(body: body, headers: headers) else { return .notJSON }
+                guard let pretty = BodyDecoder.json(body: body, headers: headers, indent: tree ? 2 : indent) else { return .notJSON }
                 if tree { return .tree(JSONTreeNode.parse(pretty: pretty)) }
                 let (s, cut) = BodyView.capped(pretty)
                 return .pretty(s, s.utf8.count <= BodyView.highlightLimit ? JSONHighlighter.tokens(s) : [], truncated: cut)

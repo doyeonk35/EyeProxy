@@ -7,6 +7,9 @@ public enum FlowLayout: String, Codable, Sendable { case classic, sideBySide }
 /// 앱 외관. `system`은 macOS 설정을 따른다.
 public enum Appearance: String, Codable, Sendable, CaseIterable { case system, light, dark }
 
+/// 목록 말줄임 위치(General ▸ Truncation Style).
+public enum TruncationStyle: String, Codable, Sendable, CaseIterable { case head, middle, tail }
+
 @Observable @MainActor
 public final class AppSettings {
     @ObservationIgnored private let defaults: UserDefaults
@@ -32,8 +35,26 @@ public final class AppSettings {
     public var filterRules: FlowFilter {
         didSet { defaults.set(try? JSONEncoder().encode(filterRules), forKey: "eyeproxy.filterRules") }
     }
-    /// 저장하지 않는다 (실행할 때마다 기록 중으로 시작).
-    public var isRecording = true
+    /// 저장하지 않는다. 실행할 때 `autoStartRecording`으로 시작한다.
+    public var isRecording: Bool
+
+    // 설정 창 General·Appearance(스펙 §11). 기본값은 지금 동작을 바꾸지 않는 쪽.
+    /// General ▸ Truncation Style: 목록 URL·Client 열 말줄임 위치.
+    public var truncationStyle: TruncationStyle { didSet { defaults.set(truncationStyle.rawValue, forKey: "eyeproxy.truncationStyle") } }
+    /// General ▸ Auto Override System Proxy Settings at Launch: 실행 시 "이 Mac 캡처"를 켠다.
+    public var autoOverrideSystemProxy: Bool { didSet { defaults.set(autoOverrideSystemProxy, forKey: "eyeproxy.autoOverrideSystemProxy") } }
+    /// General ▸ Auto Start Recording Traffic at Launch.
+    public var autoStartRecording: Bool { didSet { defaults.set(autoStartRecording, forKey: "eyeproxy.autoStartRecording") } }
+    /// Appearance ▸ Font Size(11~16): 상세 패널 본문·표.
+    public var fontSize: Int { didSet { defaults.set(fontSize, forKey: "eyeproxy.fontSize") } }
+    /// Appearance ▸ Tab Width(2·4): JSON Pretty 들여쓰기.
+    public var tabWidth: Int { didSet { defaults.set(tabWidth, forKey: "eyeproxy.tabWidth") } }
+    /// Appearance ▸ Use Monospaced Font: 목록 표.
+    public var useMonospacedFont: Bool { didSet { defaults.set(useMonospacedFont, forKey: "eyeproxy.useMonospacedFont") } }
+    /// Appearance ▸ Show Invisibles: 본문 텍스트의 공백·탭·줄바꿈 표시.
+    public var showInvisibles: Bool { didSet { defaults.set(showInvisibles, forKey: "eyeproxy.showInvisibles") } }
+    /// Appearance ▸ Alternative Rows Background Colors: 목록 줄무늬.
+    public var alternativeRowBackgrounds: Bool { didSet { defaults.set(alternativeRowBackgrounds, forKey: "eyeproxy.alternativeRowBackgrounds") } }
 
     public var sslPolicy: SSLProxyingPolicy { SSLProxyingPolicy(isEnabled: sslEnabled, patterns: sslPatterns) }
 
@@ -52,6 +73,22 @@ public final class AppSettings {
         autoSelectLatest = defaults.bool(forKey: "eyeproxy.autoSelectLatest")
         filterRules = defaults.data(forKey: "eyeproxy.filterRules").flatMap { try? JSONDecoder().decode(FlowFilter.self, from: $0) } ?? FlowFilter()
         toolSwitches = defaults.data(forKey: "eyeproxy.toolSwitches").flatMap { try? JSONDecoder().decode(ToolSwitches.self, from: $0) } ?? ToolSwitches()
+        truncationStyle = defaults.string(forKey: "eyeproxy.truncationStyle").flatMap(TruncationStyle.init(rawValue:)) ?? .tail
+        autoOverrideSystemProxy = defaults.bool(forKey: "eyeproxy.autoOverrideSystemProxy")
+        let startRecording = defaults.object(forKey: "eyeproxy.autoStartRecording") as? Bool ?? true
+        autoStartRecording = startRecording
+        isRecording = startRecording
+        fontSize = defaults.object(forKey: "eyeproxy.fontSize") as? Int ?? 13
+        tabWidth = defaults.object(forKey: "eyeproxy.tabWidth") as? Int ?? 2
+        useMonospacedFont = defaults.bool(forKey: "eyeproxy.useMonospacedFont")
+        showInvisibles = defaults.bool(forKey: "eyeproxy.showInvisibles")
+        alternativeRowBackgrounds = defaults.object(forKey: "eyeproxy.alternativeRowBackgrounds") as? Bool ?? true
+    }
+
+    /// Appearance ▸ Restore Defaults: Appearance 탭 값만 기본으로.
+    public func restoreAppearanceDefaults() {
+        (fontSize, tabWidth, useMonospacedFont, wrapLongLines) = (13, 2, false, true)
+        (showInvisibles, alternativeRowBackgrounds, appearance) = (false, true, .system)
     }
 
     public func togglePin(_ host: String) {

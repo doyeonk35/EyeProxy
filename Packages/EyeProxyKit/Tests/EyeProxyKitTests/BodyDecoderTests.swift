@@ -6,6 +6,15 @@ import Testing
 
 private func h(_ n: String, _ v: String) -> HTTPHeader { .init(name: n, value: v) }
 
+/// Appearance ▸ Tab Width: JSON Pretty 들여쓰기 칸 수(기본 2).
+@Test func jsonIndentFollowsTabWidth() {
+    let body = Data(#"{"a":[1]}"#.utf8), headers = [h("Content-Type", "application/json")]
+    let four = "{\n    \"a\" : [\n        1\n    ]\n}"
+    #expect(BodyDecoder.json(body: body, headers: headers, indent: 4) == four)
+    #expect(BodyDecoder.decode(body: body, headers: headers, indent: 4) == .json(pretty: four, raw: #"{"a":[1]}"#))
+    #expect(BodyDecoder.json(body: body, headers: headers) == "{\n  \"a\" : [\n    1\n  ]\n}")
+}
+
 @Test func decodesGzipJSON() throws {
     let gz = try gzip(Data(#"{"a":1}"#.utf8))
     #expect(BodyDecoder.decode(body: gz, headers: [h("Content-Encoding", "gzip"), h("Content-Type", "application/json")]) == .json(pretty: "{\n  \"a\" : 1\n}", raw: "{\"a\":1}"))

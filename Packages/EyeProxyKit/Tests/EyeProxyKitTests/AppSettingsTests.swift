@@ -73,3 +73,51 @@ import Testing
     d.set(Data("x".utf8), forKey: "eyeproxy.filterRules")
     #expect(AppSettings(defaults: d).filterRules.rules.isEmpty)
 }
+
+/// 스펙 §11 General·Appearance 새 항목의 기본값은 지금 동작을 바꾸지 않는다. 새 키는 `eyeproxy.` 접두로 저장된다.
+@Test @MainActor func newSettingsHaveSpecDefaults() {
+    let d = UserDefaults(suiteName: UUID().uuidString)!
+    let s = AppSettings(defaults: d)
+    #expect(s.truncationStyle == .tail)
+    #expect(!s.autoOverrideSystemProxy && s.autoStartRecording && s.isRecording)
+    #expect(s.fontSize == 13 && s.tabWidth == 2)
+    #expect(!s.useMonospacedFont && !s.showInvisibles && s.alternativeRowBackgrounds)
+    s.truncationStyle = .head; s.autoOverrideSystemProxy = true; s.autoStartRecording = false
+    s.fontSize = 15; s.tabWidth = 4; s.useMonospacedFont = true; s.showInvisibles = true; s.alternativeRowBackgrounds = false
+    #expect(d.string(forKey: "eyeproxy.truncationStyle") == "head" && d.bool(forKey: "eyeproxy.autoOverrideSystemProxy"))
+    #expect(d.integer(forKey: "eyeproxy.fontSize") == 15 && d.integer(forKey: "eyeproxy.tabWidth") == 4)
+    let again = AppSettings(defaults: d)
+    #expect(again.truncationStyle == .head && again.autoOverrideSystemProxy && !again.autoStartRecording)
+    #expect(again.fontSize == 15 && again.tabWidth == 4 && again.useMonospacedFont && again.showInvisibles && !again.alternativeRowBackgrounds)
+    // Auto Start Recording을 끄면 기록 멈춤으로 시작한다.
+    #expect(!again.isRecording)
+}
+
+/// 옛 설정(외관·포트·상태 막대 아이콘·줄바꿈·레이아웃)은 키를 바꾸지 않고 그대로 읽는다.
+@Test @MainActor func existingKeysAreReadUnchanged() {
+    let d = UserDefaults(suiteName: UUID().uuidString)!
+    d.set("dark", forKey: "eyeproxy.appearance")
+    d.set(9191, forKey: "eyeproxy.port")
+    d.set(false, forKey: "eyeproxy.showStatusItem")
+    d.set(false, forKey: "eyeproxy.wrapLongLines")
+    d.set("sideBySide", forKey: "eyeproxy.layout")
+    let s = AppSettings(defaults: d)
+    #expect(s.appearance == .dark && s.port == 9191 && !s.showStatusItem && !s.wrapLongLines && s.layout == .sideBySide)
+}
+
+/// Restore Defaults는 Appearance 탭 값만 되돌린다.
+@Test @MainActor func restoreAppearanceDefaultsResetsOnlyAppearance() {
+    let d = UserDefaults(suiteName: UUID().uuidString)!
+    let s = AppSettings(defaults: d)
+    s.fontSize = 16; s.tabWidth = 4; s.useMonospacedFont = true; s.wrapLongLines = false
+    s.showInvisibles = true; s.alternativeRowBackgrounds = false; s.appearance = .dark
+    s.port = 9191; s.layout = .sideBySide; s.showStatusItem = false; s.truncationStyle = .middle
+    s.autoOverrideSystemProxy = true; s.autoStartRecording = false
+    s.restoreAppearanceDefaults()
+    for x in [s, AppSettings(defaults: d)] {
+        #expect(x.fontSize == 13 && x.tabWidth == 2 && !x.useMonospacedFont && x.wrapLongLines)
+        #expect(!x.showInvisibles && x.alternativeRowBackgrounds && x.appearance == .system)
+        #expect(x.port == 9191 && x.layout == .sideBySide && !x.showStatusItem && x.truncationStyle == .middle)
+        #expect(x.autoOverrideSystemProxy && !x.autoStartRecording)
+    }
+}

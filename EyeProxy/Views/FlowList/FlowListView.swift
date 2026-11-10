@@ -18,6 +18,12 @@ struct FlowListView: View {
         let comments = model.session.comments
 
         let latest = AutoSelect.latest(in: rows)
+        // General ▸ Truncation Style: URL·Client 열.
+        let truncation: Text.TruncationMode = switch model.settings.truncationStyle {
+        case .head: .head
+        case .middle: .middle
+        case .tail: .tail
+        }
 
         // Proxyman 메인 목록과 같은 열·순서(Task 15b). 선택 열은 숨김 기본값.
         ScrollViewReader { proxy in
@@ -47,7 +53,7 @@ struct FlowListView: View {
                         let struck = model.session.highlights[row.id]?.strikethrough ?? false
                         (Text(row.host).foregroundStyle(struck ? .secondary : .primary).strikethrough(struck)
                             + Text(row.flow.request.path).foregroundStyle(.secondary).strikethrough(struck))
-                            .lineLimit(1).truncationMode(.middle)
+                            .lineLimit(1).truncationMode(truncation)
                     }}
                     .width(min: 200, ideal: 360)
                     .customizationID("url")
@@ -58,9 +64,9 @@ struct FlowListView: View {
                                 AppIcon(path: identity.path)
                                 Text(name)
                             }
-                            .lineLimit(1)
+                            .lineLimit(1).truncationMode(truncation)
                         } else if !name.isEmpty {
-                            Text(name).lineLimit(1)
+                            Text(name).lineLimit(1).truncationMode(truncation)
                         }
                     }}
                     .width(min: 80, ideal: 130, max: 240)
@@ -131,7 +137,9 @@ struct FlowListView: View {
                         .defaultVisibility(.hidden)
                 }
             }
-            .alternatingRowBackgrounds(.disabled)
+            // Appearance ▸ Alternative Rows Background Colors·Use Monospaced Font(스펙 §11).
+            .alternatingRowBackgrounds(model.settings.alternativeRowBackgrounds ? .enabled : .disabled)
+            .monospaced(model.settings.useMonospacedFont)
             .focused($tableFocused)
             .defaultFocus($tableFocused, true)
             // AppKit이 창을 처음 key로 만들며 키 뷰 순서의 첫 검색칸에 포커스를 주므로, 그 뒤에 목록으로 되돌린다.

@@ -73,6 +73,9 @@ public final class CertificateAuthority: Sendable {
         return ""
     }
 
+    /// 루트 CA 유효기간(설정 ▸ General 루트 인증서 카드).
+    public var validity: ClosedRange<Date> { certificate.notValidBefore...certificate.notValidAfter }
+
     /// CA 인증서(DER)의 SHA-256 지문: 대문자 16진 바이트를 `:`로 구분(`AB:CD:…`).
     public var sha256Fingerprint: String {
         SHA256.hash(data: certificateDER).map { String(format: "%02X", $0) }.joined(separator: ":")

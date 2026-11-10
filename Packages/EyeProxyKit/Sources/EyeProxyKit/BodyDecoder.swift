@@ -5,7 +5,8 @@ import Foundation
 public enum DecodedBody: Equatable, Sendable { case empty, json(pretty: String, raw: String), text(String), image(Data), html(String), binary(Data) }
 
 public enum BodyDecoder {
-    public static func decode(body: Data, headers: [HTTPHeader]) -> DecodedBody {
+    /// indent: JSON Pretty 들여쓰기 칸 수(Appearance ▸ Tab Width).
+    public static func decode(body: Data, headers: [HTTPHeader], indent: Int = 2) -> DecodedBody {
         func header(_ n: String) -> String? { headers.first { $0.name.caseInsensitiveCompare(n) == .orderedSame }?.value }
         if body.isEmpty { return .empty }
         guard let data = decompressed(body: body, contentEncoding: header("Content-Encoding")) else { return .binary(body) }
@@ -13,15 +14,15 @@ public enum BodyDecoder {
         let type = (header("Content-Type") ?? "").split(separator: ";").first.map { $0.trimmingCharacters(in: .whitespaces).lowercased() } ?? ""
         if type.hasPrefix("image/") { return .image(data) }
         guard let s = String(data: data, encoding: .utf8) else { return .binary(data) }
-        if type == "application/json" || type.hasSuffix("+json"), let p = reindentJSON(Array(data)) { return .json(pretty: p, raw: s) }
+        if type == "application/json" || type.hasSuffix("+json"), let p = reindentJSON(Array(data), indent: indent) { return .json(pretty: p, raw: s) }
         return type == "text/html" ? .html(s) : .text(s)
     }
 
     /// JSON·Treeview 탭: Content-Type과 상관없이 (압축을 푼) 본문이 JSON이면 들여쓴 문자열, 아니면 nil.
-    public static func json(body: Data, headers: [HTTPHeader]) -> String? {
+    public static func json(body: Data, headers: [HTTPHeader], indent: Int = 2) -> String? {
         let encoding = headers.first { $0.name.caseInsensitiveCompare("Content-Encoding") == .orderedSame }?.value
         guard let data = decompressed(body: body, contentEncoding: encoding) else { return nil }
-        return reindentJSON(Array(data))
+        return reindentJSON(Array(data), indent: indent)
     }
 
     private static let jsonSpace: Set<UInt8> = [32, 9, 10, 13]
@@ -31,15 +32,15 @@ public enum BodyDecoder {
     private enum JSONState { case value, valueOrClose, key, keyOrClose, colon, afterValue, done }
 
     /// 키 순서·숫자 리터럴·이스케이프를 그대로 두고 들여쓰기만 다시 하는 토큰 기반 정렬.
-    /// 문법(상태 기계)을 검증하며, JSON이 아니거나 깊이(512)·출력 크기(입력×4+1MB) 상한을 넘으면 nil.
-    private static func reindentJSON(_ b: [UInt8]) -> String? {
+    /// 문법(상태 기계)을 검증하며, JSON이 아니거나 깊이(512)·출력 크기(입력×2×들여쓰기+1MB) 상한을 넘으면 nil.
+    private static func reindentJSON(_ b: [UInt8], indent: Int) -> String? {
         var out: [UInt8] = []
-        let maxOut = b.count * 4 + 1_000_000
+        let maxOut = b.count * 2 * indent + 1_000_000
         var stack: [UInt8] = []          // 열린 괄호 종류: "{" 또는 "["
         var state = JSONState.value
         var justOpened = false
         var i = 0
-        func nl() { out.append(10); out.append(contentsOf: [UInt8](repeating: 32, count: stack.count * 2)) }
+        func nl() { out.append(10); out.append(contentsOf: [UInt8](repeating: 32, count: stack.count * indent)) }
         func flush() { if justOpened { justOpened = false; nl() } }
         func ended() { state = stack.isEmpty ? .done : .afterValue }
 

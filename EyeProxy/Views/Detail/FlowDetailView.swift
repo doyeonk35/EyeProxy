@@ -239,7 +239,7 @@ private struct RawView: View {
     var body: some View {
         Group {
             if let text {
-                CodeTextView(text: text, wrap: model.settings.wrapLongLines)
+                CodeTextView(text: text, wrap: model.settings.wrapLongLines, fontSize: CGFloat(model.settings.fontSize), showInvisibles: model.settings.showInvisibles)
             } else {
                 ProgressView()
             }

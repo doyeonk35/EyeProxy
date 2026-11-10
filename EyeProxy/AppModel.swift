@@ -137,6 +137,7 @@ final class AppModel {
     @ObservationIgnored private var restartUpdate: Task<Void, Never>?
     /// 시스템 프록시를 마지막으로 켠 포트(끌 때 "우리 것"을 가려내는 기준).
     @ObservationIgnored private var capturePort: Int?
+    @ObservationIgnored private var didAutoOverride = false
 
     init() {
         try? FileManager.default.createDirectory(at: Self.supportDirectory, withIntermediateDirectories: true)
@@ -644,6 +645,15 @@ final class AppModel {
         quitting = true
         await setMacCapture(false)   // 진행 중인 변경 뒤에 직렬화된다
         await stopServer()
+    }
+
+    /// General ▸ Auto Override System Proxy Settings at Launch: 실행에 한 번만(메인 창을 다시 열어도 다시 켜지 않는다)
+    /// 서버가 뜬 뒤 "이 Mac 캡처"를 켠다. 이전 실행이 남긴 프록시 복원 알림이 떠 있으면 사용자 선택에 맡긴다.
+    func autoOverrideSystemProxyAtLaunch() async {
+        guard !didAutoOverride else { return }
+        didAutoOverride = true
+        guard settings.autoOverrideSystemProxy, pendingProxyRestore == nil, runningPort != nil else { return }
+        await setMacCapture(true)
     }
 
     func restorePendingProxy() async {

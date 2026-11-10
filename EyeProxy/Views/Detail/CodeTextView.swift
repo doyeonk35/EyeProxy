@@ -11,6 +11,10 @@ struct CodeTextView: NSViewRepresentable {
     let text: NSAttributedString
     let wrap: Bool
     var isEditable = false
+    /// 상세 본문은 Appearance ▸ Font Size를 넘긴다. nil이면 `font`(편집기 등) 그대로.
+    var fontSize: CGFloat?
+    /// Appearance ▸ Show Invisibles: 공백 `·`, 탭 `→`, 줄바꿈 `¬`.
+    var showInvisibles = false
     var onChange: ((String) -> Void)?
 
     static let font = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular)
@@ -23,6 +27,7 @@ struct CodeTextView: NSViewRepresentable {
     @MainActor final class Coordinator: NSObject, NSTextViewDelegate {
         var text: NSAttributedString?
         var wrap: Bool?
+        var fontSize: CGFloat?
         var onChange: ((String) -> Void)?
 
         func textDidChange(_ notification: Notification) {
@@ -75,6 +80,7 @@ struct CodeTextView: NSViewRepresentable {
         c.onChange = onChange
         tv.isEditable = isEditable
         tv.allowsUndo = isEditable
+        tv.showsInvisibles = showInvisibles
         if c.wrap != wrap {
             c.wrap = wrap
             let big = CGFloat.greatestFiniteMagnitude
@@ -88,7 +94,8 @@ struct CodeTextView: NSViewRepresentable {
                 tc.containerSize = NSSize(width: big, height: big)
             }
         }
-        if c.text !== text, let storage = tv.textStorage {
+        let textChanged = c.text !== text
+        if textChanged, let storage = tv.textStorage {
             c.text = text
             if isEditable, storage.string == text.string {
                 recolor(storage, from: text)
@@ -96,6 +103,11 @@ struct CodeTextView: NSViewRepresentable {
                 storage.setAttributedString(text)
                 tv.reloadLineStarts()
             }
+        }
+        // 본문 문자열은 `base`의 고정 크기로 만들어지므로 넣은 뒤 글꼴 크기만 바꾼다(전체가 같은 모노 글꼴).
+        if let fontSize, textChanged || c.fontSize != fontSize {
+            c.fontSize = fontSize
+            tv.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)   // 글자 전체에 적용된다
         }
     }
 
@@ -115,8 +127,10 @@ struct CodeTextView: NSViewRepresentable {
 final class GutterTextView: NSTextView {
     private static let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
     private static let pad: CGFloat = 8
+    private static let invisibleMarks: [UInt16: NSString] = [32: "·", 9: "→", 10: "¬"]
     private var lineStarts = [0]  // 각 줄 첫 글자의 UTF-16 인덱스
     private var gutter: CGFloat = 28
+    var showsInvisibles = false { didSet { if showsInvisibles != oldValue { needsDisplay = true } } }
 
     /// 텍스트가 바뀐 뒤 호출: 줄 시작 위치와 여백 폭을 다시 계산한다.
     func reloadLineStarts() {
@@ -137,17 +151,35 @@ final class GutterTextView: NSTextView {
         NSPoint(x: gutter + Self.pad, y: textContainerInset.height)
     }
 
+    /// 보이는 글리프 범위의 공백·탭·줄바꿈 자리에 흐린 기호를 그린다(글자는 그 위에 그려지고 이 자리는 비어 있다).
+    private func drawInvisibles(_ lm: NSLayoutManager, _ glyphs: NSRange, _ origin: NSPoint) {
+        let chars = lm.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        let text = string as NSString
+        let attrs: [NSAttributedString.Key: Any] = [.font: font ?? CodeTextView.font, .foregroundColor: NSColor.tertiaryLabelColor]
+        for i in chars.location..<NSMaxRange(chars) {
+            guard let mark = Self.invisibleMarks[text.character(at: i)] else { continue }
+            let glyph = lm.glyphIndexForCharacter(at: i)
+            let line = lm.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+            let x = lm.location(forGlyphAt: glyph).x
+            mark.draw(at: NSPoint(x: origin.x + line.minX + x, y: origin.y + line.minY), withAttributes: attrs)
+        }
+    }
+
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
+        guard let lm = layoutManager, let tc = textContainer else { return }
+        let origin = textContainerOrigin
+        let visible = rect.offsetBy(dx: -origin.x, dy: -origin.y)
+        let glyphs = lm.glyphRange(forBoundingRect: NSRect(x: 0, y: visible.minY, width: tc.size.width, height: visible.height), in: tc)
+        // 가로로도 보이는 부분만(줄바꿈 끈 한 줄짜리 큰 본문에서 줄 전체를 돌지 않게).
+        if showsInvisibles { drawInvisibles(lm, lm.glyphRange(forBoundingRect: visible, in: tc), origin) }
+
         let gutterRect = NSRect(x: 0, y: rect.minY, width: gutter, height: rect.height)
-        guard gutterRect.intersects(rect), let lm = layoutManager, let tc = textContainer else { return }
+        guard gutterRect.intersects(rect) else { return }
         NSColor.windowBackgroundColor.setFill()
         gutterRect.fill()
 
         let attrs: [NSAttributedString.Key: Any] = [.font: Self.numberFont, .foregroundColor: NSColor.secondaryLabelColor]
-        let origin = textContainerOrigin
-        let visible = rect.offsetBy(dx: -origin.x, dy: -origin.y)
-        let glyphs = lm.glyphRange(forBoundingRect: NSRect(x: 0, y: visible.minY, width: tc.size.width, height: visible.height), in: tc)
         lm.enumerateLineFragments(forGlyphRange: glyphs) { frag, _, _, range, _ in
             let ch = lm.characterIndexForGlyph(at: range.location)
             // ch 이하인 줄 시작의 개수 = 줄 번호

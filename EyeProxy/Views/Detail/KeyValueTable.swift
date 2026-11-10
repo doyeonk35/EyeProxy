@@ -10,6 +10,7 @@ struct KeyValueTable: View {
     let emptyTitle: LocalizedStringKey
     @Binding var filterVisible: Bool
     @Binding var options: TableFilter
+    @Environment(AppModel.self) private var model
     @State private var hovered: Int?
     @State private var query = ""
     @FocusState private var fieldFocused: Bool
@@ -38,6 +39,7 @@ struct KeyValueTable: View {
                         }
                     }
                 }
+                .font(.system(size: CGFloat(model.settings.fontSize)))   // Appearance ▸ Font Size
                 // 이름 칸·행 빈 곳을 클릭하면 표가 포커스를 받아 ⌘F가 이 표로 온다. 값 글자 클릭은 글자 선택이 가져간다
                 // (탭 제스처로 포커스를 주면 더블클릭 단어 선택·⌘C가 깨져서 쓰지 않는다 — 실측).
                 .focusable(interactions: .edit)
