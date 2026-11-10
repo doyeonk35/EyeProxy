@@ -104,7 +104,7 @@ Proxyman에서 매일 쓰던 손버릇(Highlight, Delete/Delete All, Auto Select
 **미룬 것(README 알려진 제한에도 있음)**
 - 같은 길이 본문만 바뀐 편집은 Raw·본문 탭이 갱신 안 됨(근본 해법은 편집 세대 카운터). M3U8 탭은 응답 편집 뒤 갱신 안 됨.
 - Finder 더블클릭·`open -a`로 `.har` 열기(`application(_:open:)` + `CFBundleDocumentTypes`, "현재 세션 교체?" 결정 필요).
-- HAR 가져오기에서 클라이언트 이름 복원, 가져온 흐름의 사이드바 묶기(`clientAddress`가 빈 문자열).
+- HAR 가져오기에서 클라이언트 이름 복원(지금은 `clientAddress`가 빈 문자열이라 사이드바에 "가져온 요청" 한 묶음으로 보인다).
 - 외부 HAR: `wss` 복호화 여부, URL 세부(userinfo·대문자 scheme·명시 기본 포트). Core `UpstreamClient` 기본 포트 판정은 http/https만(Host 헤더 우선이라 실사용 영향 없음).
 - CSV 수식 주입 방어, `FlowExport.har`의 `try!`.
 - 세션 파일의 손상된 `numbers`(중복·0 이하)를 `replace`가 그대로 받음.
@@ -114,7 +114,7 @@ Proxyman에서 매일 쓰던 손버릇(Highlight, Delete/Delete All, Auto Select
 
 ## 4. 머지 메모
 
-이 브랜치가 갈라진 뒤 `main`에 v1.0.0 릴리스 커밋 `1458c57`이 들어갔다(`EyeProxy/Info.plist`의 `CFBundleVersion` 5·`CFBundleShortVersionString` 1.0.0, `project.yml`, `docs/appcast.xml`). 이 브랜치도 `EyeProxy/Info.plist`를 고쳤다(`.har` UTI `UTImportedTypeDeclarations` 추가, 파일 끝). 두 쪽 모두 남기면 되고 작은 충돌이 날 수 있다 — 버전은 main 값, UTI 선언은 이 브랜치 값. 머지 뒤 `xcodegen generate` + Debug 빌드, 빌드된 Info.plist에 `com.tv.eyeproxy.har`가 있는지 확인. HAR `log.creator.version`은 머지 뒤 1.0.0으로 나간다.
+이 브랜치가 갈라진 뒤 `main`에 v1.0.0 릴리스 커밋 `1458c57`이 들어갔다(`EyeProxy/Info.plist`의 `CFBundleVersion` 5·`CFBundleShortVersionString` 1.0.0, `project.yml`, `docs/appcast.xml`). 이 브랜치도 `EyeProxy/Info.plist`를 고쳤다(`.har` UTI `UTImportedTypeDeclarations` 추가, 파일 끝). 고친 자리가 달라 충돌 없이 합쳐진다(`git merge-tree --write-tree main HEAD` 확인) — 버전은 main 값, UTI 선언은 이 브랜치 값이 남는다. 머지 뒤 `xcodegen generate` + Debug 빌드, 빌드된 Info.plist에 `com.tv.eyeproxy.har`가 있는지 확인. HAR `log.creator.version`은 머지 뒤 1.0.0으로 나간다.
 
 ## 5. 다음 묶음 메모
 

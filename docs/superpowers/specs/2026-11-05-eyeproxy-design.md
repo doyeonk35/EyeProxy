@@ -229,6 +229,6 @@ P1이 끝나면 Sparkle 배포 파이프라인(release.sh, appcast)을 먼저 �
 
 ## 부록 A. 참고
 - Proxyman 문서: https://proxyman.com/docs/
-- 사내 tvOS 세팅 가이드: https://tving.atlassian.net/wiki/spaces/TVING/pages/1738342740
+- 사내 tvOS 세팅 가이드(사내 문서)
 - 시뮬레이터 CA: `xcrun simctl keychain <UDID> add-root-cert <ca.pem>` (미설치 시 -9813 / NSURLError -1202)
 - 서명·배포 레퍼런스: `~/personal/TvingLoginManager/project.yml`, `scripts/release.sh`
