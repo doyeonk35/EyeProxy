@@ -8,11 +8,10 @@ struct MainToolbar: ToolbarContent {
     var body: some ToolbarContent {
         @Bindable var settings = model.settings
         ToolbarItemGroup(placement: .navigation) {
-            Toggle(isOn: $settings.isRecording) {
-                // Proxyman처럼 기록 중 ▶, 멈춤 ⏸ (녹화 심볼은 작게 보면 구분이 어렵다).
-                Label("기록", systemImage: settings.isRecording ? "play.fill" : "pause.fill")
-            }
-            .help(settings.isRecording ? "새 요청 기록 일시정지 (⌘R)" : "새 요청 기록 다시 시작 (⌘R)")
+            // Proxyman처럼 상태가 아니라 누르면 할 일: 기록 중 ⏸(멈춤), 멈춤 ▶(기록).
+            Button(settings.isRecording ? "기록 일시정지" : "기록 다시 시작",
+                   systemImage: settings.isRecording ? "pause.fill" : "play.fill") { settings.isRecording.toggle() }
+                .help(settings.isRecording ? "기록 일시정지 (⌘R)" : "기록 다시 시작 (⌘R)")
             Button("지우기", systemImage: "trash") { model.clear() }
                 .help("세션의 모든 요청 지우기 (⌘K)")
             Button("Compose", systemImage: "square.and.pencil") { openWindow(id: "compose") }
@@ -30,6 +29,12 @@ struct MainToolbar: ToolbarContent {
                         .buttonStyle(.link)
                         .foregroundStyle(.red)
                         .help("규칙 파일을 읽거나 저장하지 못한 내용 보기")
+                }
+                if model.updateAvailable {
+                    Button("New Update ⚠") { model.checkForUpdates() }
+                        .buttonStyle(.link)
+                        .foregroundStyle(.orange)
+                        .help("새 버전이 있습니다 — 업데이트 확인 창 열기")
                 }
             }
                 .font(.caption)
@@ -66,9 +71,12 @@ struct MainToolbar: ToolbarContent {
         case .stopped:
             Text("중지됨").foregroundStyle(.secondary)
         case .running(let port):
-            let ips = model.lanAddresses.joined(separator: ", ")
-            Group {
-                if ips.isEmpty { Text("실행 중 · 포트 \(String(port))") } else { Text("실행 중 · 포트 \(String(port)) · \(ips)") }
+            // Proxyman: "● Prog | Listening on IP:포트", 기록을 멈추면 " | Pause". 점은 기록 중 초록, 멈춤 주황.
+            let recording = model.settings.isRecording
+            let ip = model.lanAddresses.first ?? "127.0.0.1"
+            HStack(spacing: 5) {
+                Circle().fill(recording ? .green : .orange).frame(width: 7, height: 7)
+                Text(verbatim: "Prog | Listening on \(ip):\(port)" + (recording ? "" : " | Pause"))
             }
             .foregroundStyle(.secondary)
         case .failed(let message):

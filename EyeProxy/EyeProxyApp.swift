@@ -6,7 +6,6 @@ import SwiftUI
 @main struct EyeProxyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private var model: AppModel { appDelegate.model }
-    private let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     var body: some Scene {
         Window("Prog", id: "main") {
@@ -28,7 +27,7 @@ import SwiftUI
         }
         .commands {
             CommandGroup(after: .appInfo) {
-                Button("업데이트 확인…") { updaterController.checkForUpdates(nil) }
+                Button("업데이트 확인…") { model.checkForUpdates() }
                     .help("새 버전이 있는지 확인")
             }
             CommandGroup(after: .newItem) {
@@ -142,9 +141,20 @@ private struct LayoutPicker: View {
     }
 }
 
-@MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     let model = AppModel()
     private var quitTask: Task<Void, Never>?
+    private var updaterController: SPUStandardUpdaterController?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
+        updaterController = updater
+        model.checkForUpdates = { updater.checkForUpdates(nil) }
+    }
+
+    // 자동·수동 확인 모두 여기로 온다. 새 버전이 있을 때만 툴바 배지를 띄운다.
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) { model.updateAvailable = true }
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) { model.updateAvailable = false }
 
     /// 시스템 프록시가 EyeProxy를 가리킬 수 있으면(캡처 중·변경 중·백업 잔여) 진행 중인 변경을 기다려 되돌린 뒤 종료한다.
     /// 실패해도 오류를 기록하고 종료 — 백업이 남아 다음 실행에서 복원을 제안한다. 두 번째 ⌘Q는 같은 작업을 기다린다.

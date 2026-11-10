@@ -70,7 +70,11 @@ struct FlowListView: View {
                         .width(min: 70, ideal: 86, max: 120)
                         .customizationID("state")
                     TableColumn("Code", value: \.status) { (row: FlowRow) in cell(row) {
-                        if row.flow.response != nil { StatusTag(flow: row.flow, selected: model.selectedFlowIDs.contains(row.id)) }
+                        if row.flow.response != nil {
+                            StatusTag(flow: row.flow, selected: model.selectedFlowIDs.contains(row.id))
+                        } else if row.state == .active {
+                            Text("-").foregroundStyle(.secondary)
+                        }
                     }}
                     .width(min: 40, ideal: 50, max: 80)
                     .customizationID("code")

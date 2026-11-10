@@ -42,7 +42,8 @@ final class AppModel {
         get { selectedFlowIDs.count == 1 ? selectedFlowIDs.first : nil }
         set { selectedFlowIDs = newValue.map { [$0] } ?? [] }
     }
-    var sortOrder: [KeyPathComparator<FlowRow>] = [KeyPathComparator(\.number)]
+    /// 기본은 ID 내림차순(최신이 맨 위, Proxyman). 열 머리로 바꾼 정렬은 저장하지 않는다.
+    var sortOrder: [KeyPathComparator<FlowRow>] = [KeyPathComparator(\.number, order: .reverse)]
     var sidebarSelection: SidebarItem? = .allFlows
     /// 우클릭 ▸ Tools로 열 새 규칙. 해당 도구 창이 꺼내 편집기를 연다.
     var pendingNewRule: PendingNewRule?
@@ -68,6 +69,10 @@ final class AppModel {
     /// Breakpoint 창을 여는 동작. 메인 창이 등록한다(창이 닫혀도 앱 수준 관찰이 부른다).
     @ObservationIgnored var openBreakpointsWindow: (@MainActor () -> Void)?
     @ObservationIgnored var lastPendingBreakpoints = 0
+    /// Sparkle이 새 버전을 찾았다(`AppDelegate`의 updater delegate). 툴바 "New Update" 배지.
+    var updateAvailable = false
+    /// Sparkle 업데이트 확인. 앱이 시작하면 `AppDelegate`가 등록한다.
+    @ObservationIgnored var checkForUpdates: @MainActor () -> Void = {}
 
     // 온보딩(기기 윈도우)
     @ObservationIgnored let systemProxy = SystemProxy(backupURL: supportDirectory.appending(path: "system-proxy-backup.json"))
