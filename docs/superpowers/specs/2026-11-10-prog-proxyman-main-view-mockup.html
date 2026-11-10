@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prog 메인 화면 미리보기</title>
+<style>
+:root {
+  --bg: #e9e9ed; --win: #ffffff; --bar: #f3f3f5; --side: #ececf0; --line: #d9d9de; --line2: #e8e8ec;
+  --text: #1d1d1f; --sub: #6e6e73; --faint: #a1a1a6; --accent: #0a84ff; --accent-bg: #d6e7ff; --sel: #0a64d6; --sel-text: #fff;
+  --stripe: #f6f6f8; --pill: #e6e6ea; --green: #28a745; --orange: #f0960a; --red: #e5484d; --blue: #2f6fe0; --grey: #8e8e93;
+  --url-scheme: #8e8e93; --url-host: #2f6fe0; --url-path: #1f9d55; --note: #ff375f; --shadow: 0 18px 50px rgba(0,0,0,.18);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #161618; --win: #1e1e20; --bar: #2a2a2d; --side: #232326; --line: #3a3a3e; --line2: #2e2e31;
+  --text: #ececf0; --sub: #9a9aa0; --faint: #6a6a70; --accent: #0a84ff; --accent-bg: #1c3557; --sel: #0a5fc8; --sel-text: #fff;
+  --stripe: #232326; --pill: #38383c; --url-scheme: #8e8e93; --url-host: #6ea2ff; --url-path: #4cc38a; --shadow: 0 18px 50px rgba(0,0,0,.5);
+} }
+:root[data-theme="dark"] {
+  --bg: #161618; --win: #1e1e20; --bar: #2a2a2d; --side: #232326; --line: #3a3a3e; --line2: #2e2e31;
+  --text: #ececf0; --sub: #9a9aa0; --faint: #6a6a70; --accent: #0a84ff; --accent-bg: #1c3557; --sel: #0a5fc8; --sel-text: #fff;
+  --stripe: #232326; --pill: #38383c; --url-scheme: #8e8e93; --url-host: #6ea2ff; --url-path: #4cc38a; --shadow: 0 18px 50px rgba(0,0,0,.5);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", sans-serif; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+button { font: inherit; color: inherit; }
+.page { max-width: 1440px; margin: 0 auto; padding: 20px 16px 60px; }
+.page-head { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px; }
+.page-head h1 { font-size: 20px; margin: 0 0 4px; }
+.page-head p { margin: 0; color: var(--sub); max-width: 760px; }
+.head-ctl { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--win); border-radius: 7px; padding: 5px 11px; cursor: pointer; }
+.btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.scroller { overflow-x: auto; padding-bottom: 6px; }
+
+/* window */
+.win { min-width: 1180px; background: var(--win); border: 1px solid var(--line); border-radius: 11px; box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column; }
+.toolbar { height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--bar); border-bottom: 1px solid var(--line); }
+.lights { display: flex; gap: 8px; margin-right: 8px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+.lights i:nth-child(1){background:#ff5f57}.lights i:nth-child(2){background:#febc2e}.lights i:nth-child(3){background:#28c840}
+.tb-btn { width: 30px; height: 28px; border: 0; background: transparent; border-radius: 6px; display: grid; place-items: center; cursor: pointer; color: var(--sub); }
+.tb-btn:hover { background: var(--pill); }
+.tb-btn svg { width: 15px; height: 15px; fill: currentColor; }
+.capsule { flex: 1; max-width: 520px; margin: 0 auto; height: 28px; border-radius: 8px; background: var(--win); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--sub); font-size: 12px; }
+.capsule b { color: var(--text); font-weight: 600; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.upd { font-size: 11px; padding: 3px 8px; border-radius: 6px; background: rgba(240,150,10,.15); color: var(--orange); border: 0; cursor: pointer; white-space: nowrap; }
+.chips { display: flex; gap: 4px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.chip { padding: 2px 9px; border-radius: 6px; color: var(--sub); cursor: pointer; }
+.chip.on { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+.chips .sep { width: 1px; height: 14px; background: var(--line); margin: 0 4px; }
+
+.main { display: flex; height: 760px; min-height: 0; }
+/* sidebar */
+.side { width: 250px; flex: none; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.side-tree { flex: 1; overflow: auto; padding: 8px 6px; }
+.sec { font-size: 11px; font-weight: 700; color: var(--faint); padding: 8px 8px 3px; cursor: pointer; user-select: none; }
+.sec:hover { color: var(--sub); }
+.node { display: flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.node:hover { background: rgba(127,127,127,.12); }
+.node.sel { background: var(--sel); color: var(--sel-text); }
+.node.sel .cnt, .node.sel .ico { color: rgba(255,255,255,.8); }
+.node .disc { width: 12px; flex: none; color: var(--faint); font-size: 9px; text-align: center; }
+.node .ico { width: 14px; flex: none; color: var(--accent); text-align: center; font-size: 11px; }
+.node .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.node .cnt { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.side-foot { display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-top: 1px solid var(--line); }
+.side-foot input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--win); border-radius: 6px; padding: 4px 8px; font-size: 12px; color: var(--text); }
+.plus { width: 22px; height: 22px; border: 0; border-radius: 5px; background: transparent; cursor: pointer; color: var(--sub); font-size: 16px; line-height: 1; }
+.plus:hover { background: var(--pill); }
+
+/* content column */
+.col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fbar { border-bottom: 1px solid var(--line); background: var(--bar); padding: 6px 10px 4px; display: flex; flex-direction: column; gap: 4px; }
+.frule { display: flex; align-items: center; gap: 6px; }
+.frule select, .frule input[type=text] { height: 24px; border: 1px solid var(--line); background: var(--win); color: var(--text); border-radius: 6px; font-size: 12px; padding: 0 6px; }
+.frule select.k { width: 168px; } .frule select.m { width: 150px; }
+.frule input[type=text] { flex: 1; min-width: 0; }
+.frule.off select, .frule.off input[type=text] { opacity: .45; }
+.rb { width: 24px; height: 24px; border: 1px solid var(--line); background: var(--win); border-radius: 6px; cursor: pointer; color: var(--sub); }
+.fhint { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); padding: 1px 2px 2px; }
+.andor { border: 1px solid var(--line); border-radius: 5px; overflow: hidden; display: inline-flex; }
+.andor button { border: 0; background: transparent; font-size: 10px; padding: 1px 7px; cursor: pointer; color: var(--sub); }
+.andor button.on { background: var(--accent); color: #fff; }
+
+.split-v { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.list { flex: 0 0 44%; overflow: auto; border-bottom: 1px solid var(--line); }
+table.grid { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+.grid th { position: sticky; top: 0; z-index: 1; background: var(--bar); text-align: left; font-weight: 500; color: var(--sub); padding: 4px 6px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line2); white-space: nowrap; }
+.grid th.sorted::after { content: " ▼"; font-size: 9px; color: var(--accent); }
+.grid td { padding: 3px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid transparent; }
+.grid tbody tr:nth-child(even) { background: var(--stripe); }
+.grid tbody tr { cursor: default; position: relative; }
+.grid tbody tr.sel, .grid tbody tr.sel:nth-child(even) { background: var(--sel); color: var(--sel-text); }
+.grid tbody tr.sel td { color: var(--sel-text) !important; }
+.grid tr.strike td.u { text-decoration: line-through; }
+.hl-bar { width: 3px; padding: 0 !important; }
+.client { display: flex; align-items: center; gap: 4px; }
+.client .ci { font-size: 11px; width: 14px; text-align: center; }
+.c-done { color: var(--green); } .c-err { color: var(--red); } .c-3xx { color: var(--blue); }
+
+.detail { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.dhead { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.pills { display: flex; flex-direction: column; gap: 4px; flex: none; }
+.pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 5px; background: var(--pill); text-align: center; white-space: nowrap; }
+.pill.ok { background: rgba(40,167,69,.16); color: var(--green); } .pill.bad { background: rgba(229,72,77,.15); color: var(--red); }
+.pill.act { background: rgba(240,150,10,.16); color: var(--orange); } .pill.meth { background: var(--accent-bg); color: var(--accent); }
+.durl { flex: 1; min-width: 0; font-size: 12px; word-break: break-all; line-height: 1.5; }
+.u-s { color: var(--url-scheme); } .u-h { color: var(--url-host); font-weight: 600; } .u-p { color: var(--url-path); }
+.dact { display: flex; gap: 4px; flex: none; }
+.dact button { border: 1px solid var(--line); background: var(--win); border-radius: 6px; font-size: 11px; padding: 3px 8px; cursor: pointer; }
+.panes { flex: 1; min-height: 0; display: flex; }
+.pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pane + .pane { border-left: 1px solid var(--line); }
+.ptitle { font-size: 11px; font-weight: 700; color: var(--faint); padding: 6px 10px 0; }
+.tabs { display: flex; align-items: center; gap: 1px; padding: 4px 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.tab { font-size: 12px; padding: 2px 8px; border-radius: 5px; cursor: pointer; color: var(--sub); border: 0; background: transparent; }
+.tab.on { background: var(--pill); color: var(--text); font-weight: 600; }
+.tabs .vsep { width: 1px; height: 14px; background: var(--line); margin: 0 5px; }
+.tabs .grow { flex: 1; }
+.pbody { flex: 1; min-height: 0; overflow: auto; position: relative; }
+table.kv { width: 100%; border-collapse: collapse; font-size: 12px; }
+.kv th { text-align: left; font-weight: 500; color: var(--sub); background: var(--bar); padding: 3px 8px; border-bottom: 1px solid var(--line); position: sticky; top: 0; }
+.kv th:first-child { width: 36%; border-right: 1px solid var(--line2); }
+.kv td { padding: 3px 8px; vertical-align: top; word-break: break-all; }
+.kv td:first-child { color: var(--sub); }
+.kv tr:nth-child(even) td { background: var(--stripe); }
+pre.code { margin: 0; padding: 8px 10px; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+.jk { color: #b5428c; } .js { color: var(--url-path); } .jn { color: var(--blue); }
+.pfilter { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-bottom: 1px solid var(--line); background: var(--bar); position: relative; }
+.pfilter input { flex: 1; height: 22px; border: 1px solid var(--line); border-radius: 6px; background: var(--win); color: var(--text); font-size: 12px; padding: 0 7px; }
+.menu { position: absolute; right: 8px; top: 30px; z-index: 5; background: var(--win); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 4px 0; min-width: 190px; font-size: 12px; }
+.menu div { padding: 4px 12px 4px 26px; cursor: pointer; position: relative; }
+.menu div:hover { background: var(--accent); color: #fff; }
+.menu div.chk::before { content: "✓"; position: absolute; left: 10px; }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+.empty { color: var(--faint); text-align: center; padding: 40px 16px; }
+.https { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 34px 20px; }
+.https .lock { font-size: 34px; }
+.https h3 { margin: 0; font-size: 15px; }
+.https p { margin: 0; color: var(--sub); max-width: 340px; font-size: 12px; }
+.https .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.https .primary { background: var(--accent); color: #fff; border: 0; border-radius: 7px; padding: 5px 12px; cursor: pointer; }
+.https .second { background: var(--win); border: 1px solid var(--line); border-radius: 7px; padding: 5px 12px; cursor: pointer; }
+.tree { list-style: none; margin: 0; padding: 4px 10px; font-size: 12px; }
+.tree ul { list-style: none; margin: 0; padding-left: 16px; }
+.tree summary { cursor: pointer; }
+.tree-ctl { display: flex; gap: 6px; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+.tree-ctl button { font-size: 11px; border: 1px solid var(--line); background: var(--win); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+
+/* bottom bar */
+.bbar { height: 30px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border-top: 1px solid var(--line); background: var(--bar); font-size: 12px; }
+.bb { border: 0; background: transparent; border-radius: 5px; padding: 2px 8px; cursor: pointer; color: var(--sub); display: inline-flex; align-items: center; gap: 4px; }
+.bb:hover { background: var(--pill); }
+.bb.on { color: var(--accent); background: var(--accent-bg); font-weight: 600; }
+.bcenter { flex: 1; text-align: center; color: var(--sub); }
+.res { color: var(--faint); font-variant-numeric: tabular-nums; margin-right: 6px; }
+.badge { border: 0; border-radius: 5px; padding: 2px 7px; font-size: 11px; font-weight: 600; cursor: pointer; }
+.b-bp { background: rgba(229,72,77,.15); color: var(--red); } .b-ml { background: rgba(31,157,85,.15); color: var(--url-path); }
+.b-mr { background: rgba(47,111,224,.15); color: var(--blue); } .b-nc { background: rgba(142,142,147,.2); color: var(--sub); }
+.b-po { background: rgba(240,150,10,.16); color: var(--orange); } .b-ssl { background: rgba(229,72,77,.12); color: var(--red); }
+
+/* floating tool window */
+.toolwin { position: fixed; right: 30px; bottom: 30px; width: 380px; background: var(--win); border: 1px solid var(--line); border-radius: 11px; box-shadow: var(--shadow); z-index: 20; display: none; }
+.toolwin .toolbar { height: 38px; }
+.toolwin .tw-b { padding: 14px 16px; color: var(--sub); font-size: 12px; }
+
+/* settings */
+.swin { margin-top: 28px; min-width: 700px; max-width: 760px; }
+.stabs { display: flex; justify-content: center; gap: 2px; padding: 8px 10px 6px; background: var(--bar); border-bottom: 1px solid var(--line); }
+.stab { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 10px; border-radius: 7px; cursor: pointer; font-size: 11px; color: var(--sub); border: 0; background: transparent; min-width: 74px; }
+.stab .si { font-size: 18px; line-height: 22px; }
+.stab.on { background: var(--pill); color: var(--text); }
+.spanel { padding: 18px 26px 22px; }
+.frow { display: grid; grid-template-columns: 250px 1fr; gap: 12px; align-items: center; padding: 5px 0; }
+.frow > label:first-child { text-align: right; color: var(--sub); }
+.frow .ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.frow select, .frow input[type=number], .frow input[type=text] { height: 24px; border: 1px solid var(--line); background: var(--win); color: var(--text); border-radius: 6px; font-size: 12px; padding: 0 6px; }
+.frow .help { color: var(--faint); font-size: 11px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 2px 10px; font-size: 12px; cursor: pointer; }
+.seg button.on { background: var(--accent); color: #fff; }
+.card { border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; margin-top: 14px; display: flex; gap: 12px; align-items: center; }
+.card .cert { font-size: 28px; }
+.card .meta { flex: 1; font-size: 12px; color: var(--sub); }
+.card .meta b { color: var(--text); font-size: 13px; }
+.shr { border: 0; border-top: 1px solid var(--line2); margin: 10px 0; }
+.listbox { border: 1px solid var(--line); border-radius: 7px; min-height: 120px; font-size: 12px; }
+.listbox div { padding: 4px 10px; display: flex; gap: 8px; align-items: center; }
+.listbox div:nth-child(even) { background: var(--stripe); }
+
+/* annotations */
+body.notes [data-n] { outline: 2px dashed var(--note); outline-offset: -2px; position: relative; }
+body.notes [data-n]::after { content: attr(data-n); position: absolute; top: 2px; left: 2px; z-index: 9; background: var(--note); color: #fff; font: 700 10px/16px -apple-system, sans-serif; min-width: 16px; height: 16px; border-radius: 8px; text-align: center; padding: 0 4px; pointer-events: none; }
+.legend { margin-top: 18px; display: none; background: var(--win); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+body.notes .legend { display: block; }
+.legend ol { margin: 0; padding-left: 0; list-style: none; columns: 2 380px; font-size: 12px; }
+.legend li { break-inside: avoid; padding: 3px 0; display: flex; gap: 8px; }
+.legend li b.n { background: var(--note); color: #fff; border-radius: 8px; min-width: 18px; height: 18px; text-align: center; font-size: 10px; line-height: 18px; flex: none; }
+.legend li span { color: var(--sub); }
+h2.sub { font-size: 15px; margin: 34px 0 4px; }
+p.subp { margin: 0 0 10px; color: var(--sub); }
+</style>
+</head>
+<body class="notes">
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>Prog 메인 화면 미리보기 (Proxyman 방식)</h1>
+      <p>설계 문서 <span class="mono">2026-11-10-prog-proxyman-main-view-design.md</span>를 그대로 옮긴 정적 목업입니다. 버튼·사이드바·필터·탭·하단 배지를 눌러 볼 수 있습니다. 데이터는 예시이고, 실제 SwiftUI 화면과 여백·글꼴은 다를 수 있습니다.</p>
+    </div>
+    <div class="head-ctl">
+      <button class="btn on" id="tNotes">변경점 번호 표시</button>
+      <button class="btn" id="tTheme">다크 모드</button>
+    </div>
+  </div>
+
+  <div class="scroller">
+  <div class="win" id="mainWin">
+    <div class="toolbar">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <button class="tb-btn" id="recBtn" data-n="1" title="기록 일시정지 (⌘R)"></button>
+      <button class="tb-btn" title="세션 지우기 (⌘K)"><svg viewBox="0 0 16 16"><path d="M5 2h6v1h3v1.5H2V3h3zM3.5 6h9l-.7 8H4.2z"/></svg></button>
+      <div class="capsule" data-n="2"><span class="dot" id="capDot"></span><b>Prog</b><span>|</span><span class="mono">Listening on 192.168.0.10:9090</span><span id="capPause"></span></div>
+      <button class="upd" data-n="2" title="업데이트 확인">1 New Update ⚠</button>
+      <button class="tb-btn" title="Compose"><svg viewBox="0 0 16 16"><path d="M2 12.5V14h1.5l7.4-7.4-1.5-1.5zM13.7 3.8l-1.5-1.5a.6.6 0 0 0-.8 0l-1.2 1.2 2.3 2.3 1.2-1.2a.6.6 0 0 0 0-.8z"/></svg></button>
+      <button class="tb-btn" title="Breakpoints"><svg viewBox="0 0 16 16"><path d="M2 4h9l3 4-3 4H2z"/></svg></button>
+      <button class="tb-btn" title="레이아웃"><svg viewBox="0 0 16 16"><path d="M2 2h12v12H2zm1 1v4.5h10V3zm0 5.5V13h10V8.5z"/></svg></button>
+      <button class="tb-btn" id="openSettings" title="설정"><svg viewBox="0 0 16 16"><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zm6 3.3V7.2l-1.7-.4-.4-1 .9-1.5-1.1-1.1-1.5.9-1-.4L8.8 2H7.2l-.4 1.7-1 .4-1.5-.9-1.1 1.1.9 1.5-.4 1L2 7.2v1.6l1.7.4.4 1-.9 1.5 1.1 1.1 1.5-.9 1 .4.4 1.7h1.6l.4-1.7 1-.4 1.5.9 1.1-1.1-.9-1.5.4-1z"/></svg></button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="main">
+      <aside class="side" data-n="4">
+        <div class="side-tree" id="sideTree"></div>
+        <div class="side-foot">
+          <button class="plus" title="Pinned에 도메인 추가">+</button>
+          <input id="sideFilter" placeholder="Filter (⌘⇧F)">
+        </div>
+      </aside>
+      <section class="col">
+        <div class="fbar" id="fbar" data-n="3"></div>
+        <div class="split-v">
+          <div class="list" data-n="5">
+            <table class="grid" id="grid">
+              <colgroup><col style="width:3px"><col style="width:22px"><col style="width:46px"><col style="width:150px"><col><col style="width:64px"><col style="width:52px"><col style="width:96px"><col style="width:72px"><col style="width:70px"><col style="width:76px"></colgroup>
+              <thead><tr><th></th><th></th><th class="sorted">ID</th><th>Client</th><th>URL</th><th>Method</th><th>Code</th><th>Time</th><th>Duration</th><th>Request</th><th>Response</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="detail" id="detail"></div>
+        </div>
+      </section>
+    </div>
+    <div class="bbar" data-n="10" id="bbar"></div>
+  </div>
+  </div>
+
+  <h2 class="sub" id="settingsAnchor">설정 창</h2>
+  <p class="subp">General · Appearance · Tools · SSL Proxying · Bypass · Advanced. 기본값은 지금 Prog 동작을 바꾸지 않는 쪽입니다.</p>
+  <div class="scroller">
+  <div class="win swin" data-n="11">
+    <div class="toolbar" style="height:38px"><div class="lights"><i></i><i></i><i></i></div><div style="flex:1;text-align:center;font-weight:600;font-size:13px" id="sTitle">General</div><div style="width:60px"></div></div>
+    <div class="stabs" id="stabs"></div>
+    <div class="spanel" id="spanel"></div>
+  </div>
+  </div>
+
+  <div class="legend">
+    <ol>
+      <li><b class="n">1</b><div>기록 버튼 — 누르면 할 일을 보여 줌(기록 중 ❚❚, 멈춤 ▶) <span>§2</span></div></li>
+      <li><b class="n">2</b><div>상태 캡슐 <span class="mono">● Prog | Listening on …</span> + 멈추면 <span class="mono">| Pause</span>, 업데이트 배지 <span>§10</span></div></li>
+      <li><b class="n">3</b><div>필터 막대 — 툴바 검색칸 대신. 키·매칭 규칙 여러 줄(AND), 단축키 안내 <span>§4</span></div></li>
+      <li><b class="n">4</b><div>사이드바 Favorites ▸ Pinned / Remote devices / All ▸ Apps·Domains, 도메인 경로 트리, 아래 Filter 칸 <span>§5</span></div></li>
+      <li><b class="n">5</b><div>목록 ID 내림차순(최신이 위), 상태 점 초록·주황·빨강, Active 행은 Code·Duration <span class="mono">-</span> <span>§3 §10</span></div></li>
+      <li><b class="n">6</b><div>상세 머리 — 메서드·상태 알약 세로, URL 색(스킴 회색·호스트 파랑·경로 초록) <span>§7 §10</span></div></li>
+      <li><b class="n">7</b><div>탭 — 요청 <span class="mono">Header · Query · Body · (Cookies) · Raw │ Summary · Treeview · M3U8 · JSON</span>, 응답 <span class="mono">Header · Body · (Set-Cookie) · Raw │ Treeview · M3U8 · JSON</span> <span>§7</span></div></li>
+      <li><b class="n">8</b><div>패널 표 거르기 <span class="mono">≡</span> 버튼과 <span class="mono">⋯</span> 옵션(대소문자·정규식) <span>§10</span></div></li>
+      <li><b class="n">9</b><div>CONNECT 행 — <span class="mono">HTTPS Response</span> 안내와 Enable 버튼 두 개 <span>§10</span></div></li>
+      <li><b class="n">10</b><div>하단 바 — Clear·Filter·Auto Select, 선택 수, 메모리·속도, 켜진 도구 배지(누르면 그 창) <span>§6</span></div></li>
+      <li><b class="n">11</b><div>설정 창 탭 구성과 항목 <span>§11</span></div></li>
+    </ol>
+  </div>
+</div>
+
+<div class="toolwin" id="toolwin">
+  <div class="toolbar"><div class="lights" id="twClose" style="cursor:pointer"><i></i><i></i><i></i></div><div style="flex:1;text-align:center;font-weight:600" id="twTitle"></div><div style="width:50px"></div></div>
+  <div class="tw-b" id="twBody"></div>
+</div>
+
+<script>
+const ICON = {
+  pause: '<svg viewBox="0 0 16 16"><path d="M4 2.5h3v11H4zm5 0h3v11H9z"/></svg>',
+  play: '<svg viewBox="0 0 16 16"><path d="M4 2.2v11.6L13.5 8z"/></svg>'
+};
+const HL = { red: '#e5484d', orange: '#f0960a', yellow: '#e6c200', green: '#28a745', blue: '#2f6fe0', purple: '#8e5bd8' };
+const HL_BG = { red: 'rgba(229,72,77,.13)', orange: 'rgba(240,150,10,.14)', yellow: 'rgba(230,194,0,.16)', green: 'rgba(40,167,69,.13)', blue: 'rgba(47,111,224,.13)', purple: 'rgba(142,91,216,.14)' };
+
+// ---- sample data (placeholders) ----
+const DEV = '192.168.0.20 (Apple TV)';
+const rows = [
+  r(1, 'Safari', 'mac', 'GET', 'https', 'www.example.com', '/', '', 200, 'OK', '10:41:02', 182, 0.4, 38.2, 'html'),
+  r(2, 'Safari', 'mac', 'GET', 'https', 'static.example.com', '/js/app.js', 'v=12', 200, 'OK', '10:41:02', 64, 0, 212.4, 'js'),
+  r(3, 'Safari', 'mac', 'CONNECT', 'https', 'telemetry.example.io', '', '', 200, 'Connection established', '10:41:03', 0, 0, 0, 'connect'),
+  r(4, DEV, 'device', 'GET', 'https', 'api.example.com', '/v3/home', 'device=tv&lang=ko', 200, 'OK', '10:41:05', 241, 0, 18.6, 'json'),
+  r(5, DEV, 'device', 'GET', 'https', 'api.example.com', '/v3/media/clip/123', 'quality=fhd', 200, 'OK', '10:41:06', 190, 0, 6.1, 'json'),
+  r(6, DEV, 'device', 'GET', 'https', 'vod.example-cdn.net', '/hls/123/master.m3u8', '', 200, 'OK', '10:41:06', 88, 0, 1.9, 'm3u8'),
+  r(7, DEV, 'device', 'GET', 'https', 'vod.example-cdn.net', '/hls/123/1080p/seg_0001.ts', '', 206, 'Partial Content', '10:41:07', 312, 0, 1840.2, 'media'),
+  r(8, DEV, 'device', 'POST', 'https', 'api.example.com', '/v3/user/history', '', 401, 'Unauthorized', '10:41:08', 77, 0.3, 0.1, 'json', { color: 'red', comment: '토큰 만료 재현' }),
+  r(9, DEV, 'device', 'CONNECT', 'https', 'gw.example.com', '', '', 200, 'Connection established', '10:41:09', 0, 0, 0, 'connect'),
+  r(10, 'iOS Simulator', 'sim', 'GET', 'https', 'api.example.com', '/v3/search', 'q=drama&page=1', 200, 'OK', '10:41:11', 205, 0, 9.8, 'json', { color: 'yellow' }),
+  r(11, 'iOS Simulator', 'sim', 'GET', 'https', 'img.example.org', '/poster/9981.webp', 'w=480', 304, 'Not Modified', '10:41:11', 41, 0, 0, 'image', { strike: true }),
+  r(12, 'Safari', 'mac', 'POST', 'https', 'www.example.com', '/api/login', '', 0, '', '10:41:12', 0, 0.2, 0, 'failed'),
+  r(13, DEV, 'device', 'GET', 'https', 'vod.example-cdn.net', '/hls/123/1080p/seg_0002.ts', '', 206, 'Partial Content', '10:41:13', 0, 0, 0, 'active'),
+  r(14, 'iOS Simulator', 'sim', 'GET', 'https', 'api.example.com', '/v3/media/clip/456', 'quality=hd', 200, 'OK', '10:41:14', 166, 0, 5.4, 'json'),
+];
+function r(id, client, ck, method, scheme, host, path, query, code, reason, time, dur, req, res, kind, extra = {}) {
+  const state = kind === 'failed' ? 'failed' : kind === 'active' ? 'active' : 'done';
+  return { id, client, ck, method, scheme, host, path, query, code, reason, time, dur, req, res, kind, state, ...extra };
+}
+const urlOf = x => x.method === 'CONNECT' ? `${x.host}:443` : `${x.scheme}://${x.host}${x.path}${x.query ? '?' + x.query : ''}`;
+
+// ---- state ----
+const S = {
+  recording: true, sel: 14, side: { kind: 'all' }, pinned: ['api.example.com'], open: { 'host::api.example.com': true, 'dev': true, 'app:Safari': false },
+  fbar: true, rules: [{ on: true, key: 'Host', match: 'Contains', q: '' }], mode: 'AND', autoSelect: true,
+  reqTab: 'Header', resTab: 'Body', pf: { req: false, res: false }, pfOpt: { case: false, regex: false }, menu: null, sideQ: '', stab: 'General',
+  tools: { Breakpoint: true, 'Map Local': true, 'Map Remote': false, 'Block List': false, 'Allow List': false, 'Network Conditions': false, 'No Caching': true },
+  proxyOverridden: true, sslEnabled: true,
+};
+const KEYS = ['URL', 'Host', 'Query String', 'Request Header', 'Response Header', 'Request Body', 'Response Body', 'Method', 'Status Code', 'Client', 'IP Address', 'Comment', 'Color', 'Duration (ms)', 'Request Body Size (KB)', 'Response Body Size (KB)'];
+const NUMERIC = ['Status Code', 'Duration (ms)', 'Request Body Size (KB)', 'Response Body Size (KB)'];
+const MATCHES = ['Contains', 'Not Contains', 'Start With', 'End With', 'Equal', 'Not Equal', '<', '>=', 'Match Wildcard', 'Not Match Wildcard', 'Match Regex', 'Not Match Regex'];
+
+function subject(x, key) {
+  switch (key) {
+    case 'URL': return urlOf(x); case 'Host': return x.host; case 'Query String': return x.query; case 'Method': return x.method;
+    case 'Status Code': return x.code ? String(x.code) : ''; case 'Client': return x.client; case 'IP Address': return x.ck === 'device' ? '192.168.0.20' : '127.0.0.1';
+    case 'Comment': return x.comment || ''; case 'Color': return x.color || ''; case 'Duration (ms)': return String(x.dur);
+    case 'Request Body Size (KB)': return String(x.req); case 'Response Body Size (KB)': return String(x.res);
+    case 'Request Header': return reqHeaders(x).map(h => h.join(': ')).join('\n'); case 'Response Header': return resHeaders(x).map(h => h.join(': ')).join('\n');
+    case 'Request Body': return x.method === 'POST' ? '{"token":"…"}' : ''; case 'Response Body': return x.kind === 'json' ? JSON.stringify(jsonOf(x)) : '';
+  }
+  return '';
+}
+function wild(p) { return new RegExp('^' + p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$', 'i'); }
+function test(rule, x) {
+  const s = subject(x, rule.key), q = rule.q;
+  if (q === '') return true;
+  const a = s.toLowerCase(), b = q.toLowerCase();
+  try {
+    switch (rule.match) {
+      case 'Contains': return a.includes(b); case 'Not Contains': return !a.includes(b);
+      case 'Start With': return a.startsWith(b); case 'End With': return a.endsWith(b);
+      case 'Equal': return a === b; case 'Not Equal': return a !== b;
+      case '<': return parseFloat(s) < parseFloat(q); case '>=': return parseFloat(s) >= parseFloat(q);
+      case 'Match Wildcard': return wild(q).test(s); case 'Not Match Wildcard': return !wild(q).test(s);
+      case 'Match Regex': return new RegExp(q, 'i').test(s); case 'Not Match Regex': return !new RegExp(q, 'i').test(s);
+    }
+  } catch (e) { return true; }
+  return true;
+}
+function bySide(x) {
+  const s = S.side;
+  switch (s.kind) {
+    case 'all': return true;
+    case 'host': return x.host === s.host;
+    case 'path': return x.host === s.host && x.path.startsWith(s.prefix);
+    case 'device': return x.ck === 'device';
+    case 'devhost': return x.ck === 'device' && x.host === s.host;
+    case 'app': return x.ck !== 'device' && x.client === s.app;
+    case 'apphost': return x.ck !== 'device' && x.client === s.app && x.host === s.host;
+  }
+  return true;
+}
+function visible() {
+  const live = S.rules.filter(r => r.on && r.q !== '');
+  return rows.filter(x => bySide(x) && (live.length === 0 || (S.mode === 'AND' ? live.every(r => test(r, x)) : live.some(r => test(r, x)))))
+             .sort((a, b) => b.id - a.id);
+}
+
+// ---- toolbar ----
+function renderToolbar() {
+  const b = document.getElementById('recBtn');
+  b.innerHTML = S.recording ? ICON.pause : ICON.play;
+  b.title = S.recording ? '기록 일시정지 (⌘R)' : '기록 다시 시작 (⌘R)';
+  document.getElementById('capDot').style.background = S.recording ? 'var(--green)' : 'var(--orange)';
+  document.getElementById('capPause').innerHTML = S.recording ? '' : '<span>|</span> <b>Pause</b>';
+}
+document.getElementById('recBtn').onclick = () => { S.recording = !S.recording; renderToolbar(); };
+
+// ---- chips (기존 유지) ----
+document.getElementById('chips').innerHTML = ['All', '|', 'HTTP', 'HTTPS', '|', 'JSON', 'XML', 'HTML', 'JS', 'CSS', 'Image', 'Media', 'Other', '|', '1xx', '2xx', '3xx', '4xx', '5xx']
+  .map((c, i) => c === '|' ? '<span class="sep"></span>' : `<span class="chip${i === 0 ? ' on' : ''}">${c}</span>`).join('');
+
+// ---- sidebar ----
+function count(f) { return rows.filter(f).length; }
+function pathTree(host, filterFn) {
+  const root = {};
+  rows.filter(x => x.host === host && x.method !== 'CONNECT' && filterFn(x)).forEach(x => {
+    let n = root, acc = '';
+    x.path.split('/').filter(Boolean).forEach(seg => { acc += '/' + seg; n[seg] = n[seg] || { _p: acc, _c: 0, _k: {} }; n[seg]._c++; n = n[seg]._k; });
+  });
+  return root;
+}
+function nodeHtml({ key, depth, disc, ico, name, cnt, sel, onclick }) {
+  return `<div class="node${sel ? ' sel' : ''}" style="padding-left:${8 + depth * 14}px" data-act="${onclick}" ${key ? `data-key="${key}"` : ''}>`
+    + `<span class="disc" ${key ? `data-tog="${key}"` : ''}>${disc || ''}</span><span class="ico">${ico || ''}</span><span class="nm">${name}</span><span class="cnt">${cnt ?? ''}</span></div>`;
+}
+const enc = o => encodeURIComponent(JSON.stringify(o));
+function isSel(o) { return JSON.stringify(o) === JSON.stringify(S.side); }
+function domainBlock(host, depth, filterFn, sideKind, extra) {
+  const key = `${sideKind}:${extra || ''}:${host}`;
+  const tree = pathTree(host, filterFn);
+  const hasKids = Object.keys(tree).length > 0;
+  const o = sideKind === 'host' ? { kind: 'host', host } : sideKind === 'devhost' ? { kind: 'devhost', host } : { kind: 'apphost', app: extra, host };
+  let h = nodeHtml({ key, depth, disc: hasKids ? (S.open[key] ? '▼' : '▶') : '', ico: '🌐', name: host, cnt: count(x => x.host === host && filterFn(x)), sel: isSel(o), onclick: enc(o) });
+  if (hasKids && S.open[key] && sideKind === 'host') h += pathNodes(host, tree, depth + 1);
+  return h;
+}
+function pathNodes(host, tree, depth) {
+  return Object.entries(tree).map(([seg, n]) => {
+    const key = `p:${host}:${n._p}`, kids = Object.keys(n._k).length > 0, o = { kind: 'path', host, prefix: n._p };
+    let h = nodeHtml({ key: kids ? key : '', depth, disc: kids ? (S.open[key] ? '▼' : '▶') : '', ico: kids ? '📁' : '·', name: '/' + seg, cnt: n._c, sel: isSel(o), onclick: enc(o) });
+    if (kids && S.open[key]) h += pathNodes(host, n._k, depth + 1);
+    return h;
+  }).join('');
+}
+function renderSide() {
+  const q = S.sideQ.toLowerCase(), m = s => !q || s.toLowerCase().includes(q);
+  const hosts = [...new Set(rows.map(x => x.host))].sort();
+  const devHosts = [...new Set(rows.filter(x => x.ck === 'device').map(x => x.host))].sort();
+  const apps = [...new Set(rows.filter(x => x.ck !== 'device').map(x => x.client))].sort();
+  let h = '<div class="sec">Favorites</div>';
+  h += nodeHtml({ depth: 0, disc: '▼', ico: '📌', name: 'Pinned', cnt: '', onclick: '' });
+  h += S.pinned.filter(m).map(p => domainBlock(p, 1, () => true, 'host', 'pin')).join('');
+  if (devHosts.length) {
+    h += '<div class="sec">Remote devices</div>';
+    h += nodeHtml({ key: 'dev', depth: 0, disc: S.open.dev ? '▼' : '▶', ico: '📺', name: DEV, cnt: count(x => x.ck === 'device'), sel: isSel({ kind: 'device' }), onclick: enc({ kind: 'device' }) });
+    if (S.open.dev) h += devHosts.filter(m).map(d => domainBlock(d, 1, x => x.ck === 'device', 'devhost')).join('');
+  }
+  h += `<div class="sec" data-act="${enc({ kind: 'all' })}" title="All을 누르면 전체 요청">All${S.side.kind === 'all' ? ' · 선택됨' : ''}</div>`;
+  h += nodeHtml({ key: 'apps', depth: 0, disc: S.open.apps === false ? '▶' : '▼', ico: '▦', name: 'Apps', cnt: count(x => x.ck !== 'device'), onclick: '' });
+  if (S.open.apps !== false) apps.filter(a => m(a) || rows.some(x => x.client === a && m(x.host))).forEach(a => {
+    const key = 'app:' + a, o = { kind: 'app', app: a };
+    h += nodeHtml({ key, depth: 1, disc: S.open[key] ? '▼' : '▶', ico: a === 'Safari' ? '🧭' : '📱', name: a, cnt: count(x => x.ck !== 'device' && x.client === a), sel: isSel(o), onclick: enc(o) });
+    if (S.open[key]) [...new Set(rows.filter(x => x.client === a).map(x => x.host))].sort().filter(m).forEach(d => h += domainBlock(d, 2, x => x.client === a, 'apphost', a));
+  });
+  h += nodeHtml({ key: 'doms', depth: 0, disc: S.open.doms === false ? '▶' : '▼', ico: '🌐', name: 'Domains', cnt: rows.length, onclick: '' });
+  if (S.open.doms !== false) h += hosts.filter(m).map(d => domainBlock(d, 1, () => true, 'host')).join('');
+  document.getElementById('sideTree').innerHTML = h;
+}
+document.getElementById('sideTree').onclick = e => {
+  const tog = e.target.closest('[data-tog]');
+  if (tog && tog.dataset.tog) { const k = tog.dataset.tog; S.open[k] = !(S.open[k] ?? (k === 'apps' || k === 'doms')); renderSide(); return; }
+  const n = e.target.closest('[data-act]');
+  if (n && n.dataset.act) { S.side = JSON.parse(decodeURIComponent(n.dataset.act)); renderAll(); }
+};
+document.getElementById('sideFilter').oninput = e => { S.sideQ = e.target.value; renderSide(); };
+
+// ---- filter bar ----
+function renderFbar() {
+  const el = document.getElementById('fbar');
+  el.style.display = S.fbar ? '' : 'none';
+  el.innerHTML = S.rules.map((r, i) => `<div class="frule${r.on ? '' : ' off'}" data-i="${i}">
+      <input type="checkbox" ${r.on ? 'checked' : ''} data-f="on" title="이 규칙 켜기·끄기 (⌘B)">
+      <select class="k" data-f="key">${KEYS.map(k => `<option${k === r.key ? ' selected' : ''}>${k}</option>`).join('')}</select>
+      <select class="m" data-f="match">${MATCHES.filter(m => NUMERIC.includes(r.key) || (m !== '<' && m !== '>=')).map(m => `<option${m === r.match ? ' selected' : ''}>${m}</option>`).join('')}</select>
+      <input type="text" data-f="q" value="${r.q.replace(/"/g, '&quot;')}" placeholder="${r.key} 검색 (예: ${r.key === 'Host' ? 'api.example' : r.key === 'Status Code' ? '401' : '…'})">
+      <button class="rb" data-f="del" title="규칙 지우기 (⇧⌘N)" ${S.rules.length === 1 ? 'disabled' : ''}>−</button>
+      <button class="rb" data-f="add" title="규칙 추가 (⌘N)" ${S.rules.length >= 10 ? 'disabled' : ''}>+</button>
+    </div>`).join('')
+    + `<div class="fhint"><span>Show ⌘F · New ⌘N · Remove ⇧⌘N · Up ⌘↑ · Down ⌘↓ · On/Off ⌘B · Hide ESC</span>
+       <span class="andor" title="규칙 묶는 방식"><button data-mode="AND" class="${S.mode === 'AND' ? 'on' : ''}">AND</button><button data-mode="OR" class="${S.mode === 'OR' ? 'on' : ''}">OR</button></span></div>`;
+}
+let deb;
+document.getElementById('fbar').addEventListener('input', e => {
+  const row = e.target.closest('[data-i]'); if (!row) return;
+  const r = S.rules[+row.dataset.i], f = e.target.dataset.f;
+  if (f === 'q') { r.q = e.target.value; clearTimeout(deb); deb = setTimeout(() => { renderList(); renderBbar(); }, 150); }
+});
+document.getElementById('fbar').addEventListener('change', e => {
+  const row = e.target.closest('[data-i]'); if (!row) return;
+  const r = S.rules[+row.dataset.i], f = e.target.dataset.f;
+  if (f === 'on') r.on = e.target.checked;
+  if (f === 'key') { r.key = e.target.value; if (!NUMERIC.includes(r.key) && (r.match === '<' || r.match === '>=')) r.match = 'Contains'; }
+  if (f === 'match') r.match = e.target.value;
+  renderFbar(); renderList(); renderBbar();
+});
+document.getElementById('fbar').addEventListener('click', e => {
+  if (e.target.dataset.mode) { S.mode = e.target.dataset.mode; renderFbar(); renderList(); return; }
+  const row = e.target.closest('[data-i]'); if (!row) return;
+  const i = +row.dataset.i, f = e.target.dataset.f;
+  if (f === 'add') S.rules.splice(i + 1, 0, { on: true, key: 'URL', match: 'Contains', q: '' });
+  else if (f === 'del') S.rules.splice(i, 1);
+  else return;
+  renderFbar(); renderList(); renderBbar();
+});
+
+// ---- list ----
+function renderList() {
+  const v = visible();
+  if (S.autoSelect && v.length && !v.some(x => x.id === S.sel)) S.sel = v[0].id;
+  document.querySelector('#grid tbody').innerHTML = v.map(x => {
+    const dot = x.state === 'active' ? 'var(--orange)' : x.state === 'failed' ? 'var(--red)' : 'var(--green)';
+    const codeCls = x.code >= 400 ? 'c-err' : x.code >= 300 ? 'c-3xx' : 'c-done';
+    const ci = x.ck === 'device' ? '📺' : x.ck === 'sim' ? '📱' : '🧭';
+    const bg = x.color && x.id !== S.sel ? `style="background:${HL_BG[x.color]}"` : '';
+    return `<tr data-id="${x.id}" class="${x.id === S.sel ? 'sel' : ''}${x.strike ? ' strike' : ''}" ${bg}>
+      <td class="hl-bar" style="background:${x.color ? HL[x.color] : 'transparent'}"></td>
+      <td><span class="dot" style="background:${dot}" title="${x.state === 'active' ? 'Active' : x.state === 'failed' ? 'Failed' : 'Completed'}"></span></td>
+      <td>${x.id}</td>
+      <td><span class="client"><span class="ci">${ci}</span>${x.client}</span></td>
+      <td class="u">${urlOf(x)}</td>
+      <td>${x.method}</td>
+      <td class="${x.state === 'done' ? codeCls : ''}">${x.state === 'done' ? x.code : '-'}</td>
+      <td>${x.time}</td>
+      <td>${x.state === 'done' ? x.dur + ' ms' : '-'}</td>
+      <td>${x.req ? x.req + ' KB' : '-'}</td>
+      <td>${x.state === 'done' && x.res ? x.res + ' KB' : '-'}</td></tr>`;
+  }).join('') || `<tr><td colspan="11" class="empty">필터에 맞는 요청이 없습니다.</td></tr>`;
+  renderDetail();
+}
+document.querySelector('#grid tbody').onclick = e => {
+  const tr = e.target.closest('tr[data-id]'); if (!tr) return;
+  S.sel = +tr.dataset.id; S.autoSelect = false; renderList(); renderBbar();
+};
+
+// ---- detail ----
+function reqHeaders(x) {
+  if (x.method === 'CONNECT') return [['Host', x.host + ':443'], ['Proxy-Connection', 'keep-alive'], ['User-Agent', x.ck === 'device' ? 'AppleCoreMedia/1.0 (Apple TV)' : 'Mozilla/5.0']];
+  const h = [['Host', x.host], ['Accept', x.kind === 'json' ? 'application/json' : '*/*'], ['Accept-Encoding', 'gzip, deflate, br'], ['Accept-Language', 'ko-KR,ko;q=0.9'], ['User-Agent', x.ck === 'device' ? 'ExampleTV/5.2 (tvOS 26.0)' : x.ck === 'sim' ? 'ExampleApp/5.2 (iOS 26.0; Simulator)' : 'Mozilla/5.0 (Macintosh) Safari/605.1.15']];
+  if (x.host.startsWith('api')) h.push(['Authorization', 'Bearer eyJhbGciOi…(예시)'], ['Cookie', 'sid=ab12cd; theme=dark']);
+  return h;
+}
+function resHeaders(x) {
+  if (x.state !== 'done') return [];
+  const ct = { json: 'application/json; charset=utf-8', m3u8: 'application/vnd.apple.mpegurl', media: 'video/mp2t', image: 'image/webp', html: 'text/html; charset=utf-8', js: 'application/javascript' }[x.kind] || 'text/plain';
+  const h = [['Content-Type', ct], ['Content-Length', String(Math.round(x.res * 1024))], ['Date', 'Tue, 10 Nov 2026 01:41:05 GMT'], ['Cache-Control', 'max-age=60'], ['Server', 'example']];
+  if (x.host === 'www.example.com') h.push(['Set-Cookie', 'sid=ab12cd; Path=/; HttpOnly; Secure']);
+  if (x.code === 206) h.push(['Content-Range', 'bytes 0-1884364/9421820']);
+  return h;
+}
+function jsonOf(x) {
+  if (x.code === 401) return { error: { code: 'TOKEN_EXPIRED', message: '토큰이 만료되었습니다' } };
+  if (x.path.includes('search')) return { query: 'drama', page: 1, total: 128, items: [{ id: 101, title: '예시 드라마', rating: 4.6 }, { id: 102, title: '다른 드라마', rating: 4.1 }] };
+  if (x.path.includes('clip')) return { id: x.path.split('/').pop(), title: '예시 클립', duration: 1284, drm: false, streams: { hls: 'https://vod.example-cdn.net/hls/123/master.m3u8' } };
+  return { result: 'ok', sections: [{ type: 'banner', count: 5 }, { type: 'row', title: '이어 보기', count: 12 }], ttl: 60 };
+}
+function jsonHtml(v, ind = 0) {
+  const pad = '  '.repeat(ind), pad2 = '  '.repeat(ind + 1);
+  if (Array.isArray(v)) return '[\n' + v.map(e => pad2 + jsonHtml(e, ind + 1)).join(',\n') + '\n' + pad + ']';
+  if (v && typeof v === 'object') return '{\n' + Object.entries(v).map(([k, e]) => `${pad2}<span class="jk">"${k}"</span>: ${jsonHtml(e, ind + 1)}`).join(',\n') + '\n' + pad + '}';
+  if (typeof v === 'string') return `<span class="js">"${v}"</span>`;
+  return `<span class="jn">${v}</span>`;
+}
+function treeHtml(v, k) {
+  const label = k !== undefined ? `<span class="jk">${k}</span>: ` : '';
+  if (v && typeof v === 'object') {
+    const ents = Array.isArray(v) ? v.map((e, i) => [i, e]) : Object.entries(v);
+    return `<li><details open><summary>${label}<span style="color:var(--faint)">${Array.isArray(v) ? `Array [${v.length}]` : `Object {${ents.length}}`}</span></summary><ul>${ents.map(([kk, e]) => treeHtml(e, kk)).join('')}</ul></details></li>`;
+  }
+  return `<li>${label}${typeof v === 'string' ? `<span class="js">"${v}"</span>` : `<span class="jn">${v}</span>`}</li>`;
+}
+const M3U8 = `#EXTM3U
+#EXT-X-VERSION:6
+#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,CODECS="avc1.640028,mp4a.40.2"
+1080p/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720
+720p/index.m3u8
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="한국어",LANGUAGE="ko",URI="subs/ko.m3u8"`;
+
+function kvTable(list, side) {
+  const q = (document.getElementById('pfq-' + side) || {}).value || '';
+  let f = list;
+  if (q) f = list.filter(([k, v]) => {
+    const s = k + ' ' + v;
+    if (S.pfOpt.regex) { try { return new RegExp(q, S.pfOpt.case ? '' : 'i').test(s); } catch (e) { return true; } }
+    return S.pfOpt.case ? s.includes(q) : s.toLowerCase().includes(q.toLowerCase());
+  });
+  return `<table class="kv"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>${f.map(([k, v]) => `<tr><td class="mono">${k}</td><td class="mono">${v}</td></tr>`).join('') || '<tr><td colspan="2" class="empty">없음</td></tr>'}</tbody></table>`;
+}
+function qsList(x) { return x.query ? x.query.split('&').map(p => p.split('=')) : []; }
+function cookieList(x) { const c = reqHeaders(x).find(h => h[0] === 'Cookie'); return c ? c[1].split('; ').map(p => p.split('=')) : []; }
+function setCookieList(x) { return resHeaders(x).filter(h => h[0] === 'Set-Cookie').map(h => { const [kv, ...rest] = h[1].split('; '); const [k, v] = kv.split('='); return [k, v + (rest.length ? '; ' + rest.join('; ') : '')]; }); }
+
+function reqTabs(x) {
+  const a = ['Header', 'Query', 'Body'];
+  if (cookieList(x).length) a.push('Cookies');
+  if (reqHeaders(x).some(h => h[0] === 'Authorization')) a.push('Auth');
+  a.push('Raw', '|', 'Summary', 'Treeview');
+  if (x.kind === 'm3u8') a.push('M3U8');
+  a.push('JSON');
+  return a;
+}
+function resTabs(x) {
+  const a = ['Header', 'Body'];
+  if (setCookieList(x).length) a.push('Set-Cookie');
+  a.push('Raw', '|', 'Treeview');
+  if (x.kind === 'm3u8') a.push('M3U8');
+  a.push('JSON');
+  return a;
+}
+function tabBar(side, tabs, cur) {
+  return `<div class="tabs" ${side === 'req' ? 'data-n="7"' : ''}>${tabs.map(t => t === '|' ? '<span class="vsep"></span>' : `<button class="tab${t === cur ? ' on' : ''}" data-side="${side}" data-tab="${t}">${t}</button>`).join('')}
+    <span class="grow"></span><button class="tab" data-pf="${side}" title="표 거르기 (⌘F)" ${side === 'req' ? 'data-n="8"' : ''}>≡</button></div>`;
+}
+function pfBar(side) {
+  if (!S.pf[side]) return '';
+  return `<div class="pfilter"><input id="pfq-${side}" placeholder="이름·값으로 거르기"><button class="tab" data-menu="${side}" title="옵션">⋯</button>
+    ${S.menu === side ? `<div class="menu"><div data-opt="case0" class="${!S.pfOpt.case ? 'chk' : ''}">Case Insensitive</div><div data-opt="case1" class="${S.pfOpt.case ? 'chk' : ''}">Case Sensitive</div><hr><div data-opt="re0" class="${!S.pfOpt.regex ? 'chk' : ''}">Text</div><div data-opt="re1" class="${S.pfOpt.regex ? 'chk' : ''}">Regular Expression</div></div>` : ''}</div>`;
+}
+function rawReq(x) { return `${x.method} ${x.method === 'CONNECT' ? x.host + ':443' : x.path + (x.query ? '?' + x.query : '')} HTTP/1.1\n` + reqHeaders(x).map(h => h.join(': ')).join('\n') + (x.method === 'POST' ? '\n\n{"token":"…"}' : ''); }
+function rawRes(x) { return `HTTP/1.1 ${x.code} ${x.reason}\n` + resHeaders(x).map(h => h.join(': ')).join('\n') + (x.kind === 'json' ? '\n\n' + JSON.stringify(jsonOf(x), null, 2) : ''); }
+
+function reqBody(x, t) {
+  if (t === 'Header') return kvTable(reqHeaders(x), 'req');
+  if (t === 'Query') return kvTable(qsList(x), 'req');
+  if (t === 'Cookies') return kvTable(cookieList(x), 'req');
+  if (t === 'Auth') return kvTable([['Type', 'Bearer'], ['Token', 'eyJhbGciOi…(예시)']], 'req');
+  if (t === 'Body') return x.method === 'POST' ? `<pre class="code mono">{\n  <span class="jk">"token"</span>: <span class="js">"…"</span>\n}</pre>` : '<div class="empty">본문 없음</div>';
+  if (t === 'Raw') return `<pre class="code mono">${rawReq(x)}</pre>`;
+  if (t === 'Summary') return kvTable([['Client', x.client], ['Start', '2026-11-10 ' + x.time + '.214'], ['Duration', x.state === 'done' ? x.dur + ' ms' : '-'], ['Request Size', x.req + ' KB'], ['Response Size', x.res + ' KB'], ['SSL', x.method === 'CONNECT' ? '복호화 안 함 (터널)' : 'TLS 1.3 · 복호화'], ['적용된 도구', x.host.startsWith('api') ? 'No Caching' : '-'], ['Comment', x.comment || '-'], ['Highlight', x.color || '-']], 'req');
+  if (t === 'Treeview' || t === 'JSON') return x.method === 'POST' ? (t === 'JSON' ? `<pre class="code mono">{\n  <span class="jk">"token"</span>: <span class="js">"…"</span>\n}</pre>` : `<ul class="tree mono">${treeHtml({ token: '…' })}</ul>`) : '<div class="empty">JSON 본문 없음</div>';
+  if (t === 'M3U8') return '<div class="empty">요청 본문 없음</div>';
+  return '';
+}
+function resBody(x, t) {
+  if (x.method === 'CONNECT') return `<div class="https" data-n="9"><div class="lock">🔒</div><h3>HTTPS Response</h3>
+      <p>이 연결은 암호화된 터널이라 내용을 볼 수 없습니다. SSL Proxying을 켜면 다음 연결부터 복호화해 보여 줍니다.</p>
+      <div class="row"><button class="primary" onclick="enableSSL('${x.host}')">Enable only this domain</button>${x.ck === 'device' ? '' : `<span style="color:var(--faint)">or</span>
+      <button class="second" onclick="enableSSL('${x.client}')">Enable all domains from "${x.client}"</button>`}</div>
+      ${x.ck === 'device' ? '<p style="font-size:11px">원격 기기는 앱을 알 수 없어 첫 버튼만 보입니다. (Safari의 3번 행에서 두 버튼 모두 확인)</p>' : ''}</div>`;
+  if (x.state === 'active') return '<div class="empty">응답을 기다리는 중…</div>';
+  if (x.state === 'failed') return '<div class="empty" style="color:var(--red)">연결 실패 — 서버가 연결을 끊었습니다 (예시)</div>';
+  if (t === 'Header') return kvTable(resHeaders(x), 'res');
+  if (t === 'Set-Cookie') return kvTable(setCookieList(x), 'res');
+  if (t === 'Raw') return `<pre class="code mono">${rawRes(x)}</pre>`;
+  if (t === 'M3U8') return kvTable([['1080p', 'BANDWIDTH 6000000 · 1920x1080 · 1080p/index.m3u8'], ['720p', 'BANDWIDTH 3000000 · 1280x720 · 720p/index.m3u8'], ['자막 한국어', 'ko · subs/ko.m3u8']], 'res');
+  if (x.kind === 'json') {
+    if (t === 'Treeview') return `<div class="tree-ctl"><button onclick="this.parentNode.nextElementSibling.querySelectorAll('details').forEach(d=>d.open=true)">모두 펼치기</button><button onclick="this.parentNode.nextElementSibling.querySelectorAll('details').forEach(d=>d.open=false)">모두 접기</button></div><ul class="tree mono">${treeHtml(jsonOf(x))}</ul>`;
+    return `<pre class="code mono">${jsonHtml(jsonOf(x))}</pre>`;
+  }
+  if (x.kind === 'm3u8' && t !== 'Treeview') return `<pre class="code mono">${M3U8}</pre>`;
+  if (x.kind === 'image') return '<div class="empty">304 Not Modified — 본문 없음</div>';
+  if (x.kind === 'media') return '<div class="empty">바이너리 (video/mp2t, 1.8 MB)</div>';
+  if (t === 'Treeview' || t === 'JSON') return '<div class="empty">JSON이 아닌 본문</div>';
+  return `<pre class="code mono">${x.kind === 'html' ? '&lt;!doctype html&gt;\n&lt;html lang="ko"&gt;…' : 'function init(){ … }'}</pre>`;
+}
+function urlHtml(x) {
+  if (x.method === 'CONNECT') return `<span class="u-h">${x.host}</span><span class="u-s">:443</span>`;
+  return `<span class="u-s">${x.scheme}://</span><span class="u-h">${x.host}</span><span class="u-p">${x.path}${x.query ? '?' + x.query : ''}</span>`;
+}
+function renderDetail() {
+  const x = rows.find(r => r.id === S.sel);
+  const el = document.getElementById('detail');
+  if (!x || !visible().some(v => v.id === x.id)) { el.innerHTML = '<div class="empty" style="margin:auto">요청을 고르세요</div>'; return; }
+  const rt = reqTabs(x), st = resTabs(x);
+  const rcur = rt.includes(S.reqTab) ? S.reqTab : 'Header', scur = st.includes(S.resTab) ? S.resTab : 'Header';
+  const statusPill = x.state === 'active' ? '<span class="pill act">Active</span>' : x.state === 'failed' ? '<span class="pill bad">Failed</span>'
+    : `<span class="pill ${x.code >= 400 ? 'bad' : 'ok'}">${x.code} ${x.reason}</span>`;
+  el.innerHTML = `<div class="dhead" data-n="6"><div class="pills"><span class="pill meth">${x.method}</span>${statusPill}</div>
+      <div class="durl mono">${urlHtml(x)}</div><div class="dact"><button>Copy URL</button><button>Copy cURL</button></div></div>
+    <div class="panes">
+      <div class="pane"><div class="ptitle">REQUEST</div>${tabBar('req', rt, rcur)}${pfBar('req')}<div class="pbody">${reqBody(x, rcur)}</div></div>
+      <div class="pane"><div class="ptitle">RESPONSE</div>${x.method === 'CONNECT' ? '' : tabBar('res', st, scur)}${pfBar('res')}<div class="pbody">${resBody(x, scur)}</div></div>
+    </div>`;
+}
+document.getElementById('detail').addEventListener('click', e => {
+  const t = e.target;
+  if (t.dataset.tab) { S[t.dataset.side === 'req' ? 'reqTab' : 'resTab'] = t.dataset.tab; renderDetail(); return; }
+  if (t.dataset.pf) { S.pf[t.dataset.pf] = !S.pf[t.dataset.pf]; S.menu = null; renderDetail(); return; }
+  if (t.dataset.menu) { S.menu = S.menu === t.dataset.menu ? null : t.dataset.menu; keepPf(renderDetail); return; }
+  if (t.dataset.opt) { const o = t.dataset.opt; if (o.startsWith('case')) S.pfOpt.case = o === 'case1'; else S.pfOpt.regex = o === 're1'; S.menu = null; keepPf(renderDetail); }
+});
+document.getElementById('detail').addEventListener('input', e => { if (e.target.id && e.target.id.startsWith('pfq-')) keepPf(renderDetail); });
+function keepPf(fn) {
+  const vals = {}; ['req', 'res'].forEach(s => { const i = document.getElementById('pfq-' + s); if (i) vals[s] = i.value; });
+  const focus = document.activeElement && document.activeElement.id;
+  // render twice: first to restore inputs, then to apply filter with restored values
+  fn(); Object.entries(vals).forEach(([s, v]) => { const i = document.getElementById('pfq-' + s); if (i) i.value = v; });
+  const save = { ...vals }; fn(); Object.entries(save).forEach(([s, v]) => { const i = document.getElementById('pfq-' + s); if (i) i.value = v; });
+  if (focus) { const f = document.getElementById(focus); if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } }
+}
+window.enableSSL = what => { openTool('SSL Proxying', `<b>${what}</b>을(를) SSL Proxying 목록에 넣었습니다(목업). 실제 앱에서는 열린 터널을 끊고, 기기가 다시 연결하면 복호화된 요청이 보입니다.`); };
+
+// ---- bottom bar ----
+function renderBbar() {
+  const v = visible(), live = S.rules.some(r => r.on && r.q);
+  const badges = Object.entries(S.tools).filter(([, on]) => on).map(([n]) => n);
+  const cls = { Breakpoint: 'b-bp', 'Map Local': 'b-ml', 'Map Remote': 'b-mr', 'Block List': 'b-bp', 'Allow List': 'b-ml', 'Network Conditions': 'b-mr', 'No Caching': 'b-nc' };
+  document.getElementById('bbar').innerHTML = `
+    <button class="bb" id="bClear" title="세션 지우기 (⌘K)">🗑 Clear</button>
+    <button class="bb${S.fbar || live ? ' on' : ''}" id="bFilter" title="필터 막대 보이기·숨기기 (⌘F)">⏚ Filter${live ? ' •' : ''}</button>
+    <button class="bb${S.autoSelect ? ' on' : ''}" id="bAuto" title="새 요청을 자동으로 선택">↧ Auto Select</button>
+    <div class="bcenter">${v.some(x => x.id === S.sel) ? 1 : 0}/${v.length} rows selected</div>
+    <span class="res mono">181 MB · ↑122 KB/s ↓20 KB/s</span>
+    ${badges.map(b => `<button class="badge ${cls[b]}" data-tool="${b}" title="${b} 창 열기">${b}</button>`).join(' ')}
+    ${S.proxyOverridden ? '<button class="badge b-po" data-tool="Proxy Overridden" title="Certificate 창의 이 Mac 섹션 열기">Proxy Overridden</button>' : ''}
+    ${S.sslEnabled ? '' : '<button class="badge b-ssl" data-tool="SSL Proxying Off">SSL Proxying Off</button>'}`;
+}
+document.getElementById('bbar').addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.id === 'bFilter') { S.fbar = !S.fbar; renderFbar(); renderBbar(); }
+  else if (t.id === 'bAuto') { S.autoSelect = !S.autoSelect; if (S.autoSelect) { const v = visible(); if (v.length) S.sel = v[0].id; renderList(); } renderBbar(); }
+  else if (t.id === 'bClear') openTool('Clear', '세션 지우기(⌘K)와 같습니다. 목업이라 실제로 지우지는 않습니다.');
+  else if (t.dataset.tool) openTool(t.dataset.tool, t.dataset.tool === 'Proxy Overridden'
+    ? 'Certificate 창이 열리고 "이 Mac" 섹션으로 이동합니다. 여기서 시스템 프록시 캡처를 끌 수 있습니다.'
+    : `${t.dataset.tool} 규칙 창이 열립니다(지금 도구 메뉴에서 여는 창과 같은 창). 창에서 도구를 끄면 이 배지가 사라집니다.`);
+});
+function openTool(title, body) {
+  document.getElementById('twTitle').textContent = title;
+  document.getElementById('twBody').innerHTML = body;
+  document.getElementById('toolwin').style.display = 'block';
+}
+document.getElementById('twClose').onclick = () => document.getElementById('toolwin').style.display = 'none';
+
+// ---- keyboard ----
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && !e.target.closest('#detail')) { e.preventDefault(); S.fbar = true; renderFbar(); renderBbar(); document.querySelector('#fbar input[type=text]').focus(); }
+  if (e.key === 'Escape' && e.target.closest('#fbar')) { S.fbar = false; renderFbar(); renderBbar(); }
+});
+
+// ---- settings ----
+const STABS = [['General', '⚙︎'], ['Appearance', '◐'], ['Tools', '🛠'], ['SSL Proxying', '🔒'], ['Bypass', '↪︎'], ['Advanced', '⚗︎']];
+const chk = (on, dis) => `<input type="checkbox" ${on ? 'checked' : ''} ${dis ? 'disabled' : ''}>`;
+const seg = (opts, cur) => `<span class="seg">${opts.map(o => `<button class="${o === cur ? 'on' : ''}" onclick="this.parentNode.querySelectorAll('button').forEach(b=>b.classList.remove('on'));this.classList.add('on')">${o}</button>`).join('')}</span>`;
+const row = (label, ctl, help) => `<div class="frow"><label>${label}</label><div class="ctl">${ctl}${help ? `<span class="help">${help}</span>` : ''}</div></div>`;
+const SP = {
+  General: () => row('Content Layout:', seg(['Vertical', 'Horizontal'], 'Vertical'))
+    + row('', `<label>${chk(true)} Show Prog Icon on Menu Bar</label>`)
+    + row('Truncation Style:', `<select><option>Head</option><option>Middle</option><option selected>Tail</option></select>`, '목록 URL·Client 말줄임 위치')
+    + '<hr class="shr">'
+    + row('Port Number:', `<input type="number" value="9090" style="width:80px">`, '바꾸면 서버 재시작')
+    + row('', `<label>${chk(false)} Auto Override System Proxy Settings at Launch</label>`)
+    + row('', `<label>${chk(true)} Auto Start Recording Traffic at Launch</label>`)
+    + `<div class="card"><div class="cert">📜</div><div class="meta"><b>EyeProxy Root CA</b><br>유효기간 2026-11-01 ~ 2036-10-30 · 이 Mac: 설치됨 · 신뢰함 ✓</div><button class="btn">Open Certificate…</button><button class="btn">Generate new…</button></div>`,
+  Appearance: () => row('Font Size:', `<select>${[11, 12, 13, 14, 15, 16].map(n => `<option${n === 13 ? ' selected' : ''}>${n}</option>`).join('')}</select>`, '상세 본문·표')
+    + row('Tab Width:', seg(['2 Spaces', '4 Spaces'], '2 Spaces'), 'JSON 들여쓰기')
+    + row('', `<label>${chk(false)} Use Monospaced Font</label>`, '목록 표')
+    + row('', `<label>${chk(true)} Word Wrap</label>`)
+    + row('', `<label>${chk(false)} Show Invisibles</label>`, '본문 공백·탭·줄바꿈')
+    + row('', `<label>${chk(true)} Alternative Rows Background Colors</label>`)
+    + '<hr class="shr">'
+    + row('App Theme:', seg(['System', 'Light', 'Dark'], 'System'))
+    + row('', `<button class="btn">Restore Defaults</button>`, 'Appearance 값만 기본으로'),
+  Tools: () => row('', `<label>${chk(false)} Use No-Caching on Repeated Requests</label>`)
+    + row('Request Timeout:', `<input type="number" value="30" style="width:70px"> seconds`, '0 = 제한 없음 · Compose·Repeat')
+    + row('', `<label>${chk(false)} Add --proxy flag into cURL command</label>`, '<span class="mono">--proxy http://192.168.0.10:9090</span>')
+    + row('', `<label>${chk(false)} Auto open the Export Directory after exporting</label>`),
+  'SSL Proxying': () => `<p class="help" style="margin:0 0 10px;color:var(--sub)">지금 Prog의 SSL Proxying 탭 그대로(Include / Exclude 목록, 자물쇠 토글).</p>
+    <div class="listbox">${['api.example.com', '*.example-cdn.net', 'gw.example.com'].map(h => `<div>${chk(true)}<span class="mono">${h}</span></div>`).join('')}</div>
+    <div style="margin-top:6px"><button class="plus">+</button><button class="plus">−</button></div>`,
+  Bypass: () => `<p class="help" style="margin:0 0 10px;color:var(--sub)">지금 Prog의 Bypass 탭 그대로(프록시를 거치지 않을 호스트).</p>
+    <div class="listbox">${['localhost', '127.0.0.1', '*.local', '169.254/16'].map(h => `<div><span class="mono">${h}</span></div>`).join('')}</div>`,
+  Advanced: () => row('', `<label title="Prog는 종료할 때 늘 이전 프록시로 되돌립니다">${chk(true, true)} Restore to previous HTTP/HTTPS Proxy when Prog is closed</label>`, '항상 켜짐')
+    + row('', `<label>${chk(true)} Show Update Notification at Launch</label>`)
+    + '<hr class="shr">'
+    + row('', `<label>${chk(true)} Use 24-Hour Time</label>`, '목록 Time 열')
+    + row('', `<label>${chk(false)} Display Full Time Format</label>`, '날짜·시간대까지')
+    + row('', `<label>${chk(false)} Show Alert when quitting the app</label>`)
+    + row('', `<label>${chk(true)} Show Resource Usage in Bottom Bar</label>`)
+    + '<hr class="shr">'
+    + row('', `<label>${chk(false)} Hide Unnecessary Apple Requests from iOS Simulators</label>`, '*.apple.com · *.icloud.com 숨김')
+    + row('', `<label>${chk(false)} Stay On Top</label>`)
+    + row('', `<label>${chk(false)} Show Invisible Characters</label>`, '헤더 값 공백을 ·로'),
+};
+function renderSettings() {
+  document.getElementById('stabs').innerHTML = STABS.map(([n, i]) => `<button class="stab${n === S.stab ? ' on' : ''}" data-st="${n}"><span class="si">${i}</span>${n}</button>`).join('');
+  document.getElementById('spanel').innerHTML = SP[S.stab]();
+  document.getElementById('sTitle').textContent = S.stab;
+}
+document.getElementById('stabs').onclick = e => { const b = e.target.closest('[data-st]'); if (b) { S.stab = b.dataset.st; renderSettings(); } };
+document.getElementById('openSettings').onclick = () => document.getElementById('settingsAnchor').scrollIntoView({ behavior: 'smooth' });
+
+// ---- page controls ----
+document.getElementById('tNotes').onclick = e => { document.body.classList.toggle('notes'); e.target.classList.toggle('on'); };
+document.getElementById('tTheme').onclick = e => {
+  const root = document.documentElement, dark = root.dataset.theme !== 'dark' && !(root.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  root.dataset.theme = dark ? 'dark' : 'light'; e.target.textContent = dark ? '라이트 모드' : '다크 모드';
+};
+if (matchMedia('(prefers-color-scheme: dark)').matches) document.getElementById('tTheme').textContent = '라이트 모드';
+
+function renderAll() { renderToolbar(); renderSide(); renderFbar(); renderList(); renderBbar(); }
+renderAll(); renderSettings();
+</script>
+</body>
+</html>
