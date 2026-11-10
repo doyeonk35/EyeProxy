@@ -2,7 +2,7 @@
 
 플랜: `2026-11-10-prog-find-filter.md`(설계 절이 스펙) · 브랜치: `find-filter`(base `3b93fac`)
 상태: Task 1~4 구현·리뷰 완료. 아래 2장의 **미확인** 항목은 사람이 확인한다(실제 키보드, 한글 입력, 시트·도구 창, 라이트 외관, 큰 JSON, VoiceOver).
-테스트: `swift test --package-path Packages/EyeProxyKit`(Kit 329개, Task 1 시점. Task 2~4는 Kit을 건드리지 않음).
+테스트: `swift test --package-path Packages/EyeProxyKit`(Kit 330개 — 최종 리뷰에서 `arrayIndexKeysAreNotMatched` 추가).
 
 ## 1. 무엇이 들어갔나
 
@@ -15,7 +15,9 @@
 | 2 | 앱: JSON 트리를 평탄화한 행 `List`로 다시 쓰고(깊이 512도 보기 깊이 일정), Tree 모드 막대에 모두 펼치기·모두 접기·찾기 버튼, 찾기 막대(Search·Filter, i / N, Enter/⇧Enter, Esc). 수정: 빠른 입력 시 한 글자 늦은 결과, 행 화살표 클릭. | `c0a6309` |
 | 3 | 앱: Edit ▸ Find 메뉴와 ⌘F 라우팅(텍스트 뷰 → 표·트리 → 목록·사이드바면 툴바 검색칸 → 표준 체인), 본문·Raw `NSTextView` 내장 찾기 막대, 헤더·쿼리·쿠키·요약 표 거르기("N / 전체 M"), 트리 막대 ⌘F 재포커스·⌘G/⇧⌘G·막대 밖 Esc·"일치 없음"·들여쓰기 상한 32·접근성 라벨. | `c25b089` |
 | 3 수정 | 찾기 막대 입력 중 ⌘F가 툴바 검색칸으로 튀던 것(목록·사이드바·포커스 없음일 때만 검색칸으로), `DetailFind` Equatable(메뉴 재구성 방지), 표 탭 제스처 제거(값 더블클릭 선택·⌘C 회복), 요약 표 흐름 바뀌면 초기화, 표 검색칸 포커스 지연. | `b1a1fcc` |
-| 4 | README와 이 문서. | 이 커밋 |
+| 4 | README와 이 문서. | `acc9357` |
+| 최종 리뷰 | 배열 원소 인덱스 키는 검색 제외(Kit), M3U8 표 ⌘F가 툴바로 가지 않게, Esc·✕ 뒤 표·트리로 포커스 복귀(다음 ⌘F가 같은 막대), 트리 보이는 행·일치 집합 캐시, Filter에서 일치 중복 계산 제거, 표 행·강조를 원래 인덱스로. | `2242f27` |
+| 최종 리뷰 문서 | README 찾기 막대 범위(일반 텍스트·HTML 소스·편집 보기의 Replace), 이 점검표. | 이 커밋 |
 
 ## 2. 수동 점검표
 
@@ -44,7 +46,7 @@
 | 모두 펼치기 | 모두 펼치기 버튼 | 확인됨 | `ff-task2/2-expanded.png` |
 | 모두 접기 | 펼친 뒤 모두 접기 버튼 | 미확인 | 코드 확인(`treeExpanded = []`) |
 | 행 화살표 | 행 화살표 클릭으로 하나씩 펼침·접힘 | 확인됨 | `ff-task2/6-chevron.png` |
-| 트리 Search | 접힌 상태에서 "0" → 일치 강조, 조상 펼침, `3 / 54` | 확인됨 | `ff-task2/3-search.png` |
+| 트리 Search | 접힌 상태에서 "0" → 일치 강조, 조상 펼침, `3 / 54`. 최종 리뷰 뒤 배열 인덱스 키를 빼서 같은 "0"이 `1 / 28` | 확인됨 | `ff-task2/3-search.png`, `ff-final/2-tree-search-0-no-index-keys.png` |
 | 트리 Search 스크롤 | "true" → `2 / 6`, 현재 일치로 스크롤 | 확인됨 | `ff-task2/3b-search-others.png` |
 | Enter / ⇧Enter | 검색칸에서 Enter 다음, ⇧Enter 이전 | 확인됨 | 리포트 |
 | 빠른 입력 결과 | "email"을 빠르게 입력 → `1 / 12`(수정 전 한 글자 늦음) | 확인됨 | 리포트, 수정 전 `ff-task2/0-bug-stale-query-before-fix.png` |
@@ -55,15 +57,19 @@
 | 트리 Esc 복원 | 검색칸·트리 행 포커스에서 Esc → 막대 닫힘, 열기 전 펼침 상태 | 확인됨 | `ff-task2/5-closed-restored.png`, `ff-task3/5b-tree-esc-from-list.png` |
 | 실제 키보드 ⇧⌘G | 하드웨어 키보드로 ⇧⌘G(자동 확인의 HID 키 입력은 앱에 닿지 않았고, 앱 PID로 직접 보낸 이벤트는 `3/3 → 2/3`로 동작 — 전역 단축키 의심) | 미확인 | 리포트, 메뉴 항목 AX 확인 |
 | 한글 검색어(IME) | 트리·표·본문 찾기에 한글을 실제 입력기로 입력(예: 키·값의 한글) | 미확인 | Kit 테스트(`searchIsCaseInsensitiveAndMatchesKoreanKeysAndValues`) |
-| Compose·Breakpoint 편집기 ⌘F | 편집기 본문 클릭 → ⌘F → 내장 찾기 막대 | 미확인 | 코드 확인(같은 `NSTextView` 경로) |
+| Compose·Breakpoint 편집기 ⌘F | 편집기 본문 클릭 → ⌘F → 내장 찾기 막대 | Compose 확인됨, Breakpoint·Map Local 미확인 | `ff-final/8-compose-raw-find.png`, 나머지는 코드 확인(같은 `NSTextView` 경로) |
 | 코멘트 시트 ⌘F | Add Comment… 시트에서 ⌘F → 뒤의 툴바 검색칸으로 가지 않음 | 미확인 | 코드 확인(`sheetParent == nil`) |
 | 라이트 외관 | 시스템 라이트에서 트리 강조색·옅은 노랑, 표·트리 막대 | 미확인 | 스크린샷은 모두 다크 |
-| 아주 큰 JSON | 2 MB 이상 JSON 응답의 트리에서 Search·Filter 입력 반응 | 미확인 | - |
+| 2 MB JSON 모두 펼치기 | 2.05 MB·15만 노드 응답 → Tree → 모두 펼치기 → Filter에 "ad" 두 글자(Debug 빌드). 펼치기는 바로, 첫 글자 ≈0.3초 멈칫, 둘째 글자 ≈0.05초(AX 왕복 0.39초를 뺀 값) | 확인됨 | `ff-final/6b-big-tree-expanded.png`, `ff-final/7-big-filter-ad.png` |
+| Esc 후 ⌘F | 표: 거르기 열기 → Esc(또는 ✕) → ⌘F → 같은 칸이 다시 열림. 트리: 막대 → Esc → 트리에 포커스 → ⌘F → 막대 다시 열림 | 확인됨 | `ff-final/1-table-esc-then-cmdF.png`, `ff-final/3-tree-esc-then-cmdF.png` |
+| M3U8 표 ⌘F | M3U8 탭 표 행 클릭 → ⌘F → 포커스가 표에 머묾(툴바 검색칸으로 가지 않음) | 확인됨 | `ff-final/5-m3u8-table-cmdF.png`(AX 포커스 확인) |
+| 일반 텍스트 본문 찾기 | M3U8 응답 본문 탭(일반 텍스트) → ⌘F → "index" 2개 | 확인됨 | `ff-final/4-plain-text-body-find.png` |
+| 편집 보기에서 바꾸기 | Compose Raw 편집기 → ⌘F → 막대에 Replace 체크 | 확인됨 | `ff-final/8-compose-raw-find.png` (바꾸기 실행은 미확인) |
 | VoiceOver 라벨 | 모두 펼치기·모두 접기·찾기, 이전 일치·다음 일치·닫기, 행 화살표 펼치기/접기 | 미확인 | 코드 확인(`Label`·`accessibilityLabel`) |
 | 트리 행 글자 선택 | 트리 행 글자 드래그 선택·복사 | 미확인 | 코드 확인(`.textSelection(.enabled)`) |
 | macOS 15 | 개발 Mac(최신 macOS) 밖에서 찾기 막대·라우팅 | 미확인 | - |
 
-집계: 확인됨 28 / 미확인 11.
+집계: 확인됨 33 / 부분 확인 1 / 미확인 9.
 
 ## 3. 보류·결정 요약
 
@@ -78,7 +84,7 @@
 
 **다음으로 미룸**
 - 본문 찾기 정규식(내장 막대가 지원 안 함), 트리 JSON Path·jq 모드, 목록 2차 필터(키·매칭 방식 메뉴), 필터 여러 개(⌘N), M3U8 찾기.
-- 큰 트리에서 키 입력마다 동기 전체 계산(디바운스·백그라운드 계산). 코드에 `ponytail:` 표시는 없다.
+- 큰 트리에서 키 입력마다 동기 전체 계산(디바운스·백그라운드 계산). `JSONTreeView.apply`에 `ponytail:` 표시(측정값·올릴 방법)를 남겼다.
 - Filter에서 걸러진 객체·배열의 개수 표시(지금은 원래 개수).
 - Search 중 손으로 바꾼 펼침이 다음 입력에 덮임(의도, 단순함).
 - 일치가 1개일 때 다시 스크롤하기(Task 2 리뷰 minor).
