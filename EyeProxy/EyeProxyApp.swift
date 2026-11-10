@@ -153,6 +153,9 @@ private struct LayoutPicker: View {
         let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
         updaterController = updater
         model.checkForUpdates = { updater.checkForUpdates(nil) }
+        // Advanced ▸ Show Update Notification at Launch: Sparkle 값을 그대로 보이고, 바꿀 때만 Sparkle에 쓴다.
+        model.automaticUpdateChecks = updater.updater.automaticallyChecksForUpdates
+        model.setAutomaticUpdateChecks = { updater.updater.automaticallyChecksForUpdates = $0 }
     }
 
     // 자동·수동 확인 모두 여기로 온다. 새 버전이 있을 때만 툴바 배지를 띄운다.
@@ -162,6 +165,15 @@ private struct LayoutPicker: View {
     /// 시스템 프록시가 EyeProxy를 가리킬 수 있으면(캡처 중·변경 중·백업 잔여) 진행 중인 변경을 기다려 되돌린 뒤 종료한다.
     /// 실패해도 오류를 기록하고 종료 — 백업이 남아 다음 실행에서 복원을 제안한다. 두 번째 ⌘Q는 같은 작업을 기다린다.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Advanced ▸ Show Alert when quitting the app.
+        // 취소하면 아무것도 바꾸지 않게 Breakpoint를 놓기 전에 묻는다. 종료가 이미 진행 중이면 다시 묻지 않는다.
+        if quitTask == nil, model.settings.showQuitAlert {
+            let alert = NSAlert()
+            alert.messageText = String(localized: "Prog를 종료할까요?")
+            alert.addButton(withTitle: String(localized: "종료"))
+            alert.addButton(withTitle: String(localized: "취소"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
+        }
         // 멈춘 Breakpoint는 모두 원본대로 보낸다(§5.1).
         model.breakpoints.releaseAll()
         if quitTask != nil { return .terminateLater }

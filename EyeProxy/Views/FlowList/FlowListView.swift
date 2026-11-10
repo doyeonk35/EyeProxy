@@ -18,6 +18,8 @@ struct FlowListView: View {
         let comments = model.session.comments
 
         let latest = AutoSelect.latest(in: rows)
+        // Advanced ▸ Use 24-Hour Time · Display Full Time Format.
+        let timeFormat = FlowRow.timeFormat(use24Hour: model.settings.use24HourTime, full: model.settings.displayFullTimeFormat)
         // General ▸ Truncation Style: URL·Client 열.
         let truncation: Text.TruncationMode = switch model.settings.truncationStyle {
         case .head: .head
@@ -87,9 +89,11 @@ struct FlowListView: View {
                     .width(min: 40, ideal: 50, max: 80)
                     .customizationID("code")
                     TableColumn("Time", value: \.startedAt) { (row: FlowRow) in cell(row) {
-                        Text(row.startedAt, format: Self.timeFormat).monospacedDigit()
+                        // 문자열로 먼저 만든다 — `Text(_:format:)`는 화면 로캘을 끼워 넣어 PM이 "오후"가 된다.
+                        Text(verbatim: row.startedAt.formatted(timeFormat)).monospacedDigit()
                     }}
-                    .width(min: 90, ideal: 102, max: 140)
+                    // 저장된 열 폭이 좁아도 형식이 잘리지 않게 최소 폭을 형식에 맞춘다.
+                    .width(min: model.settings.displayFullTimeFormat ? 240 : model.settings.use24HourTime ? 90 : 140, ideal: 102, max: 280)
                     .customizationID("time")
                     TableColumn("Duration", value: \.durationMS) { (row: FlowRow) in cell(row) {
                         Text(FlowRow.durationText(ms: row.durationMS)).monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing)
@@ -171,10 +175,7 @@ struct FlowListView: View {
                     .help("이 호스트를 SSL Proxying List에 넣고 복호화 켜기")
                     Button(model.session.comments[id] == nil ? "Add Comment…" : "Edit Comment…") { model.commentingFlowID = id }
                         .help("이 요청의 코멘트 쓰기·고치기")
-                    Button("Copy as cURL") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(CurlExport.command(for: flow.request), forType: .string)
-                    }
+                    Button("Copy as cURL") { model.copyCurl(flow.id) }
                     .help("이 요청을 cURL 명령으로 복사")
                     Menu("Tools") {
                         ForEach(Self.toolWindows, id: \.id) { tool in
@@ -229,9 +230,4 @@ struct FlowListView: View {
         case .failed: "Failed"
         }
     }
-
-    /// 시작 시각 `HH:mm:ss.SSS`(24시간, 로캘 무관).
-    private static let timeFormat = Date.VerbatimFormatStyle(
-        format: "\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits):\(second: .twoDigits).\(secondFraction: .fractional(3))",
-        timeZone: .current, calendar: .current)
 }

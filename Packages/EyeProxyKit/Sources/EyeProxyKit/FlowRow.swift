@@ -52,6 +52,23 @@ public struct FlowRow: Identifiable, Sendable {
         edited = marks.map(\.rawValue).joined(separator: ", ")
     }
 
+    /// 목록 Time 열(Advanced ▸ Use 24-Hour Time · Display Full Time Format). 로캘 무관:
+    /// `14:03:05.123` / `02:03:05.123 PM`, 전체 형식이면 앞에 `2026-11-10 `, 뒤에 ` GMT+9`.
+    public static func timeFormat(use24Hour: Bool, full: Bool, timeZone: TimeZone = .current) -> Date.VerbatimFormatStyle {
+        // FormatString은 서로 끼워 넣을 수 없어 네 가지를 그대로 적는다.
+        let format: Date.FormatString = switch (use24Hour, full) {
+        case (true, false):
+            "\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits):\(second: .twoDigits).\(secondFraction: .fractional(3))"
+        case (false, false):
+            "\(hour: .twoDigits(clock: .twelveHour, hourCycle: .oneBased)):\(minute: .twoDigits):\(second: .twoDigits).\(secondFraction: .fractional(3)) \(dayPeriod: .standard(.abbreviated))"
+        case (true, true):
+            "\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits):\(second: .twoDigits).\(secondFraction: .fractional(3)) \(timeZone: .localizedGMT(.short))"
+        case (false, true):
+            "\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twelveHour, hourCycle: .oneBased)):\(minute: .twoDigits):\(second: .twoDigits).\(secondFraction: .fractional(3)) \(dayPeriod: .standard(.abbreviated)) \(timeZone: .localizedGMT(.short))"
+        }
+        return Date.VerbatimFormatStyle(format: format, timeZone: timeZone, calendar: Calendar(identifier: .gregorian))
+    }
+
     /// 목록 Duration 열(Proxyman 형식): "266 ms" / "59.26 s" / "2.01 min", 미완(-1) "-".
     public static func durationText(ms: Int) -> String {
         if ms < 0 { return "-" }

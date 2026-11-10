@@ -32,6 +32,7 @@ struct ComposeView: View {
         }
         .frame(minWidth: 900, minHeight: 520)
         .onAppear {
+            timeout = model.settings.requestTimeoutInterval   // Tools ▸ Request Timeout이 기본값
             history = ComposeHistory.load()
             takeSeed()
         }

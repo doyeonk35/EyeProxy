@@ -8,6 +8,15 @@ public struct SimulatorDevice: Identifiable, Equatable, Sendable {
     public init(udid: String, name: String, runtime: String) { self.udid = udid; self.name = name; self.runtime = runtime }
 }
 
+/// Advanced ▸ Hide Unnecessary Apple Requests from iOS Simulators: 시뮬레이터가 스스로 보내는 `*.apple.com`·`*.icloud.com`.
+public enum SimulatorNoise {
+    public static func isAppleNoise(host: String, clientIsSimulator: Bool) -> Bool {
+        guard clientIsSimulator else { return false }
+        let h = host.lowercased()
+        return ["apple.com", "icloud.com"].contains { h == $0 || h.hasSuffix("." + $0) }
+    }
+}
+
 public enum SimulatorsError: Error { case failed(String) }
 
 public enum Simulators {

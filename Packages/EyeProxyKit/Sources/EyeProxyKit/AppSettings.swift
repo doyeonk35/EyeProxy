@@ -56,6 +56,31 @@ public final class AppSettings {
     /// Appearance ▸ Alternative Rows Background Colors: 목록 줄무늬.
     public var alternativeRowBackgrounds: Bool { didSet { defaults.set(alternativeRowBackgrounds, forKey: "eyeproxy.alternativeRowBackgrounds") } }
 
+    // 설정 창 Tools·Advanced(스펙 §11). Use No-Caching on Repeated Requests는 `toolSwitches.repeatNoCache`(옛 키 그대로).
+    /// Tools ▸ Request Timeout(초, 0 = 없음): Compose 기본값·Repeat.
+    public var requestTimeout: Int { didSet { defaults.set(requestTimeout, forKey: "eyeproxy.requestTimeout") } }
+    /// Tools ▸ Add --proxy flag into cURL command.
+    public var curlProxyFlag: Bool { didSet { defaults.set(curlProxyFlag, forKey: "eyeproxy.curlProxyFlag") } }
+    /// Tools ▸ Auto open the Export Directory after exporting: 내보낸 파일을 Finder에서 보여 준다.
+    public var autoOpenExportDirectory: Bool { didSet { defaults.set(autoOpenExportDirectory, forKey: "eyeproxy.autoOpenExportDirectory") } }
+    /// Advanced ▸ Use 24-Hour Time: 목록 Time 열.
+    public var use24HourTime: Bool { didSet { defaults.set(use24HourTime, forKey: "eyeproxy.use24HourTime") } }
+    /// Advanced ▸ Display Full Time Format: Time 열에 날짜·시간대까지.
+    public var displayFullTimeFormat: Bool { didSet { defaults.set(displayFullTimeFormat, forKey: "eyeproxy.displayFullTimeFormat") } }
+    /// Advanced ▸ Show Alert when quitting the app.
+    public var showQuitAlert: Bool { didSet { defaults.set(showQuitAlert, forKey: "eyeproxy.showQuitAlert") } }
+    /// Advanced ▸ Show Resource Usage in Bottom Bar: 하단 바 메모리·속도.
+    public var showResourceUsage: Bool { didSet { defaults.set(showResourceUsage, forKey: "eyeproxy.showResourceUsage") } }
+    /// Advanced ▸ Hide Unnecessary Apple Requests from iOS Simulators(`SimulatorNoise`).
+    public var hideAppleSimulatorRequests: Bool { didSet { defaults.set(hideAppleSimulatorRequests, forKey: "eyeproxy.hideAppleSimulatorRequests") } }
+    /// Advanced ▸ Stay On Top: 메인 창 항상 위.
+    public var stayOnTop: Bool { didSet { defaults.set(stayOnTop, forKey: "eyeproxy.stayOnTop") } }
+    /// Advanced ▸ Show Invisible Characters: 이름·값 표 값의 공백을 `·`로(보이기만, 복사는 원래 값).
+    public var showInvisibleCharacters: Bool { didSet { defaults.set(showInvisibleCharacters, forKey: "eyeproxy.showInvisibleCharacters") } }
+
+    /// Compose·Repeat에 넘기는 타임아웃. 0이면 nil(제한 없음).
+    public var requestTimeoutInterval: TimeInterval? { requestTimeout > 0 ? TimeInterval(requestTimeout) : nil }
+
     public var sslPolicy: SSLProxyingPolicy { SSLProxyingPolicy(isEnabled: sslEnabled, patterns: sslPatterns) }
 
     public init(defaults: UserDefaults = .standard) {
@@ -84,6 +109,16 @@ public final class AppSettings {
         useMonospacedFont = defaults.bool(forKey: "eyeproxy.useMonospacedFont")
         showInvisibles = defaults.bool(forKey: "eyeproxy.showInvisibles")
         alternativeRowBackgrounds = defaults.object(forKey: "eyeproxy.alternativeRowBackgrounds") as? Bool ?? true
+        requestTimeout = max(defaults.object(forKey: "eyeproxy.requestTimeout") as? Int ?? 30, 0)
+        curlProxyFlag = defaults.bool(forKey: "eyeproxy.curlProxyFlag")
+        autoOpenExportDirectory = defaults.bool(forKey: "eyeproxy.autoOpenExportDirectory")
+        use24HourTime = defaults.object(forKey: "eyeproxy.use24HourTime") as? Bool ?? true
+        displayFullTimeFormat = defaults.bool(forKey: "eyeproxy.displayFullTimeFormat")
+        showQuitAlert = defaults.bool(forKey: "eyeproxy.showQuitAlert")
+        showResourceUsage = defaults.object(forKey: "eyeproxy.showResourceUsage") as? Bool ?? true
+        hideAppleSimulatorRequests = defaults.bool(forKey: "eyeproxy.hideAppleSimulatorRequests")
+        stayOnTop = defaults.bool(forKey: "eyeproxy.stayOnTop")
+        showInvisibleCharacters = defaults.bool(forKey: "eyeproxy.showInvisibleCharacters")
     }
 
     /// Appearance ▸ Restore Defaults: Appearance 탭 값만 기본으로.

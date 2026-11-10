@@ -82,10 +82,11 @@ extension AppModel {
             return
         }
         let noCache = settings.toolSwitches.repeatNoCache
+        let timeout = settings.requestTimeoutInterval   // Tools ▸ Request Timeout
         // 목록 순서대로 보낸다.
         for flow in session.flows where ids.contains(flow.id) && !flow.isTunnel {
             let request = noCache ? NoCachingInterceptor.noCache(flow.request) : flow.request
-            Task { _ = try? await client.send(request, timeout: 60) }
+            Task { _ = try? await client.send(request, timeout: timeout) }
         }
     }
 }

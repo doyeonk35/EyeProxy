@@ -180,11 +180,37 @@ private struct AppearanceSettings: View {
 
 /// §11 Advanced. Prog는 종료할 때 늘 이전 프록시로 되돌리므로 그 항목은 켜진 채 비활성으로 보인다.
 private struct AdvancedSettings: View {
+    @Environment(AppModel.self) private var model
+
     var body: some View {
+        @Bindable var model = model
+        @Bindable var settings = model.settings
         Form {
-            Toggle("Restore to previous HTTP/HTTPS Proxy when Prog is closed", isOn: .constant(true))
-                .disabled(true)
-                .help("Prog는 종료할 때 늘 이전 시스템 프록시로 되돌립니다(끌 수 없음)")
+            Section {
+                Toggle("Restore to previous HTTP/HTTPS Proxy when Prog is closed", isOn: .constant(true))
+                    .disabled(true)
+                    .help("Prog는 종료할 때 늘 이전 시스템 프록시로 되돌립니다(끌 수 없음)")
+                Toggle("Show Update Notification at Launch", isOn: $model.automaticUpdateChecks)
+                    .help("새 버전을 자동으로 확인해 알리기(Sparkle 자동 확인)")
+            }
+            Section {
+                Toggle("Use 24-Hour Time", isOn: $settings.use24HourTime)
+                    .help("목록 Time 열을 24시간제로(끄면 AM/PM)")
+                Toggle("Display Full Time Format", isOn: $settings.displayFullTimeFormat)
+                    .help("목록 Time 열에 날짜와 시간대까지 보이기")
+            }
+            Section {
+                Toggle("Show Alert when quitting the app", isOn: $settings.showQuitAlert)
+                    .help("종료하기 전에 확인 알림 띄우기")
+                Toggle("Show Resource Usage in Bottom Bar", isOn: $settings.showResourceUsage)
+                    .help("하단 바에 메모리·처리 속도 보이기")
+                Toggle("Hide Unnecessary Apple Requests from iOS Simulators", isOn: $settings.hideAppleSimulatorRequests)
+                    .help("시뮬레이터가 보내는 apple.com·icloud.com 요청을 숨기기 — 하단 눈 토글로 볼 수 있음")
+                Toggle("Stay On Top", isOn: $settings.stayOnTop)
+                    .help("메인 창을 항상 다른 창 위에 두기")
+                Toggle("Show Invisible Characters", isOn: $settings.showInvisibleCharacters)
+                    .help("헤더 값의 공백을 ·로 보이기(복사는 원래 값)")
+            }
         }
         .formStyle(.grouped)
     }
@@ -226,13 +252,28 @@ private struct BypassSettings: View {
     }
 }
 
+/// §11 Tools. 옛 "Repeat 요청에 No-Cache"가 Use No-Caching on Repeated Requests(같은 키)다.
 private struct ToolSettings: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         @Bindable var settings = model.settings
         Form {
-            Toggle("Repeat 요청에 No-Cache 사용", isOn: $settings.toolSwitches.repeatNoCache)
+            Toggle("Use No-Caching on Repeated Requests", isOn: $settings.toolSwitches.repeatNoCache)
+                .help("Repeat으로 다시 보내는 요청에 캐시 무시 헤더 붙이기")
+            LabeledContent("Request Timeout:") {
+                HStack {
+                    TextField("", value: Binding(get: { settings.requestTimeout }, set: { settings.requestTimeout = max($0, 0) }),
+                              format: .number)
+                        .labelsHidden().frame(width: 60).multilineTextAlignment(.trailing)
+                    Text(verbatim: "seconds")
+                }
+            }
+            .help("Compose·Repeat 요청 시간 제한(초) — 0이면 제한 없음")
+            Toggle("Add --proxy flag into cURL command", isOn: $settings.curlProxyFlag)
+                .help("cURL로 복사할 때 --proxy http://<IP>:<포트>를 붙여 Prog를 거치게")
+            Toggle("Auto open the Export Directory after exporting", isOn: $settings.autoOpenExportDirectory)
+                .help("내보낸 뒤 Finder에서 파일 보여 주기")
         }
         .formStyle(.grouped)
     }

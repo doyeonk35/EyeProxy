@@ -24,7 +24,7 @@ struct BottomBar: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .frame(maxWidth: .infinity)
-            ResourceUsage()
+            if settings.showResourceUsage { ResourceUsage() }   // Advanced ▸ Show Resource Usage in Bottom Bar
             ForEach(ActiveToolBadge.active(switches: settings.toolSwitches,
                                            proxyOverridden: model.macCaptureEnabled || model.effectiveProxyLeftover,
                                            sslEnabled: settings.sslEnabled), id: \.self) { badge in

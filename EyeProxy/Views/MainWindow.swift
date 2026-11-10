@@ -15,6 +15,7 @@ struct MainWindow: View {
             BottomBar()
         }
         .toolbar { MainToolbar(model: model) }
+        .background(StayOnTop(on: model.settings.stayOnTop))
         .focusedSceneValue(\.flowSearch, DetailFind(id: searchFindID, open: { model.showFilterBar() }))
         .sheet(isPresented: Binding(get: { model.commentingFlowID != nil }, set: { if !$0 { model.commentingFlowID = nil } })) {
             if let id = model.commentingFlowID { CommentSheet(id: id) }
@@ -90,5 +91,15 @@ private struct CommentSheet: View {
         .padding(20)
         .frame(width: 420)
         .onAppear { text = model.session.comments[id] ?? "" }
+    }
+}
+
+/// Advanced ▸ Stay On Top: 메인 창을 다른 앱 창 위에(floating). 창이 붙은 다음 바꾼다.
+private struct StayOnTop: NSViewRepresentable {
+    let on: Bool
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ view: NSView, context: Context) {
+        let level: NSWindow.Level = on ? .floating : .normal
+        DispatchQueue.main.async { view.window?.level = level }
     }
 }

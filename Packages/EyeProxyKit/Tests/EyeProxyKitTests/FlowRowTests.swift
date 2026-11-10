@@ -59,3 +59,14 @@ import Testing
     #expect(FlowRow.durationText(ms: 1020) == "1.02 s" && FlowRow.durationText(ms: 59260) == "59.26 s")
     #expect(FlowRow.durationText(ms: 120600) == "2.01 min")
 }
+
+/// Advanced ▸ Use 24-Hour Time · Display Full Time Format → 목록 Time 열(로캘 무관).
+@Test func timeColumnFormatsFollowSettings() {
+    let tz = TimeZone(secondsFromGMT: 9 * 3600)!
+    let date = Calendar(identifier: .gregorian).date(from: DateComponents(
+        timeZone: tz, year: 2026, month: 11, day: 10, hour: 14, minute: 3, second: 5, nanosecond: 123_000_000))!
+    #expect(date.formatted(FlowRow.timeFormat(use24Hour: true, full: false, timeZone: tz)) == "14:03:05.123")
+    #expect(date.formatted(FlowRow.timeFormat(use24Hour: false, full: false, timeZone: tz)) == "02:03:05.123 PM")
+    #expect(date.formatted(FlowRow.timeFormat(use24Hour: true, full: true, timeZone: tz)) == "2026-11-10 14:03:05.123 GMT+9")
+    #expect(date.formatted(FlowRow.timeFormat(use24Hour: false, full: true, timeZone: tz)) == "2026-11-10 02:03:05.123 PM GMT+9")
+}

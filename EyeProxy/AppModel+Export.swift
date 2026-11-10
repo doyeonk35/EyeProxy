@@ -77,6 +77,8 @@ extension AppModel {
                         numbers: Dictionary(uniqueKeysWithValues: items.map { ($0.flow.id, $0.number) }), to: url)
                 }
             }.value
+            // Tools ▸ Auto open the Export Directory after exporting.
+            if settings.autoOpenExportDirectory { NSWorkspace.shared.activateFileViewerSelecting([url]) }
         } catch {
             systemError = String(localized: "내보내지 못했습니다: \(error.localizedDescription)")
         }

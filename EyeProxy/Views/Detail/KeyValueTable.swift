@@ -112,7 +112,9 @@ struct KeyValueTable: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(header.name).fontWeight(.semibold).foregroundStyle(.secondary)
                 .frame(width: 160, alignment: .leading)
-            Text(header.value).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+            // Advanced ▸ Show Invisible Characters: 공백을 `·`로 보이기만 한다(우클릭 복사는 원래 값).
+            Text(model.settings.showInvisibleCharacters ? header.value.replacingOccurrences(of: " ", with: "·") : header.value)
+                .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 5)

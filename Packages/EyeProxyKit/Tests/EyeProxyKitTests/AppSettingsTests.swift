@@ -132,3 +132,21 @@ import Testing
         #expect(x.autoOverrideSystemProxy && !x.autoStartRecording)
     }
 }
+
+/// Tools·Advanced(스펙 §11) 기본값·저장. Request Timeout은 0 미만이면 0(= 없음)으로 읽는다.
+@Test @MainActor func toolsAndAdvancedSettingsHaveSpecDefaults() {
+    let d = UserDefaults(suiteName: UUID().uuidString)!
+    let s = AppSettings(defaults: d)
+    #expect(s.requestTimeout == 30 && s.requestTimeoutInterval == 30 && !s.curlProxyFlag && !s.autoOpenExportDirectory)
+    #expect(s.use24HourTime && !s.displayFullTimeFormat && !s.showQuitAlert && s.showResourceUsage)
+    #expect(!s.hideAppleSimulatorRequests && !s.stayOnTop && !s.showInvisibleCharacters)
+    s.requestTimeout = 0; s.curlProxyFlag = true; s.autoOpenExportDirectory = true; s.use24HourTime = false
+    s.displayFullTimeFormat = true; s.showQuitAlert = true; s.showResourceUsage = false
+    s.hideAppleSimulatorRequests = true; s.stayOnTop = true; s.showInvisibleCharacters = true
+    let again = AppSettings(defaults: d)
+    #expect(again.requestTimeout == 0 && again.requestTimeoutInterval == nil && again.curlProxyFlag && again.autoOpenExportDirectory)
+    #expect(!again.use24HourTime && again.displayFullTimeFormat && again.showQuitAlert && !again.showResourceUsage)
+    #expect(again.hideAppleSimulatorRequests && again.stayOnTop && again.showInvisibleCharacters)
+    d.set(-5, forKey: "eyeproxy.requestTimeout")
+    #expect(AppSettings(defaults: d).requestTimeout == 0)
+}

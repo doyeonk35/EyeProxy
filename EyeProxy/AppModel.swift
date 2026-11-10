@@ -104,6 +104,10 @@ final class AppModel {
     var updateAvailable = false
     /// Sparkle 업데이트 확인. 앱이 시작하면 `AppDelegate`가 등록한다.
     @ObservationIgnored var checkForUpdates: @MainActor () -> Void = {}
+    /// Advanced ▸ Show Update Notification at Launch = Sparkle `automaticallyChecksForUpdates`(Sparkle 자기 키에 저장).
+    /// `AppDelegate`가 시작할 때 Sparkle 값을 넣고 `setAutomaticUpdateChecks`를 등록한다.
+    var automaticUpdateChecks = true { didSet { setAutomaticUpdateChecks(automaticUpdateChecks) } }
+    @ObservationIgnored var setAutomaticUpdateChecks: @MainActor (Bool) -> Void = { _ in }
 
     // 온보딩(기기 윈도우)
     @ObservationIgnored let systemProxy = SystemProxy(backupURL: supportDirectory.appending(path: "system-proxy-backup.json"))
@@ -321,6 +325,11 @@ final class AppModel {
                 // 조회 중에 미기록(Allow List)으로 빠진 흐름은 귀속하지 않는다.
                 guard let identity = await resolver.resolve(port: port, proxyPort: proxyPort), session.number(id) != nil else { return }
                 processes.set(identity, for: id)
+                // Advanced ▸ Hide Unnecessary Apple Requests from iOS Simulators: Block List 숨김과 같은 `.hidden`(눈 토글로 보기).
+                if settings.hideAppleSimulatorRequests,
+                   SimulatorNoise.isAppleNoise(host: flow.request.host, clientIsSimulator: identity.simulator != nil) {
+                    session.apply(.annotated(id: id, .hidden))
+                }
                 // 기기 창을 열지 않아도 시뮬레이터 런타임(플랫폼 표기)을 알 수 있게 처음 보는 udid면 목록을 갱신한다.
                 if let sim = identity.simulator, !bootedSimulators.contains(where: { $0.udid == sim.udid }) { await refreshSimulators() }
             }
@@ -430,7 +439,9 @@ final class AppModel {
     func copyCurl(_ id: FlowID) {
         guard let flow = session.flow(id) else { return }
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(CurlExport.command(for: flow.request), forType: .string)
+        // Tools ▸ Add --proxy flag into cURL command: 툴바 캡슐과 같은 IP·포트.
+        let proxy = settings.curlProxyFlag ? "http://\(lanAddresses.first ?? "127.0.0.1"):\(runningPort ?? settings.port)" : nil
+        NSPasteboard.general.setString(CurlExport.command(for: flow.request, proxy: proxy), forType: .string)
     }
 
     /// Info.plist의 UTExportedTypeDeclarations와 일치해야 한다.
