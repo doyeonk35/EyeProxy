@@ -393,7 +393,13 @@ final class AppModel {
         case .host(let host): f.host = host
         case .allFlows, nil: break
         }
-        return session.flows.filter { f.matches($0, process: processKey(for: $0)) }
+        // Client 이름은 계산이 무거워 Client 규칙이 있을 때만 만든다.
+        let needsClient = f.rules.contains { $0.isActive && $0.key == .client }
+        return session.flows.filter {
+            let subject = FilterSubject(flow: $0, number: session.number($0.id) ?? 0, comment: session.comments[$0.id],
+                                        highlight: session.highlights[$0.id], client: needsClient ? clientName(for: $0) : "")
+            return f.matches(subject, process: processKey(for: $0))
+        }
     }
 
     var visibleRows: [FlowRow] {

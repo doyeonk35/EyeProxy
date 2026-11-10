@@ -2,11 +2,6 @@ import EyeProxyCore
 import Testing
 @testable import EyeProxyKit
 
-@Test func filterIsANDOfTokens() {
-    let f = Flow.fixture(url: "https://api.example.com/v2/search", method: "GET", status: 200)
-    #expect(FlowFilter(text: "example search").matches(f)); #expect(!FlowFilter(text: "example POST").matches(f)); #expect(FlowFilter(text: "200").matches(f))
-}
-
 @Test func filterProcessAndLoopback() {
     let f = Flow.fixture(client: "::1", decrypted: true)
     #expect(FlowFilter(device: "127.0.0.1").matches(f)); #expect(FlowFilter.sameDevice("::1", "127.0.0.1") && !FlowFilter.sameDevice("::1", "10.0.0.1"))
@@ -42,7 +37,8 @@ private func typed(_ url: String, status: Int, _ type: String) -> Flow {
 }
 
 @Test func barFilterStacksWithTextAndHost() {
-    var b = FlowFilter(text: "search", host: "api.example.com"); b.contentKinds = [.json]
+    var b = FlowFilter(host: "api.example.com"); b.contentKinds = [.json]
+    b.rules = [FilterRule(key: .url, match: .contains, text: "search")]
     #expect(b.matches(typed("https://api.example.com/search", status: 200, "application/json")))
     #expect(!b.matches(typed("https://api.example.com/list", status: 200, "application/json")))
     #expect(!b.matches(typed("https://x.example.com/search", status: 200, "application/json")))
@@ -50,7 +46,7 @@ private func typed(_ url: String, status: Int, _ type: String) -> Flow {
 }
 
 @Test func clearBarKeepsOtherFields() {
-    var b = FlowFilter(text: "q", host: "h"); b.protocols = [.http]; b.contentKinds = [.css]; b.statusClasses = [5]
+    var b = FlowFilter(host: "h"); b.rules = [FilterRule(text: "q")]; b.protocols = [.http]; b.contentKinds = [.css]; b.statusClasses = [5]
     #expect(!b.isBarEmpty); b.clearBar()
-    #expect(b.isBarEmpty && b.text == "q" && b.host == "h")
+    #expect(b.isBarEmpty && b.rules.first?.text == "q" && b.host == "h")
 }

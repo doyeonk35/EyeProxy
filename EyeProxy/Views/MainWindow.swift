@@ -1,5 +1,6 @@
 import AppKit
 import EyeProxyCore
+import EyeProxyKit
 import SwiftUI
 
 struct MainWindow: View {
@@ -31,7 +32,10 @@ struct MainWindow: View {
             }
         }
         .toolbar { MainToolbar(model: model) }
-        .searchable(text: $model.filter.text, placement: .toolbar, prompt: Text("URL·메서드·상태 검색"))
+        // Task 3 replaces this: 툴바 검색칸은 URL·Contains 규칙 하나를 읽고 쓴다.
+        .searchable(text: Binding(get: { model.filter.rules.first?.text ?? "" },
+                                  set: { model.filter.rules = $0.isEmpty ? [] : [FilterRule(key: .url, match: .contains, text: $0)] }),
+                    placement: .toolbar, prompt: Text("URL 검색"))
         .searchFocused($searchFocused)
         .focusedSceneValue(\.flowSearch, DetailFind(id: searchFindID, open: { searchFocused = true }))
         .sheet(isPresented: Binding(get: { model.commentingFlowID != nil }, set: { if !$0 { model.commentingFlowID = nil } })) {
