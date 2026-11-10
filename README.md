@@ -99,13 +99,89 @@ Certificate
 ```
 
 - 묶음 안은 OR, 묶음 사이는 AND. 아무것도 안 고르면 `All`이 선택된 것으로 보이고, `All`을 누르면 세 묶음을 모두 비운다.
-- 검색어·사이드바(기기·프로세스·호스트·고정)·숨김 포함과 AND로 겹친다. 필터 바를 바꿔도 다른 조건은 그대로다. 선택한 행이 필터에 걸러지면 검색어로 걸러질 때와 같게 동작한다.
+- 검색어·사이드바(기기·프로세스·호스트·고정)·숨긴 요청 보기(툴바 눈 토글)와 AND로 겹친다. 필터 바를 바꿔도 다른 조건은 그대로다. 선택한 행이 필터에 걸러지면 검색어로 걸러질 때와 같게 동작한다.
 - 저장하지 않는다(앱을 다시 켜면 `All`).
 - 분류(칩에 마우스를 올리면 규칙이 보인다): 프로토콜은 scheme(복호화 안 한 터널은 HTTPS). 콘텐츠는 응답 `Content-Type`(없으면 요청) 기준으로 GraphQL(경로에 `graphql` 또는 `application/graphql`) → Form(요청이 urlencoded·multipart) → JSON → XML → JS → CSS → Document(html·plain·pdf·markdown·csv) → Media(이미지·영상·오디오·폰트·HLS) → Other 순서로 처음 맞는 것. 상태 칩을 고르면 응답 없는 행은 빠진다.
 
+## 목록 편의
+
+**안정 번호**: ID 열 번호는 한 번 붙으면 끝까지 그대로다(Proxyman과 같다). 요청을 지워도 뒤 번호를 당기지 않아 빈 번호가 생긴다 — 코멘트·Export에서 "요청 #1499"로 가리켜도 바뀌지 않게 하기 위해서다. 번호는 세션 파일에 저장되고, 번호가 없는 옛 세션은 열 때 순서대로 1부터 매긴다. Allow List로 기록하지 않고 빠지는 요청이 가장 최근 번호였으면 그 번호는 되돌려 다시 쓴다.
+
+**Highlight**: Flow ▸ Highlight ▸ … 또는 목록 우클릭 ▸ Highlight ▸ …. 여러 행을 골랐으면 모두에 적용한다.
+
+| 항목 | 단축키 |
+|---|---|
+| Red · Yellow · Green · Blue · Purple · Gray | ⌘1 … ⌘6 |
+| Strikethrough(켜기/끄기) | ⇧⌘X |
+| Reset(색·취소선 모두 지움) | ⌘0 |
+
+- 색은 하나만(새 색이 덮어씀), 취소선은 색과 따로 켜고 끈다.
+- 행 전체 배경을 옅게 칠한다(라이트 18%, 다크 28%). 선택된 행은 시스템 선택색만 보이고, 행 앞 상태 점 자리의 같은 색 세로 막대(3pt, 행 높이 전체)로 색을 알아본다. 취소선은 URL 글자에 줄을 긋고 보조색으로.
+- 코멘트와 함께 세션 파일(`.eyeproxy`)에 저장된다. 필터 바·검색으로 색을 거르지는 않는다.
+- Strikethrough는 스펙의 ⌥⌘S가 사이드바 접기와 겹쳐 ⇧⌘X로 했다.
+
+**Delete / Delete All**
+- **Flow ▸ Delete**(⌫): 선택한 행을 지운다. 목록에 포커스가 있을 때만 켜지므로 검색창·코멘트 시트에서 ⌫는 글자만 지운다. 지운 뒤 선택은 바로 아래 행(없으면 위)으로. 필터에 가려 안 보이는 선택 행은 지우지 않는다. 우클릭 ▸ Delete는 우클릭한 행만 지운다.
+- **Flow ▸ Delete All**: **보이는 행만** 지운다(필터·검색·사이드바가 걸러 낸 행은 남김). 숨겨진 행이 있을 때만 "보이는 N개를 지웁니다. 숨겨진 M개는 남습니다." 확인을 받는다. 메인 창이 앞에 있고 보이는 행이 있을 때만 켜진다.
+- 전부 지우기는 예전처럼 File ▸ 세션 지우기(⌘K, 툴바 지우기 버튼). 지운 흐름의 코멘트·Highlight·프로세스 귀속도 같이 지운다. 되돌리기(⌘Z)는 없다.
+- Add/Edit Comment…는 한 행만 선택했을 때 켜진다.
+
+**Auto Select**: View ▸ Auto Select the Latest Request(기본 끔, 앱 설정에 저장). 켜면 **보이는 목록**의 가장 최근 요청(시작 시각 기준, 정렬과 무관)을 선택하고 그 행으로 스크롤한다 — 상세도 따라 바뀐다. 필터에 걸려 안 보이는 요청은 따라가지 않고, 필터를 바꾸면 그 필터의 최신 행으로 옮긴다. 사용자가 클릭·키보드로 다른 행을 고르면 **꺼진다**(메뉴 체크도 꺼짐, 보던 행을 빼앗지 않기 위해). Delete·세션 열기처럼 앱이 선택을 옮길 때는 꺼지지 않는다.
+
+## 상세 탭
+
+요청·응답 패널 탭은 `헤더 / 쿼리 / 본문 / 쿠키 / Raw`이고, 응답이 HLS 재생목록이면 `M3U8`이 붙는다. 헤더 바 바로 아래에 접힌 **요약**이 있다.
+
+- **Raw**: HTTP/1.1 원문 — 시작 줄 + 헤더(받은 그대로, 순서·중복 유지) + 빈 줄 + 본문. 압축 본문은 본문 탭과 같은 규칙으로 풀어 보여 주고 `Content-Encoding` 헤더는 그대로 둔다. UTF-8이 아니면 `<binary N bytes>` 한 줄. 선택·복사 가능, 줄바꿈 설정을 따른다. Breakpoint·Map Remote로 요청·응답이 바뀌면 다시 만든다.
+- **요약**(기본 접힘): URL, 메서드, 상태, 클라이언트, 시작 시각, 소요 시간, 요청·응답 크기, SSL(`복호화함`/`평문 HTTP`/`복호화 안 함`), 적용된 도구(Edited 열과 같은 값), 원래 URL·실제 전송 URL(Map Remote), 코멘트, Highlight. 응답이 없는 대기·실패 흐름에서도 보인다. 우클릭으로 값 복사.
+- **M3U8**: 요청 경로가 `.m3u8`로 끝나거나 응답 Content-Type이 `application/vnd.apple.mpegurl`·`application/x-mpegurl`·`audio/mpegurl`일 때만 보인다.
+  - Master: **변형** 표(BANDWIDTH, AVERAGE-BANDWIDTH, RESOLUTION, CODECS, FRAME-RATE, URI)와 **렌디션** 표(`#EXT-X-MEDIA`: TYPE, GROUP-ID, NAME, LANGUAGE, DEFAULT, URI).
+  - Media: 요약 줄(TARGETDURATION · MEDIA-SEQUENCE · PLAYLIST-TYPE · ENDLIST · 세그먼트 수) + **세그먼트** 표(# = MEDIA-SEQUENCE + 순번, 길이, URI, BYTERANGE, DISCONTINUITY ●) + **키** 표(METHOD, URI).
+  - URI는 요청 URL 기준 절대 URL로 풀어 보여 주고 우클릭 ▸ URL 복사. 모르는 태그는 무시하고, 읽을 수 없으면 "재생목록이 아닙니다".
+
+## Export·HAR 열기
+
+```
+Flow
+  …
+  Save Requests…
+  Export  ▸ as HAR (HTTP Archive)… / as CSV… / as Prog Session…
+목록 우클릭  ▸ … / Highlight ▸ / Export ▸ (같은 세 항목) / Delete
+File ▸ 세션 열기… ⌘O   (.eyeproxy와 .har)
+```
+
+- **범위**: Flow ▸ Export는 보이는 선택 행, 선택이 없으면(또는 선택이 모두 필터에 숨었으면) 보이는 행 전체. 우클릭 ▸ Export는 우클릭한 행. 파일 안의 순서는 목록 정렬과 상관없이 ID 오름차순.
+- **저장 이름**: 기본 `Prog-<yyyyMMdd-HHmmss>.har|.csv|.eyeproxy`.
+- **Save Requests…**: 보이는 선택 행만 Prog 세션으로 저장(Proxyman 이름 그대로). 보이는 선택이 없으면 꺼진다.
+- **as Prog Session…**: 기존 세션 파일 형식을 범위만 좁혀 쓴다(번호·코멘트·Highlight·프로세스 귀속 포함). 연결 로그는 세션 전체를 내보낼 때만 넣는다.
+- **HAR 1.2**: `log.creator`는 `Prog` + 앱 버전, 항목 하나가 흐름 하나. 본문은 압축을 풀어 `content.text`·`postData.text`에 담고(텍스트가 아니면 `encoding: "base64"`), `content.size`는 풀린 크기, `bodySize`는 전송 크기다. 풀어서 바이트가 달라졌을 때만 원본 바이트를 `_prog.rawResponseBody`·`_prog.rawRequestBody`(base64)에 함께 넣는다 — 다른 도구는 풀린 본문을 읽고, Prog로 다시 열면 원본 바이트가 그대로 돌아온다. 응답이 없으면 `response.status = 0` + `_prog.error`, 미완료면 `time = 0` + `_prog.incomplete`. 세부 타이밍은 없어 `timings`는 send 0 / wait = time / receive 0.
+- **`_prog` 확장 필드**(HAR 규칙의 `_` 접두, 값 없는 필드는 생략): `number`(안정 번호), `comment`, `highlight{color, strikethrough}`, `tools`(적용된 도구 이름), `client`, `isTunnel`, `isDecrypted`, `originalURL`, `sentURL`, `error`, `incomplete`, `rawRequestBody`, `rawResponseBody`.
+- **CSV**: 열 `ID, Method, URL, Status, Code, Client, Start, Duration (ms), Request Size, Response Size, SSL, Edited, Highlight, Comment`. RFC 4180 따옴표, 줄 끝 CRLF, 본문은 넣지 않는다. 앱이 쓰는 파일은 Excel에서 한글이 깨지지 않게 UTF-8 BOM으로 시작한다(Kit `FlowExport.csv`는 BOM 없이 문자열만 돌려준다).
+- **HAR 열기**: File ▸ 세션 열기…(⌘O)에서 `.har`를 고르면 현재 세션을 **교체**한다(`.eyeproxy` 열기와 같다). Prog가 내보낸 HAR은 번호·코멘트·Highlight·도구 표시·터널·복호화 여부·원래/실제 URL을 복원한다. 번호가 겹치거나 0 이하인 게 하나라도 있으면 번호는 전부 파일 순서대로 다시 매긴다. 클라이언트 이름은 아직 복원하지 않는다(Client 열이 빈다). 다른 도구(Chrome·Proxyman 등)의 HAR은 파일 순서대로 1부터 번호를 매기고 관대하게 읽는다 — request·method·url이 없는 항목만 건너뛰고 형식이 틀린 나머지 필드는 기본값. 읽을 수 있는 항목이 없거나 JSON이 아니면 "HAR 파일을 열지 못했습니다: <이유>" 알림.
+- `.har`는 Prog가 `com.tv.eyeproxy.har`(`public.json` 계열)로 가져와 선언한다. 같은 확장자를 다른 앱(예: Proxyman)이 선언해도 열기·저장 패널이 받는다.
+
+**API(CLI·MCP용)**: 직렬화·파싱은 `EyeProxyKit`의 순수 함수이고, 앱은 범위 결정과 저장·열기 패널만 맡는다. 나중에 붙을 CLI·MCP 스킬도 같은 함수를 부른다.
+
+```swift
+FlowExport.har(_ items: [ExportItem], creator: String = "Prog", version: String) -> Data  // HAR 1.2 JSON, 키 정렬(같은 입력 → 같은 바이트)
+FlowExport.csv(_ items: [ExportItem]) -> String                                         // BOM 없음
+FlowImport.har(_ data: Data) throws -> [ImportedFlow]                                   // 실패 시 FlowImportError.invalidHAR(이유)
+struct ExportItem { flow: Flow; number: Int; comment: String?; highlight: FlowHighlight?; client: String? }
+```
+
+## 툴바
+
+- 기록 ▶/⏸(⌘R) · 지우기(⌘K) · Compose(⌥⌘C) 묶음, SSL 자물쇠와 **숨긴 요청 보기** 눈 토글 묶음, 레이아웃 피커 묶음.
+- 눈 토글은 예전 "숨김 포함" 체크박스다. 끔 = `eye.slash`, 켬 = `eye` + 회색 선택 채움(자물쇠·기록 버튼과 같은 시스템 모양). 켜면 Block List로 숨긴 요청도 목록에 보인다.
+- 상태 캡슐(No Caching, Breakpoint 대기, 규칙 경고)은 좌우 여백을 넓혔다. 버튼 묶음 안쪽 여백·버튼 간격은 시스템 기본(약 4pt)이다.
+
+## 툴팁
+
+툴바 버튼·토글·피커, 필터 바 칩, 메뉴 막대의 File·Edit·View·Flow·Tools·Certificate 항목, 상태 막대 메뉴, 목록 우클릭 메뉴, Certificate 창 버튼에 마우스를 잠깐 올리면 한국어 한 줄 설명이 뜬다. 단축키가 있으면 끝에 괄호로 붙는다(예: "요청에 로컬 파일로 응답하는 규칙 (⌥⌘L)"). 도구 창 안의 버튼(New·Delete·Save 등)은 아직 영어 툴팁이다.
+
 ## 상태 막대 메뉴
 
-메뉴 막대의 개구리 아이콘. Proxyman 상태 메뉴와 같은 순서다.
+메뉴 막대의 눈 아이콘. Proxyman 상태 메뉴와 같은 순서다.
 
 ```
 Show Prog
@@ -125,9 +201,10 @@ Quit Prog                    ⌘Q
 - 토글은 메인 창과 같은 값이다 — Record Traffic = 툴바 ▶/⏸·⌘R, macOS Proxy Overridden = 이 Mac 캡처(바꾸는 중엔 비활성), SSL Proxying List = 툴바 자물쇠, 도구 스위치 = Tools ▸ Enable/Disable Tools.
 - **Listen on**: LAN 첫 주소(없으면 `127.0.0.1`)와 포트. Copy Shell Command는 `export https_proxy=http://<ip>:<port> http_proxy=http://<ip>:<port>`. 서버가 멈추면 `Listen on — (Stopped)`로 비활성.
 - **Quit Prog**: 일반 종료와 같아서 시스템 프록시를 원래대로 되돌린다.
-- **아이콘**: 기록 중이면 물 위로 눈을 내민 개구리(눈 뜸), 서버는 켜졌는데 기록이 꺼지면 눈 감은 개구리, 서버가 멈추거나 실패하면 물결과 공기방울만. 템플릿 이미지라 밝은·어두운 메뉴 막대 색을 따른다.
+- **아이콘**: 눈 두 개. 기록 중이면 눈 뜸(눈동자), 서버는 켜졌는데 기록이 꺼지면 눈 감음, 서버가 멈추거나 실패하면 빈 눈 윤곽에 사선. 템플릿 이미지라 밝은·어두운 메뉴 막대 색을 따른다.
+- **빨간 점**: 확인할 일이 있을 때만 오른쪽 위에 뜬다 — 멈춘 Breakpoint가 있음, 서버 시작 실패, 규칙 파일 경고. 셋 다 없으면 점도 없다(평소엔 눈만). 접근성 레이블은 "Prog — 기록 중/일시정지/서버 중지[, 확인 필요]".
 - 설정 ▸ 일반 **상태 막대에 아이콘 표시**(기본 켬)로 숨기고 보인다.
-- 앱 아이콘(녹색 개구리)과 상태 막대 아이콘 원본은 `Design/*.svg`이고, `scripts/make-icons.sh`가 `Assets.xcassets`의 PNG를 다시 만든다(산출물은 커밋).
+- 앱 아이콘(녹색 개구리)과 상태 막대 아이콘 원본은 `Design/*.svg`(눈은 `MenuBar-Eyes-Open/Closed/Stopped.svg`)이고, `scripts/make-icons.sh`가 `sips`로 렌더해 `Assets.xcassets`의 PNG를 다시 만든다(산출물은 커밋). 앱 아이콘은 macOS 기본 여백(1024 캔버스에 824 본체)과 투명한 모서리를 갖고, 스크립트가 크기와 모서리 알파 0을 검사한다.
 
 ## 문제 해결
 
@@ -196,6 +273,21 @@ GitHub 레포가 private이면 Sparkle 업데이트와 Release 다운로드가 �
 - P12는 macOS 내장 `/usr/bin/openssl`(LibreSSL, 기본 암호화 방식)로 만든다. openssl이 없거나 실패하면 오류 알림만 뜬다.
 - Listen 주소(상태 막대 메뉴·툴바·Android 섹션)는 네트워크가 바뀌어도 바로 갱신되지 않는다. 메뉴·창을 다시 그릴 때 갱신된다.
 - 상태 막대 아이콘은 메뉴 막대가 꽉 차면(노치 포함) "»" 안에 숨는다.
+
+## 알려진 제한(목록·상세·Export)
+
+- Delete·Delete All은 되돌릴 수 없다(⌘Z 없음).
+- Highlight 행 배경은 SwiftUI Table 열 간격(실측 17pt)에 맞춰 칠한다. OS가 열 간격을 바꾸면 행 배경에 틈이나 진한 띠가 생길 수 있다.
+- 다른 앱이 ⇧⌘X를 전역 단축키로 잡고 있으면 Strikethrough 단축키가 Prog에 닿지 않는다(메뉴로는 된다).
+- Breakpoint 등으로 본문을 **같은 길이로만** 고치고 시작 줄·헤더가 그대로면 Raw·본문 탭이 갱신되지 않는다. M3U8 탭은 응답 Breakpoint 편집 뒤에도 갱신되지 않는다.
+- M3U8 URI 열이 넓어 기본 분할에서는 가로 스크롤이나 열 너비 조절이 필요하다. 요약의 펼침 상태는 선택을 해제하면 접힘으로 돌아간다.
+- `.har`는 File ▸ 세션 열기…(⌘O)로만 연다. Finder 더블클릭·`open -a`는 지원하지 않는다(문서 열기 처리 없음).
+- HAR에서 클라이언트 이름(`_prog.client`)은 복원하지 않아 가져온 흐름의 Client 열이 비고 사이드바 기기·프로세스로 나뉘지 않는다(다음 묶음).
+- 다른 도구의 HAR: 복호화 여부는 `https` 여부로 추정하고(`wss`는 복호화 안 함으로), 시각을 못 읽은 항목은 앞 항목의 시각, URL의 사용자 정보·대문자 scheme·명시한 기본 포트는 따로 다루지 않는다.
+- CSV는 `=`·`+`·`-`·`@`로 시작하는 값을 그대로 쓴다(수식 주입 방어 없음). 믿을 수 없는 트래픽의 CSV는 Excel에서 열 때 주의한다.
+- 빨간 점이 떠 있는 동안 메뉴 막대가 라이트↔다크로 바뀔 때 눈 색이 따라 바뀌는지는 실제 막대에서 확인하지 못했다(그릴 때마다 막대 외관을 읽도록 구현, 오프라인 렌더로만 확인).
+- 메뉴 툴팁은 개발 Mac(최신 macOS)에서만 확인했다. macOS 15와 상태 막대·우클릭 메뉴의 툴팁 표시는 미확인.
+- 툴바 버튼 묶음 안쪽 여백·버튼 간격은 SwiftUI에 API가 없어 시스템 기본을 따른다. 상태 캡슐의 위아래 여백은 툴바 행 높이에 묻혀 보이지 않는다.
 
 ## 빌드·테스트
 
