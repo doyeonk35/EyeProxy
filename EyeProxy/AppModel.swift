@@ -11,12 +11,6 @@ enum ServerState: Equatable {
     case failed(message: String)
 }
 
-enum SidebarItem: Hashable {
-    case allFlows
-    case host(String)
-    case scope(FlowScope)
-}
-
 @MainActor @Observable
 final class AppModel {
     static let supportDirectory = URL.applicationSupportDirectory.appending(path: "com.tv.eyeproxy")
@@ -75,6 +69,11 @@ final class AppModel {
     /// 사이드바 트리·"전체" 개수. 목록처럼 트래픽 중에는 묶어서 다시 만든다.
     private(set) var sidebarTree = SidebarTree.build(flows: [], attribution: [:], devices: [], pinned: [], runtimes: [:])
     private(set) var sidebarFlowCount = 0
+    /// 사이드바 아래 필터 칸: 줄 이름으로 거른다.
+    var sidebarFilterText = "" { didSet { sidebarRefresh.now() } }
+    /// 경로 트리를 펼친 도메인. 펼친 도메인만 경로 트리를 만든다(사이드바와 같이 묶어서 갱신).
+    var expandedDomains: Set<String> = [] { didSet { sidebarRefresh.now() } }
+    private(set) var pathTrees: [String: [PathNode]] = [:]
     @ObservationIgnored private lazy var rowsRefresh = ThrottledRefresh { [weak self] in self?.computeVisibleRows() }
     @ObservationIgnored private lazy var sidebarRefresh = ThrottledRefresh { [weak self] in self?.computeSidebar() }
     /// 우클릭 ▸ Tools로 열 새 규칙. 해당 도구 창이 꺼내 편집기를 연다.
@@ -340,10 +339,7 @@ final class AppModel {
         processes.clear()
         selectedFlowID = nil
         // 지우면 목록이 비어 선택된 행이 사라진다 → 보이지 않는 필터가 남지 않게.
-        switch sidebarSelection {
-        case .host, .scope: sidebarSelection = .allFlows
-        case .allFlows, nil: break
-        }
+        if let s = sidebarSelection, s != .allFlows { sidebarSelection = .allFlows }
         refreshVisibleRows()
     }
 
@@ -442,11 +438,7 @@ final class AppModel {
     private func computeVisibleFlows() -> [Flow] {
         var f = filter
         (f.rules, f.combineWithOr) = (appliedRules.rules, appliedRules.combineWithOr)
-        switch sidebarSelection {
-        case .scope(let s): (f.device, f.process, f.host) = (s.device, s.process, s.host)
-        case .host(let host): f.host = host
-        case .allFlows, nil: break
-        }
+        sidebarSelection?.apply(to: &f)
         let p = f.prepared()
         // Client 이름은 계산이 무거워 Client 규칙이 있을 때만 만든다.
         let needsClient = f.rules.contains { $0.isActive && $0.key == .client }
@@ -571,7 +563,8 @@ final class AppModel {
         let flows = sidebarFlows
         sidebarFlowCount = flows.count
         sidebarTree = SidebarTree.build(flows: flows, attribution: processes.attribution, devices: devices.devices,
-                                        pinned: settings.pinnedHosts, runtimes: simulatorRuntimes)
+                                        pinned: settings.pinnedHosts, runtimes: simulatorRuntimes).filtered(sidebarFilterText)
+        pathTrees = Dictionary(uniqueKeysWithValues: expandedDomains.map { ($0, SidebarTree.pathTree(for: $0, flows: flows)) })
     }
 
     // MARK: - 온보딩

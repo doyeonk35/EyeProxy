@@ -18,12 +18,14 @@ extension FocusedValues {
     @Entry var detailFind: DetailFind?
     /// 메인 창 필터 막대를 보이고 현재 규칙 검색칸에 포커스를 주는 동작(`open`).
     @Entry var flowSearch: DetailFind?
+    /// 사이드바(목록·필터 칸)에 포커스가 있을 때 사이드바 필터 칸에 포커스를 주는 동작. ⇧⌘F는 그때만 켜진다.
+    @Entry var sidebarFilter: DetailFind?
 }
 
 /// Edit ▸ Find. SwiftUI `Window` 장면은 Find 항목을 넣지 않아 직접 둔다(⌘F 단축키는 여기 하나뿐).
 /// 라우팅: ① 본문·Raw 텍스트 뷰가 응답자면 내장 찾기 막대(NSTextFinder) ② 표·트리가 포커스면 그 막대
 /// ③ 메인 창(시트 아님)의 목록·사이드바면 필터 막대 ④ 그 밖은 표준 응답자 체인.
-/// 필터 막대 단축키(⌘N·⇧⌘N·⌘↑·⌘↓·⌘B)는 막대 안에 포커스가 있을 때만 켜진다 — 다른 곳의 같은 키를 빼앗지 않는다.
+/// 필터 막대 단축키(⌘N·⇧⌘N·⌘↑·⌘↓·⌘B)는 막대 안에, ⇧⌘F는 사이드바에 포커스가 있을 때만 켜진다 — 다른 곳의 같은 키를 빼앗지 않는다.
 struct FindCommands: Commands {
     var body: some Commands {
         CommandGroup(after: .pasteboard) { FindMenu() }
@@ -34,6 +36,7 @@ private struct FindMenu: View {
     @FocusedValue(\.detailFind) private var detail
     @FocusedValue(\.flowSearch) private var flowSearch
     @FocusedValue(\.filterBar) private var filterBar
+    @FocusedValue(\.sidebarFilter) private var sidebarFilter
 
     var body: some View {
         Divider()
@@ -47,6 +50,10 @@ private struct FindMenu: View {
             Button("Find Previous") { step(-1) }
                 .keyboardShortcut("g", modifiers: [.command, .shift])
                 .help("이전 일치 (⇧⌘G)")
+            Button("Filter Sidebar") { sidebarFilter?.open() }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+                .disabled(sidebarFilter == nil)
+                .help("사이드바 필터 칸으로 (⇧⌘F, 사이드바에 포커스가 있을 때)")
             Divider()
             filterItem("New Filter", .add, "n", help: "필터 막대에 규칙 추가 (⌘N)")
             filterItem("Remove Filter", .remove, "n", [.command, .shift], help: "필터 막대의 이 규칙 지우기 (⇧⌘N)")

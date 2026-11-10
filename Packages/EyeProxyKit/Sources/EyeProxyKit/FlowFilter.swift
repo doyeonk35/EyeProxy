@@ -26,6 +26,8 @@ public struct FlowFilter: Equatable, Sendable, Codable {
     public var combineWithOr = false
     public var device: String? = nil
     public var host: String? = nil
+    /// 사이드바 경로 노드: 쿼리를 뺀 경로가 이 경로이거나 그 아래(세그먼트 경계, "/v3"는 "/v30"을 고르지 않는다).
+    public var pathPrefix: String? = nil
     /// ProcessIdentity.groupKey. 귀속 없는 흐름의 키는 `unknownProcessKey`.
     public var process: String? = nil
     /// false면 `.hidden` 주석이 있는 흐름(Block List의 숨김)을 뺀다.
@@ -72,6 +74,11 @@ public struct FlowFilter: Equatable, Sendable, Codable {
 
     public static func isLoopback(_ address: String) -> Bool { address == "127.0.0.1" || address == "::1" }
 
+    /// 쿼리·조각을 뺀 경로의 세그먼트(빈 세그먼트 제외). 경로 트리와 `pathPrefix`가 같이 쓴다.
+    public static func pathSegments(_ path: String) -> [Substring] {
+        path.prefix { $0 != "?" && $0 != "#" }.split(separator: "/")
+    }
+
     public static func sameDevice(_ a: String, _ b: String) -> Bool {
         (isLoopback(a) && isLoopback(b)) || a == b
     }
@@ -98,9 +105,11 @@ public struct PreparedFilter {
     private let active: [(rule: FilterRule, regex: NSRegularExpression?, body: Int?)]
     /// 켜진 본문 규칙(순서대로). `bodyHits`·`matches(bodyHits:)`의 배열이 이 순서를 따른다.
     public let bodyRules: [FilterRule]
+    private let prefixSegments: [Substring]?
 
     init(_ filter: FlowFilter) {
         self.filter = filter
+        prefixSegments = filter.pathPrefix.map(FlowFilter.pathSegments)
         var active: [(rule: FilterRule, regex: NSRegularExpression?, body: Int?)] = []
         var bodyRules: [FilterRule] = []
         for r in filter.rules where r.isEnabled && !r.text.isEmpty {
@@ -127,6 +136,7 @@ public struct PreparedFilter {
         if let device = f.device, !FlowFilter.sameDevice(flow.clientAddress, device) { return false }
         if let wanted = f.process, (process ?? FlowFilter.unknownProcessKey) != wanted { return false }
         if let host = f.host, flow.request.host != host { return false }
+        if let prefixSegments, !FlowFilter.pathSegments(flow.request.path).starts(with: prefixSegments) { return false }
         if !f.protocols.isEmpty, !f.protocols.contains(FlowProtocol.of(flow)) { return false }
         if !f.contentKinds.isEmpty, !f.contentKinds.contains(ContentKind.of(flow)) { return false }
         if !f.statusClasses.isEmpty, !(flow.response.map { f.statusClasses.contains($0.status / 100) } ?? false) { return false }
