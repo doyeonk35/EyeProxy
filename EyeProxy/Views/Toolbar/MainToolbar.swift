@@ -20,9 +20,6 @@ struct MainToolbar: ToolbarContent {
         ToolbarItem(placement: .status) {
             HStack(spacing: 8) {
                 status
-                if model.settings.toolSwitches.noCaching {
-                    Text("No Caching").modifier(Capsuled(color: .orange, selected: false))
-                }
                 PendingBreakpointsButton(count: model.breakpoints.pending.count)
                 if !model.rules.loadWarnings.isEmpty {
                     Button("⚠︎ 규칙 경고 \(model.rules.loadWarnings.count)건") { model.showRuleWarnings = true }
