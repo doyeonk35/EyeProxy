@@ -48,6 +48,8 @@ struct BottomBar: View {
                 }
             }
         }
+        // 팝오버 안에서 No Caching을 끄면 배지(팝오버 기준점)가 사라진다 — 다음에 켤 때 저절로 다시 뜨지 않게 내린다.
+        .onChange(of: settings.toolSwitches.noCaching) { _, on in if !on { showNoCaching = false } }
         .font(.callout)
         .padding(.horizontal, 8)
         .frame(height: 26)
