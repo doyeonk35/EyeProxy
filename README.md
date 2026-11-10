@@ -17,13 +17,13 @@ macOS용 MITM 디버깅 프록시 (Proxyman류). Mac·시뮬레이터·Apple TV�
 1. 처음 켜면 루트 CA가 자동 생성된다.
 2. 메뉴 **Certificate ▸ Install Certificate on this Mac…** → 확인 → 관리자 인증 → 로그인 키체인에 추가되고 SSL 신뢰가 설정된다. Certificate 창(⌘D) › 이 Mac의 **Mac에 CA 설치**와 같다.
 3. Certificate 창 › 이 Mac의 **이 Mac 캡처**(메뉴 Tools ▸ Proxy Settings ▸ Override macOS Proxy, 상태 막대 메뉴 macOS Proxy Overridden도 같은 스위치)를 켜면 활성 네트워크 서비스의 HTTP·HTTPS 프록시가 `127.0.0.1:9090`으로 설정된다. 끄거나 종료하면 원래대로 복원된다.
-4. 기록은 툴바 버튼(⌘R)으로 켜고 끈다. 기록 중이면 ▶, 일시정지면 ⏸로 보인다.
+4. 기록은 툴바 버튼(⌘R)으로 켜고 끈다. 버튼은 누르면 할 일을 보여 준다 — 기록 중이면 ⏸(누르면 멈춤), 멈춰 있으면 ▶(누르면 기록). 실행 때 기록을 켤지는 설정 General ▸ Auto Start Recording Traffic at Launch(기본 켬).
 
 ## 기기 연결
 
 모든 기기 설치는 **Certificate** 메뉴나 Certificate 창(⌘D, Certificate ▸ Certificate & Devices Window…)에서 한다. 창 왼쪽 섹션은 `이 Mac` / `iOS 시뮬레이터` / `iPhone·iPad` / `Apple TV·Apple Watch` / `Android` / `개발 환경` / `내보내기·초기화` / `연결된 기기`이고, 메뉴 항목은 해당 섹션을 골라 창을 연다(열려 있으면 앞으로 가져와 섹션만 바꾼다).
 
-- **Mac**: 위 첫 실행 절차. 브라우저·앱 트래픽이 바로 잡힌다. 사이드바는 Mac 트래픽을 프로세스별로 나눈다. Safari·WKWebView의 XPC 헬퍼 트래픽은 책임 앱 아래로 묶이고, 시뮬레이터 앱은 "<앱> (<플랫폼> 시뮬레이터)"로, curl 같은 명령줄 도구는 자기 이름으로 표시된다.
+- **Mac**: 위 첫 실행 절차. 브라우저·앱 트래픽이 바로 잡힌다. 사이드바 All ▸ Apps가 Mac 트래픽을 프로세스별로 나눈다. Safari·WKWebView의 XPC 헬퍼 트래픽은 책임 앱 아래로 묶이고, 시뮬레이터 앱은 "<앱> (<플랫폼> 시뮬레이터)"로, curl 같은 명령줄 도구는 자기 이름으로 표시된다.
 - **시뮬레이터**: Certificate ▸ Install Certificate on iOS ▸ Simulators… → 부팅된 iOS·tvOS 시뮬레이터마다 **CA 설치** → 시뮬레이터 앱 재실행.
 - **iPhone·iPad / Apple TV**: Install Certificate on iOS ▸ Physical Devices… 또는 watchOS or tvOS… → **실기기 프로필 만들기**에서 SSID·보안 유형·비밀번호·Mac IP·포트를 입력해 `Prog-<SSID>.mobileconfig`(Wi-Fi + 수동 프록시)를 저장한다. Apple TV는 Apple Configurator로 페어링 후 프로필을 드래그, iPhone·iPad는 AirDrop·메일로 전달한다. 그다음 기기에서 `http://prog/ssl`로 CA 프로필을 설치하고 `인증서 신뢰 설정`에서 신뢰한다. Apple Watch는 짝지은 iPhone에 설치하면 전달된다. (프로필에 Wi-Fi 비밀번호가 평문으로 들어가며 앱은 비밀번호를 저장하지 않는다.)
 - **Android**: Install Certificate on Android ▸ Physical Devices… / Emulators… → Android 섹션의 실기기·에뮬레이터·Android TV 탭(아래 Certificate 메뉴 절).
@@ -42,7 +42,7 @@ macOS용 MITM 디버깅 프록시 (Proxyman류). Mac·시뮬레이터·Apple TV�
 - **Allow List**: 켜면 규칙에 맞는 요청만 기록·조작하고 나머지는 기록 없이 그대로 통과시킨다.
 - **No Caching**: 복호화되는 요청에서 캐시 헤더를 지우고 `no-cache`를 붙인다.
 - **Network Conditions**: 호스트(또는 전체)에 3G 같은 느린 네트워크 프로필을 씌운다. 한 번에 규칙 하나만 켜진다.
-- **Compose / Repeat**: 요청을 새로 만들거나(⌥⌘C, `curl …` 붙여 넣기 가능) 목록의 요청을 다시 보낸다(Flow ▸ Repeat ⌘↩, Edit and Repeat… ⌥⌘↩).
+- **Compose / Repeat**: 요청을 새로 만들거나(⌥⌘C, `curl …` 붙여 넣기 가능) 목록의 요청을 다시 보낸다(Flow ▸ Repeat ⌘↩, Edit and Repeat… ⌥⌘↩). 타임아웃은 설정 Tools ▸ Request Timeout(기본 30초, 0 = 없음)이고 Compose 창 `⋯`에서 창마다 바꿀 수 있다.
 
 **쿼리**: 규칙 편집기의 `쿼리: 무시 | 선택한 항목만 | 전체 일치`. 새 규칙은 **무시**가 기본이라 요청 URL에서 `?` 뒤를 떼고 비교하므로 `https://host/path` 하나가 쿼리가 다른 요청에 모두 맞는다(Proxyman에서 붙이던 `?*`가 필요 없다). **선택한 항목만**은 표에서 체크한 쿼리 항목만 비교한다(키는 정확히, 값은 `*`·`?` 와일드카드, 값이 `*`면 키만 있으면 됨, 체크 안 한 항목은 있든 없든 상관없음). 우클릭 ▸ Tools로 만든 규칙은 요청의 쿼리가 체크 해제로 표에 들어오니 필요한 것만 체크하면 되고, URL 칸에 쿼리가 든 URL을 붙여 넣으면 쿼리가 표로 옮겨진다. Proxyman에서 가져온 규칙은 **전체 일치**로 들어와 Proxyman과 똑같이 동작한다.
 
@@ -90,18 +90,117 @@ Certificate
 - **Export**: PEM(`Prog-CA.pem`)·DER(`Prog-CA.cer`)은 바로 저장. P12는 비밀번호(비워도 됨)를 받아 `/usr/bin/openssl pkcs12`로 만들고 비밀번호는 명령 인자에 노출하지 않는다. Private Key는 경고 확인 뒤 `Prog-CA-key.pem`을 0600으로 저장한다 — 이 키가 있으면 Prog CA를 신뢰하는 모든 기기의 HTTPS를 가로챌 수 있다.
 - **Reset all Prog Certificates…**: 확인 → `…/com.tv.eyeproxy/ca/`를 `ca-backup-<yyyyMMdd-HHmmss>/`로 옮기고 새 루트 CA(`Prog Root CA (<호스트>)`)를 만든 뒤 서버를 다시 시작한다. Mac·시뮬레이터·기기는 모두 다시 설치해야 한다. Mac 키체인의 옛 CA는 지우지 않으니 키체인 접근에서 직접 지운다.
 
-## 필터 바
+## 메인 화면
 
-메인 창 툴바 바로 아래, 목록 위 한 줄(위아래·좌우 레이아웃 모두).
+Proxyman 메인 창과 같은 배치·이름·단축키다. 구조 이름(사이드바 섹션·탭·하단 버튼·필터 키·매칭)은 Proxyman 영어, 툴팁·빈 화면·오류는 한국어 한 줄.
+
+```
+툴바        ⏸ 지우기 Compose │ ● Prog | Listening on 192.168.0.12:9090  New Update ⚠ │ 🔒 👁 │ 레이아웃
+칩 막대      [All] │ HTTP HTTPS │ JSON Form … │ 1xx … 5xx
+필터 막대    [✓] [URL ▾] [Contains ▾] [검색어]  − +          (⌘F, 숨길 수 있음)
+사이드바 │ 목록(최신이 위)
+         │ 상세: Request │ Response
+하단 바     Clear Filter Auto Select   1/106 rows selected   181 MB · ↑122 KB/s ↓20 KB/s  Breakpoint  Map Local …
+```
+
+### 툴바
+
+- 기록(⌘R) · 지우기(⌘K) · Compose(⌥⌘C) 묶음, SSL 자물쇠와 **숨긴 요청 보기** 눈 토글 묶음, 레이아웃 피커 묶음.
+- **기록 버튼**은 상태가 아니라 누르면 할 일을 보여 준다(Proxyman과 같음). 기록 중 ⏸ "기록 일시정지 (⌘R)", 멈춤 ▶ "기록 다시 시작 (⌘R)". 상태 막대 메뉴·Tools 메뉴의 Record Traffic은 상태 체크라 그대로다.
+- 눈 토글은 예전 "숨김 포함" 체크박스다. 끔 = `eye.slash`, 켬 = `eye` + 회색 선택 채움. 켜면 Block List로 숨긴 요청도 목록에 보인다.
+- **상태 캡슐**: `● Prog | Listening on <IP>:<포트>`. IP는 LAN 첫 주소(없으면 `127.0.0.1`), 상태 막대 메뉴의 Listen on과 같다. 기록을 멈추면 끝에 ` | Pause`가 붙고 점이 초록에서 주황으로 바뀐다. 서버가 멈추거나 실패하면 예전처럼 "중지됨" 또는 빨간 오류와 "다시 시도".
+- 캡슐 옆: 멈춘 Breakpoint 버튼, 규칙 경고, 그리고 새 버전이 있을 때만 주황 **New Update ⚠** 배지. 누르면 Sparkle 업데이트 창이 열린다(`Prog > 업데이트 확인…`과 같다). Sparkle이 새 버전을 찾으면 뜨고 최신이면 사라진다.
+- 예전 툴바의 No Caching 캡슐은 하단 바 배지로 옮겼다.
+
+### 목록
+
+- 기본 정렬은 ID **내림차순** — 최신 요청이 맨 위. 열 머리를 누르면 바뀌고, 저장하지 않아 앱을 다시 켜면 다시 내림차순.
+- 상태 점: 초록 Completed, 주황 Active(진행 중), 빨강 Failed. 응답 전 Active 행은 Code·Duration이 `-`.
+- Delete 뒤 선택은 화면에서 바로 아래 행(이제 더 오래된 행)으로 간다. Export 파일 순서는 정렬과 상관없이 ID 오름차순.
+- 모양은 설정을 따른다: 줄무늬(Alternative Rows Background Colors, 기본 켬), 고정폭 글꼴(Use Monospaced Font), URL·Client 말줄임 위치(Truncation Style, 기본 Tail), Time 열(Use 24-Hour Time·Display Full Time Format).
+- 트래픽이 몰리면 목록·사이드바는 최대 0.25초마다 묶어서 다시 계산한다. 필터·정렬·사이드바 선택을 바꾸면 바로.
+
+### 칩 막대
+
+툴바 바로 아래, 필터 막대 위 한 줄(위아래·좌우 레이아웃 모두).
 
 ```
 [All] │ HTTP  HTTPS │ JSON  Form  XML  JS  CSS  GraphQL  Document  Media  Other │ 1xx  2xx  3xx  4xx  5xx
 ```
 
 - 묶음 안은 OR, 묶음 사이는 AND. 아무것도 안 고르면 `All`이 선택된 것으로 보이고, `All`을 누르면 세 묶음을 모두 비운다.
-- 검색어·사이드바(기기·프로세스·호스트·고정)·숨긴 요청 보기(툴바 눈 토글)와 AND로 겹친다. 필터 바를 바꿔도 다른 조건은 그대로다. 선택한 행이 필터에 걸러지면 검색어로 걸러질 때와 같게 동작한다.
+- 필터 막대·사이드바(기기·앱·도메인·경로·고정)·숨긴 요청 보기(툴바 눈 토글)와 AND로 겹친다. 칩을 바꿔도 다른 조건은 그대로다. 선택한 행이 걸러지면 선택은 남지만 보이지 않는 선택으로 친다.
 - 저장하지 않는다(앱을 다시 켜면 `All`).
 - 분류(칩에 마우스를 올리면 규칙이 보인다): 프로토콜은 scheme(복호화 안 한 터널은 HTTPS). 콘텐츠는 응답 `Content-Type`(없으면 요청) 기준으로 GraphQL(경로에 `graphql` 또는 `application/graphql`) → Form(요청이 urlencoded·multipart) → JSON → XML → JS → CSS → Document(html·plain·pdf·markdown·csv) → Media(이미지·영상·오디오·폰트·HLS) → Other 순서로 처음 맞는 것. 상태 칩을 고르면 응답 없는 행은 빠진다.
+
+### 필터 막대(⌘F)
+
+툴바 검색칸 대신 칩 막대 아래에 Proxyman Multiple Filters와 같은 막대가 있다.
+
+```
+[✓] [URL ▾]          [Contains ▾] [api.example.com ]  −  +
+[✓] [Status Code ▾]  [>= ▾]       [400             ]  −  +
+Show ⌘F · New ⌘N · Remove ⇧⌘N · Up ⌘↑ · Down ⌘↓ · On/Off ⌘B · Hide ESC          [AND|OR]
+```
+
+- 한 줄이 규칙 하나: 켜짐 체크 · 키 · 매칭 · 검색어. `−`·`+`로 줄을 빼고 더한다(1~10줄).
+- **키**: URL(기본) · Host · Query String · Request Header · Response Header · Request Body · Response Body · Method · Status Code · Client · IP Address · Comment · Color · Duration (ms) · Request Body Size (KB) · Response Body Size (KB). Color는 Highlight 색 이름(red·yellow 등)과 맞춘다(취소선은 못 거른다).
+- **매칭**: Contains(기본) · Not Contains · Start With · End With · Equal · Not Equal · `<` · `>=` · Match Wildcard · Not Match Wildcard · Match Regex · Not Match Regex. 모두 대소문자 무시.
+  - `<`·`>=`는 숫자 키(Status Code·Duration·두 Size)에서만 고를 수 있다. 숫자 아닌 키로 바꾸면 Contains로 돌아간다. 응답 전이라 값이 없거나 검색어가 숫자가 아니면 맞지 않는다.
+  - Wildcard는 값 전체에 맞춘다(`*`·`?`). Regex는 일부만 맞아도 된다.
+  - 틀린 정규식은 칸에 빨간 테두리·경고 표시가 뜨고 그 규칙은 적용하지 않는다.
+- 꺼진 규칙·빈 검색어는 적용하지 않는다. 켜진 규칙이 여럿이면 AND(Proxyman 기본), 오른쪽 `AND|OR`로 OR.
+- 본문 키(Request Body·Response Body)는 입력이 멈추고 0.15초 뒤 메인 스레드 밖에서 계산한다. 결과가 올 때까지 목록은 이전 결과를 보인다. 새로 들어온 요청은 따로 판정될 때까지 잠깐 빠진다(AND). 다른 키는 바로 적용된다.
+- **보이기**: 목록·사이드바에 포커스가 있거나 포커스가 없을 때 ⌘F, 또는 하단 바 Filter. 규칙 칸에 포커스가 간다. **숨기기**: Esc나 하단 바 Filter. 숨겨도 켜진 규칙은 계속 적용되고 하단 바 Filter가 강조로 알린다.
+- ⌘N·⇧⌘N·⌘↑·⌘↓·⌘B는 Edit ▸ Find의 New Filter·Remove Filter·Previous Filter·Next Filter·Toggle Filter다. **필터 막대에 포커스가 있을 때만** 켜지고, 다른 곳에서는 원래 동작(도구 창의 ⌘N, 본문의 ⌘↑ 등)으로 간다.
+- 규칙과 AND/OR는 저장된다(`eyeproxy.filterRules`). 다시 켰을 때 켜진 규칙이 있으면 막대가 보이고, 포커스는 목록에 있다. 세션 파일을 열어도 규칙은 그대로다(칩·숨긴 요청 보기는 초기화).
+- 예전 검색칸의 "URL·메서드·상태" 검색은 URL Contains로 대신한다(메서드·상태는 각 키로).
+
+### 사이드바
+
+```
+Favorites
+  Pinned                       고정한 도메인
+Remote devices                 이 Mac이 아닌 기기 — 없으면 섹션째 숨김
+  192.168.0.20             3   기기 이름을 알면 이름
+    api.example.com        2
+All
+  All Requests            12   전체
+  Apps                     9   이 Mac의 앱(프로세스)별
+    Safari ▸ 도메인
+  Domains                 12
+    api.example.com ▸ /v3 ▸ /media …
+────
+[+] [Filter (⌘⇧F)]
+```
+
+- 줄 오른쪽 숫자는 그 줄의 요청 수다. Block List로 숨긴 요청은 빼고, 칩·필터 막대와는 상관없는 **전체 수**다(Proxyman과 같다).
+- 도메인(Pinned·Domains·기기·앱 아래)을 고르면 그 도메인만. Pinned·Domains의 도메인을 펼치면 **경로 트리**가 나온다. 경로 노드를 고르면 그 경로로 시작하는 요청만 보인다(세그먼트 단위: `/v3`는 `/v3/x`·`/v3?q`에 맞고 `/v30`에는 안 맞는다). 깊이 4까지이고 더 깊은 경로는 4단계 노드에 센다. 경로가 있는 도메인만 펼침 화살표가 있다.
+- **Remote devices**: 기기 줄은 그 기기 전체, 펼치면 그 기기의 도메인. 기기 이름을 알면 이름으로 보인다. 클라이언트 주소가 없는 가져온 요청은 "가져온 요청" 기기로 묶인다.
+- **Apps** 줄은 이 Mac 전체. 앱은 접혀 있고 펼치면 도메인이다. 시뮬레이터 앱은 "<앱> (<플랫폼> 시뮬레이터)", 모르는 프로세스는 맨 끝 "기타".
+- 전체는 **All Requests**. Pinned·Domains 머리는 고를 수 없다.
+- 맨 아래 **Filter (⌘⇧F)**: 사이드바 항목 이름으로 거른다(대소문자 무시). 부모 이름이 맞으면 자식을 모두, 아니면 맞는 자식만 남기고 모두 펼친다. 숫자는 바뀌지 않는다. ⇧⌘F(Edit ▸ Find ▸ Filter Sidebar)는 사이드바에 포커스가 있을 때만 켜진다. 칸에서 Esc는 칸을 비운다.
+- **`+`**: Add Pinned Domain 시트. 도메인이나 URL(호스트만 씀)을 넣고 Add.
+- 도메인 우클릭: **Pin/Unpin** · **Enable SSL Proxying**(SSL Proxying 목록에 넣고 복호화 켬) · **Copy Domain**.
+- 고정 목록은 예전 설정(`pinnedHosts`)을 그대로 읽는다. 같은 도메인이 Pinned와 Domains에 있으면 고를 때 둘 다 강조되고 펼침 상태도 같이 간다.
+
+### 하단 바
+
+창 맨 아래 한 줄.
+
+- **Clear**: 세션 지우기(⌘K)와 같다.
+- **Filter**: 필터 막대 보이기·숨기기. 막대가 보이거나 켜진 규칙이 있으면 강조된다.
+- **Auto Select**: View ▸ Auto Select the Latest Request와 같은 스위치. 켜면 강조된다.
+- 가운데 `선택/보이는 행 rows selected`(예: `1/106 rows selected`). 필터에 가려진 선택은 세지 않는다.
+- **메모리·속도**: `181 MB · ↑122 KB/s ↓20 KB/s` — 앱 상주 메모리와 최근 1초 ↑(시작한 요청의 본문)·↓(끝난 응답의 본문). 1초마다, 1000 단위. 근사값이라 긴 다운로드는 끝날 때 한 번에 잡히고 터널은 0이다. Advanced ▸ Show Resource Usage in Bottom Bar로 숨긴다.
+- **켜진 도구 배지**: 켜진 것만 아래 순서로 보인다.
+
+| 배지 | 보일 때 | 누르면 |
+|---|---|---|
+| Breakpoint · Map Local · Map Remote · Block List · Allow List · Network Conditions | 그 도구가 켜짐 | 그 도구 규칙 창 |
+| No Caching | No Caching 켜짐 | 팝오버의 No Caching 스위치(끄면 배지가 사라진다) |
+| Proxy Overridden | 이 Mac 캡처 켜짐(VPN 쪽에 Prog 프록시가 남은 경우 포함) | Certificate 창 › 이 Mac |
+| SSL Proxying Off | SSL Proxying 꺼짐 | 설정 › SSL Proxying 탭 |
 
 ## 목록 편의
 
@@ -117,32 +216,60 @@ Certificate
 
 - 색은 하나만(새 색이 덮어씀), 취소선은 색과 따로 켜고 끈다.
 - 행 전체 배경을 옅게 칠한다(라이트 18%, 다크 28%). 선택된 행은 시스템 선택색만 보이고, 행 앞 상태 점 자리의 같은 색 세로 막대(3pt, 행 높이 전체)로 색을 알아본다. 취소선은 URL 글자에 줄을 긋고 보조색으로.
-- 코멘트와 함께 세션 파일(`.eyeproxy`)에 저장된다. 필터 바·검색으로 색을 거르지는 않는다.
+- 코멘트와 함께 세션 파일(`.eyeproxy`)에 저장된다. 필터 막대 Color 키로 색 이름을 거를 수 있다(칩으로는 못 거른다).
 - Strikethrough는 스펙의 ⌥⌘S가 사이드바 접기와 겹쳐 ⇧⌘X로 했다.
 
 **Delete / Delete All**
-- **Flow ▸ Delete**(⌫): 선택한 행을 지운다. 목록에 포커스가 있을 때만 켜지므로 검색창·코멘트 시트에서 ⌫는 글자만 지운다. 지운 뒤 선택은 바로 아래 행(없으면 위)으로. 필터에 가려 안 보이는 선택 행은 지우지 않는다. 우클릭 ▸ Delete는 우클릭한 행(선택 안에서 우클릭하면 선택 전체)을 지운다.
-- **Flow ▸ Delete All**: **보이는 행만** 지운다(필터·검색·사이드바가 걸러 낸 행은 남김). 숨겨진 행이 있을 때만 "보이는 N개를 지웁니다. 숨겨진 M개는 남습니다." 확인을 받는다 — Block List로 숨긴 행(툴바 눈 토글 꺼짐)만 있어도 숨겨진 행으로 센다. 메인 창이 앞에 있고 보이는 행이 있을 때만 켜진다.
-- 전부 지우기는 예전처럼 File ▸ 세션 지우기(⌘K, 툴바 지우기 버튼). 지운 흐름의 코멘트·Highlight·프로세스 귀속도 같이 지운다. 되돌리기(⌘Z)는 없다.
+- **Flow ▸ Delete**(⌫): 선택한 행을 지운다. 목록에 포커스가 있을 때만 켜지므로 필터 막대·코멘트 시트에서 ⌫는 글자만 지운다. 지운 뒤 선택은 화면에서 바로 아래 행(없으면 위)으로. 필터에 가려 안 보이는 선택 행은 지우지 않는다. 우클릭 ▸ Delete는 우클릭한 행(선택 안에서 우클릭하면 선택 전체)을 지운다.
+- **Flow ▸ Delete All**: **보이는 행만** 지운다(칩·필터 막대·사이드바가 걸러 낸 행은 남김). 숨겨진 행이 있을 때만 "보이는 N개를 지웁니다. 숨겨진 M개는 남습니다." 확인을 받는다 — Block List로 숨긴 행(툴바 눈 토글 꺼짐)만 있어도 숨겨진 행으로 센다. 메인 창이 앞에 있고 보이는 행이 있을 때만 켜진다.
+- 전부 지우기는 예전처럼 File ▸ 세션 지우기(⌘K, 툴바 지우기 버튼, 하단 바 Clear). 지운 흐름의 코멘트·Highlight·프로세스 귀속도 같이 지운다. 되돌리기(⌘Z)는 없다.
 - Add/Edit Comment…는 한 행만 선택했을 때 켜진다.
 
-**Auto Select**: View ▸ Auto Select the Latest Request(기본 끔, 앱 설정에 저장). 켜면 **보이는 목록**의 가장 최근 요청(시작 시각 기준, 정렬과 무관)을 선택하고 그 행으로 스크롤한다 — 상세도 따라 바뀐다. 필터에 걸려 안 보이는 요청은 따라가지 않고, 필터를 바꾸면 그 필터의 최신 행으로 옮긴다. 사용자가 클릭·키보드로 다른 행을 고르면 **꺼진다**(메뉴 체크도 꺼짐, 보던 행을 빼앗지 않기 위해). Delete·세션 열기처럼 앱이 선택을 옮길 때는 꺼지지 않는다.
+**Auto Select**: View ▸ Auto Select the Latest Request 또는 하단 바 Auto Select(기본 끔, 앱 설정에 저장). 켜면 **보이는 목록**의 가장 최근 요청(시작 시각 기준, 정렬과 무관)을 선택하고 그 행으로 스크롤한다 — 상세도 따라 바뀐다. 기본 정렬에서는 최신이 맨 위라 스크롤이 거의 없다. 필터에 걸려 안 보이는 요청은 따라가지 않고, 필터를 바꾸면 그 필터의 최신 행으로 옮긴다. 사용자가 클릭·키보드로 다른 행을 고르면 **꺼진다**(메뉴 체크도 꺼짐, 보던 행을 빼앗지 않기 위해). Delete·세션 열기처럼 앱이 선택을 옮길 때는 꺼지지 않는다.
 
-## 상세 탭
+## 상세 패널
 
-요청·응답 패널 탭은 `헤더 / 쿼리 / 본문 / 쿠키 / Raw`이고, 응답이 HLS 재생목록이면 `M3U8`이 붙는다. 헤더 바 바로 아래에 접힌 **요약**이 있다.
+### 머리
 
-- **Raw**: HTTP/1.1 원문 — 시작 줄 + 헤더(받은 그대로, 순서·중복 유지) + 빈 줄 + 본문. 압축 본문은 본문 탭과 같은 규칙으로 풀어 보여 주고 `Content-Encoding` 헤더는 그대로 둔다. UTF-8이 아니면 `<binary N bytes>` 한 줄. 선택·복사 가능, 줄바꿈 설정을 따른다. Breakpoint·Map Remote로 요청·응답이 바뀌면 다시 만든다.
-- **요약**(기본 접힘): URL, 메서드, 상태, 클라이언트, 시작 시각, 소요 시간, 요청·응답 크기, SSL(`복호화함`/`평문 HTTP`/`복호화 안 함`), 적용된 도구(Edited 열과 같은 값), 원래 URL·실제 전송 URL(Map Remote), 코멘트, Highlight. 응답이 없는 대기·실패 흐름에서도 보인다. 우클릭으로 값 복사.
+- 왼쪽에 메서드 알약, 그 아래 상태 알약. 상태는 `206 Partial Content`처럼 코드+사유이고, 응답 전이면 주황 `Active`, 실패면 빨강 `Failed`.
+- 오른쪽에 전체 URL을 고정폭 글꼴로(최대 6줄): 스킴 회색, 호스트 파랑 굵게, 기본이 아닌 포트 회색, 경로·쿼리 초록. CONNECT 행은 `host:port`.
+- **복사**·**cURL** 버튼은 그대로다. cURL은 설정 Tools ▸ Add --proxy flag into cURL command를 따른다.
+
+### 탭
+
+패널 제목 `Request`·`Response` 옆에 탭이 있고, `│` 뒤는 보기 탭이다. 괄호 탭은 내용이 있을 때만 보인다(Proxyman과 같다).
+
+| 패널 | 탭 |
+|---|---|
+| Request | Header · Query · Body · (Form) · (Cookies) · (Auth) · Raw │ Summary · Treeview · JSON |
+| Response | Header · Body · (Set-Cookie) · Raw │ Treeview · (M3U8) · JSON |
+
+- **Form**: 요청 본문이 있고 Content-Type이 `application/x-www-form-urlencoded`·`multipart/form-data`일 때. urlencoded는 `+`·퍼센트를 풀고, multipart는 파트 이름과 값(파일 파트는 `파일명 (N bytes)`)을 보인다.
+- **Cookies**: Cookie 헤더가 비어 있지 않을 때. **Auth**: Authorization 헤더가 있을 때. Basic은 Type·Username·Password로 풀고, 다른 방식은 Type·Token.
+- **Set-Cookie**: 응답에 Set-Cookie 헤더가 있을 때. **M3U8**: 응답이 HLS 재생목록일 때(요청 쪽에는 없다).
+- 표 탭(Header·Query·Form·Cookies·Auth·Set-Cookie·Summary)은 머리 줄 `Key | Value`. Header 탭은 Advanced ▸ Show Invisible Characters를 켜면 값의 공백을 `·`로 보인다(그동안 값 글자 선택은 꺼지고, 우클릭 복사는 원래 값).
+- **Body**: Pretty·Raw. 예전 Tree 모드는 Treeview 탭으로 옮겼다. 글꼴 크기는 Appearance ▸ Font Size, Pretty 들여쓰기는 Tab Width를 따른다.
+- **Raw**: HTTP/1.1 원문 — 시작 줄 + 헤더(받은 그대로, 순서·중복 유지) + 빈 줄 + 본문. 압축 본문은 Body 탭과 같은 규칙으로 풀어 보여 주고 `Content-Encoding` 헤더는 그대로 둔다. UTF-8이 아니면 `<binary N bytes>` 한 줄. 선택·복사 가능, Word Wrap 설정을 따른다. Breakpoint·Map Remote로 요청·응답이 바뀌면 다시 만든다.
+- **Summary**(요청 패널): 예전 접힌 "요약"을 탭으로 옮겼다. URL, 메서드, 상태, 클라이언트, 시작 시각, 소요 시간, 요청·응답 크기, SSL(`복호화함`/`평문 HTTP`/`복호화 안 함`), 적용된 도구(Edited 열과 같은 값), 원래 URL·실제 전송 URL(Map Remote), 코멘트, Highlight. 응답이 없는 대기·실패 흐름에서도 보인다. 우클릭으로 값 복사.
+- **Treeview**: JSON 트리. 위에 **모두 펼치기**·**모두 접기**·**찾기**(돋보기, ⌘F와 같음) 버튼. 처음엔 모두 접힌 상태.
+- **JSON**: Content-Type과 상관없이 본문을 JSON으로 읽어 강조한 Pretty JSON으로 보인다(들여쓰기는 Tab Width). JSON이 아니면 "JSON이 아닙니다". ⌘F는 내장 찾기 막대. 줄 접기·JSON Path·jq·미니맵은 아직 없다.
 - **M3U8**: 요청 경로가 `.m3u8`로 끝나거나 응답 Content-Type이 `application/vnd.apple.mpegurl`·`application/x-mpegurl`·`audio/mpegurl`일 때만 보인다.
   - Master: **변형** 표(BANDWIDTH, AVERAGE-BANDWIDTH, RESOLUTION, CODECS, FRAME-RATE, URI)와 **렌디션** 표(`#EXT-X-MEDIA`: TYPE, GROUP-ID, NAME, LANGUAGE, DEFAULT, URI).
   - Media: 요약 줄(TARGETDURATION · MEDIA-SEQUENCE · PLAYLIST-TYPE · ENDLIST · 세그먼트 수) + **세그먼트** 표(# = MEDIA-SEQUENCE + 순번, 길이, URI, BYTERANGE, DISCONTINUITY ●) + **키** 표(METHOD, URI).
   - URI는 요청 URL 기준 절대 URL로 풀어 보여 주고 우클릭 ▸ URL 복사. 모르는 태그는 무시하고, 읽을 수 없으면 "재생목록이 아닙니다".
-- **트리 버튼**: 본문 탭 Tree 모드일 때 Pretty/Tree/Raw 피커 옆에 **모두 펼치기**·**모두 접기**·**찾기**(돋보기, ⌘F와 같음) 버튼이 있다. 처음엔 모두 접힌 상태.
+- 고른 탭과 표 거르기(열림·옵션)는 Request·Response 패널마다 기억한다. 흐름을 바꿔도(CONNECT 행을 거쳐도) 유지되고, 그 흐름에 없는 탭이면 Header.
+- 탭 줄 오른쪽 **`≡`**: 표 탭에서 표 거르기를 열고 닫는다(⌘F와 같다). 다른 탭에서는 꺼진다.
+
+### HTTPS Response 안내
+
+복호화하지 않은 터널(CONNECT 행)을 고르면 Response 패널에 자물쇠, `HTTPS Response`, 한 줄 설명과 버튼이 뜬다.
+
+- **Enable only this domain**: 그 호스트를 SSL Proxying 목록에 넣는다.
+- **or Enable all domains from "<앱>"**: 그 앱(이 Mac 프로세스·시뮬레이터 앱)이 이 세션에서 연 모든 도메인을 넣는다. 앱을 알 때만 보인다 — 원격 기기나 앱을 모르는 요청은 첫 버튼만.
+- 넣으면 SSL Proxying이 켜지고, 터널 재판정으로 다음 연결부터 복호화된다. 이미 목록에 있으면 첫 버튼이 꺼지고 "SSL Proxying 목록에 있습니다 — 다시 연결하면 복호화됩니다"가 보인다.
+- 규칙으로 막혔거나 실패한 터널은 안내 대신 오류를 보인다.
 
 ### 찾기·거르기(⌘F)
-
-Edit ▸ Find에 새로 넣었다(이전에는 ⌘F가 아무 일도 하지 않았다).
 
 | 항목 | 단축키 |
 |---|---|
@@ -152,17 +279,20 @@ Edit ▸ Find에 새로 넣었다(이전에는 ⌘F가 아무 일도 하지 않�
 
 ⌘F는 포커스가 있는 곳을 따른다.
 
-- **본문(Pretty·Raw 모드)·Raw 탭**: macOS 내장 찾기 막대. 일치를 모두 강조하고 ⌘G/⇧⌘G·Enter/⇧Enter로 이동, 일치 개수를 보여 준다. 대소문자 무시·포함/단어 옵션은 막대 돋보기 메뉴에 있다. 마지막 검색어는 다른 텍스트 보기로 이어진다(macOS 표준).
+- **Body(Pretty·Raw)·Raw·JSON 탭**: macOS 내장 찾기 막대. 일치를 모두 강조하고 ⌘G/⇧⌘G·Enter/⇧Enter로 이동, 일치 개수를 보여 준다. 대소문자 무시·포함/단어 옵션은 막대 돋보기 메뉴에 있다. 마지막 검색어는 다른 텍스트 보기로 이어진다(macOS 표준).
   - 같은 막대가 일반 텍스트 본문(예: M3U8 원문)·HTML 소스 보기, 그리고 편집 가능한 코드 보기(Compose·Breakpoint의 본문·Raw 편집기, Map Local 편집기)에서도 뜬다. 편집 가능한 보기에서는 막대에 **Replace**(바꾸기)도 있다.
-- **헤더·쿼리·쿠키 표, 요약**: 표 위에 거르기 칸. 이름 또는 값에 검색어가 든 행만 보이고(대소문자 무시) "N / 전체 M", 없으면 "일치 없음". 거르는 중에도 우클릭 복사는 된다. Esc·✕·탭이나 흐름을 바꾸면 닫힌다. 표에 포커스를 주려면 **이름 열이나 행의 빈 곳**을 클릭한다.
-- **JSON 트리**: 트리 위 막대 — 검색칸 + `Search | Filter`.
+- **표 탭**(Header·Query·Form·Cookies·Auth·Set-Cookie·Summary): 표 위에 거르기 칸(`≡`와 같다). 이름 또는 값에 검색어가 든 행만 보이고 "N / 전체 M", 없으면 "일치 없음". 거르는 중에도 우클릭 복사는 된다.
+  - 칸 오른쪽 **`⋯`** 메뉴: `Case Insensitive`(기본) / `Case Sensitive`, `Text`(기본) / `Regular Expression`. 틀린 정규식이면 빨간 `정규식 오류`가 뜨고 고칠 때까지 모든 행을 보인다.
+  - 옵션과 칸 열림은 흐름을 바꿔도 남고, 검색어는 흐름을 바꾸면 지운다. Esc·✕·`≡`로 닫으면 검색어를 지우고 표로 포커스가 돌아간다.
+  - 표에 포커스를 주려면 **이름 열이나 행의 빈 곳**을 클릭한다.
+- **Treeview 탭**: 트리 위 막대 — 검색칸 + `Search | Filter`.
   - Search: 키·값에 검색어가 든 노드를 강조(현재 일치는 강조색, 나머지는 옅은 노랑)하고, 조상을 펼치고, 현재 일치로 스크롤한다. "i / N", Enter·⌘G 다음, ⇧Enter·⇧⌘G 이전.
   - Filter: 일치 노드와 그 조상만 남기고 모두 펼친다. 일치한 객체·배열은 자식을 전부 둔다. "N개 일치", 없으면 "일치 없음".
   - 객체·배열은 **키로만** 일치한다(`{3 keys}` 같은 미리보기는 검색하지 않는다). 값은 화면에 보이는 그대로(문자열은 따옴표 포함) 검색한다.
   - 배열 원소의 키(인덱스 `0`·`1`…)는 검색하지 않는다 — "1"이 1·10~19번 원소에 다 걸리지 않게. 원소의 값은 검색한다.
-  - Esc(막대나 트리 어디서든)·✕·돋보기를 다시 누르면 막대를 닫고 열기 전 펼침 상태로 되돌린다. 닫으면 포커스가 트리로 돌아가 바로 ⌘F로 다시 열 수 있다(표 거르기도 같다). 막대가 열려 있을 때 ⌘F는 검색칸으로 포커스를 다시 옮긴다.
-- **M3U8 탭 표**: 찾기가 없어 ⌘F는 아무 일도 하지 않는다(툴바 검색칸으로 가지 않는다).
-- **목록·사이드바, 또는 포커스 없음**: 툴바 검색칸(목록 거르기)으로 간다.
+  - Esc(막대나 트리 어디서든)·✕·돋보기를 다시 누르면 막대를 닫고 열기 전 펼침 상태로 되돌린다. 닫으면 포커스가 트리로 돌아가 바로 ⌘F로 다시 열 수 있다. 막대가 열려 있을 때 ⌘F는 검색칸으로 포커스를 다시 옮긴다.
+- **M3U8 탭 표**: 찾기가 없어 ⌘F는 아무 일도 하지 않는다(필터 막대로 가지 않는다).
+- **목록·사이드바, 또는 포커스 없음**: 필터 막대를 보이고 규칙 칸에 포커스를 준다(목록 거르기).
 - **찾기 막대·검색칸에 입력 중**: 그 자리에 머문다(다른 곳으로 튀지 않는다).
 
 ## Export·HAR 열기
@@ -195,15 +325,69 @@ FlowImport.har(_ data: Data) throws -> [ImportedFlow]                           
 struct ExportItem { flow: Flow; number: Int; comment: String?; highlight: FlowHighlight?; client: String? }
 ```
 
-## 툴바
+## 설정
 
-- 기록 ▶/⏸(⌘R) · 지우기(⌘K) · Compose(⌥⌘C) 묶음, SSL 자물쇠와 **숨긴 요청 보기** 눈 토글 묶음, 레이아웃 피커 묶음.
-- 눈 토글은 예전 "숨김 포함" 체크박스다. 끔 = `eye.slash`, 켬 = `eye` + 회색 선택 채움(자물쇠·기록 버튼과 같은 시스템 모양). 켜면 Block List로 숨긴 요청도 목록에 보인다.
-- 상태 캡슐(No Caching, Breakpoint 대기, 규칙 경고)은 좌우 여백을 넓혔다. 버튼 묶음 안쪽 여백·버튼 간격은 시스템 기본(약 4pt)이다.
+앱 메뉴 `Prog > 설정…`(⌘,). 탭은 **General · Appearance · Tools · SSL Proxying · Bypass · Advanced**다(Proxyman 탭 중 Privacy·GitHub·Platform은 Prog에 해당 기능이 없어 뺐다). 항목 이름은 Proxyman 그대로이고, 마우스를 올리면 한국어 한 줄 설명이 뜬다. 예전 설정 키는 그대로 읽는다.
+
+| 탭 | 항목 | 기본 | 동작 |
+|---|---|---|---|
+| General | Content Layout | Vertical | Vertical = 상세가 목록 아래, Horizontal = 오른쪽(툴바 레이아웃 피커와 같은 설정) |
+| General | Show Prog Icon on Menu Bar | 켬 | 상태 막대 아이콘 |
+| General | Truncation Style | Tail | 목록 URL·Client 열 말줄임 위치(Head / Middle / Tail) |
+| General | Port Number | 9090 | 1024–65535. 바꾸면 "재시작 후 적용" — **재시작** 버튼으로 서버를 다시 연다 |
+| General | Auto Override System Proxy Settings at Launch | 끔 | 켜면 실행 때 서버가 뜬 뒤 "이 Mac 캡처"를 한 번 켠다(복원 알림이 떠 있거나 서버가 실패하면 건너뜀) |
+| General | Auto Start Recording Traffic at Launch | 켬 | 끄면 기록 멈춤(▶, ` \| Pause`)으로 시작 |
+| General | 루트 인증서 카드 | — | CA 이름·유효기간·이 Mac 로그인 키체인 설치 여부. **Open Certificate…**(Certificate 창 › 이 Mac), **Generate new…**(Reset all Prog Certificates…와 같다, 확인 알림) |
+| Appearance | Font Size | 13 | 11~16. 상세 Body·JSON·Raw 본문과 표 글자 |
+| Appearance | Tab Width | 2 Spaces | 2 / 4. Body Pretty·JSON 탭 들여쓰기(Treeview는 그대로) |
+| Appearance | Use Monospaced Font | 끔 | 목록 표를 고정폭 글꼴로 |
+| Appearance | Word Wrap | 켬 | 본문·Raw 줄바꿈 |
+| Appearance | Show Invisibles | 끔 | 본문·JSON·Raw의 공백 `·`, 탭 `→`, 줄바꿈 `¬` |
+| Appearance | Alternative Rows Background Colors | 켬 | 목록 줄무늬 |
+| Appearance | App Theme | System | System / Light / Dark |
+| Appearance | Restore Defaults | — | 위 Appearance 값만 기본으로 |
+| Tools | Use No-Caching on Repeated Requests | 끔 | Repeat 요청에 No-Cache |
+| Tools | Request Timeout | 30 seconds | Repeat 타임아웃과 Compose 기본 타임아웃. 0 = 없음 |
+| Tools | Add --proxy flag into cURL command | 끔 | cURL 복사(메뉴·우클릭·상세 cURL 버튼)에 `--proxy 'http://<IP>:<포트>'`(본문 앞). IP·포트는 툴바 캡슐과 같다 |
+| Tools | Auto open the Export Directory after exporting | 끔 | Export·Save Requests 뒤 Finder에서 파일을 보여 준다 |
+| SSL Proxying | SSL Proxying 사용, 호스트 패턴 | — | 예전과 같다(Tools ▸ SSL Proxying List…) |
+| Bypass | 시스템 프록시 Bypass 호스트 | — | 예전과 같다. Mac 캡처를 다시 켤 때 적용 |
+| Advanced | Restore to previous HTTP/HTTPS Proxy when Prog is closed | 켬(고정) | Prog는 늘 복원한다. 켜진 채 비활성 |
+| Advanced | Show Update Notification at Launch | Sparkle 값 | Sparkle 자동 확인(`SUEnableAutomaticChecks`) 그 자체. 새로 설치하면 Sparkle 권한 질문에 답할 때까지 꺼짐으로 보인다 |
+| Advanced | Use 24-Hour Time | 켬 | 목록 Time 열 `14:03:05.123`, 끄면 `02:03:05.123 PM` |
+| Advanced | Display Full Time Format | 끔 | Time 열에 날짜·시간대까지(`2026-11-10 14:03:05.123 GMT+9`) |
+| Advanced | Show Alert when quitting the app | 끔 | 종료 전 "Prog를 종료할까요?"(종료/취소). 취소하면 멈춘 Breakpoint도 그대로 |
+| Advanced | Show Resource Usage in Bottom Bar | 켬 | 하단 바 메모리·속도 |
+| Advanced | Hide Unnecessary Apple Requests from iOS Simulators | 끔 | 시뮬레이터에서 온 `apple.com`·`icloud.com`(하위 도메인 포함) 요청을 숨김 표시(Block List 숨김과 같아 눈 토글로 본다). 켠 뒤 들어온 요청부터 |
+| Advanced | Stay On Top | 끔 | Prog 창(메인·설정·도구·Compose·Breakpoint 등)을 다른 앱 창 위에 둔다. 시트·패널·알림은 그대로 |
+| Advanced | Show Invisible Characters | 끔 | 상세 Header 탭 값의 공백을 `·`로 |
+
+## 단축키
+
+| 단축키 | 동작 | 언제 |
+|---|---|---|
+| ⌘R | 기록 일시정지 / 다시 시작 | |
+| ⌘K | 세션 지우기(하단 바 Clear) | |
+| ⌥⌘C | Compose | |
+| ⌘↩ / ⌥⌘↩ | Repeat / Edit and Repeat… | |
+| ⌫ | Delete | 목록 포커스 |
+| ⌘1 … ⌘6 · ⇧⌘X · ⌘0 | Highlight 색 · Strikethrough · Reset | |
+| ⌘F | 찾기·거르기 — 본문 찾기 막대, 표·트리 거르기, 목록·사이드바면 필터 막대 | 포커스를 따름 |
+| ⌘G / ⇧⌘G | Find Next / Find Previous | |
+| ⌘N / ⇧⌘N | 필터 규칙 추가 / 지우기 | 필터 막대 포커스 |
+| ⌘↑ / ⌘↓ | 위 / 아래 규칙으로 | 필터 막대 포커스 |
+| ⌘B | 규칙 켜기·끄기 | 필터 막대 포커스 |
+| Esc | 필터 막대 숨기기 · 사이드바 Filter 비우기 · 표·트리 거르기 닫기 | 그 자리 포커스 |
+| ⇧⌘F | 사이드바 Filter 칸으로 | 사이드바 포커스 |
+| ⌥⌘N | No Caching 켜기·끄기 | |
+| ⇧⌘R | Restart Server | |
+| ⌘D | Certificate 창 | |
+| ⌘O | 세션 열기(.eyeproxy·.har) | |
+| ⌘, | 설정 | |
 
 ## 툴팁
 
-툴바 버튼·토글·피커, 필터 바 칩, 메뉴 막대의 File·Edit·View·Flow·Tools·Certificate 항목, 상태 막대 메뉴, 목록 우클릭 메뉴, Certificate 창 버튼에 마우스를 잠깐 올리면 한국어 한 줄 설명이 뜬다. 단축키가 있으면 끝에 괄호로 붙는다(예: "요청에 로컬 파일로 응답하는 규칙 (⌥⌘L)"). 도구 창 안의 버튼(New·Delete·Save 등)은 아직 영어 툴팁이다.
+툴바 버튼·토글·피커, 칩 막대 칩, 필터 막대·사이드바·하단 바·상세 탭 버튼, 설정 항목, 메뉴 막대의 File·Edit·View·Flow·Tools·Certificate 항목, 상태 막대 메뉴, 목록 우클릭 메뉴, Certificate 창 버튼에 마우스를 잠깐 올리면 한국어 한 줄 설명이 뜬다. 단축키가 있으면 끝에 괄호로 붙는다(예: "요청에 로컬 파일로 응답하는 규칙 (⌥⌘L)"). 도구 창 안의 버튼(New·Delete·Save 등)은 아직 영어 툴팁이다.
 
 ## 상태 막대 메뉴
 
@@ -224,12 +408,12 @@ Quit Prog                    ⌘Q
 ```
 
 - **Show Prog**: 앱을 앞으로 가져오고 메인 창이 닫혀 있으면 다시 연다.
-- 토글은 메인 창과 같은 값이다 — Record Traffic = 툴바 ▶/⏸·⌘R, macOS Proxy Overridden = 이 Mac 캡처(바꾸는 중엔 비활성), SSL Proxying List = 툴바 자물쇠, 도구 스위치 = Tools ▸ Enable/Disable Tools.
+- 토글은 메인 창과 같은 값이다 — Record Traffic = 툴바 기록 버튼·⌘R, macOS Proxy Overridden = 이 Mac 캡처(바꾸는 중엔 비활성), SSL Proxying List = 툴바 자물쇠, 도구 스위치 = Tools ▸ Enable/Disable Tools.
 - **Listen on**: LAN 첫 주소(없으면 `127.0.0.1`)와 포트. Copy Shell Command는 `export https_proxy=http://<ip>:<port> http_proxy=http://<ip>:<port>`. 서버가 멈추면 `Listen on — (Stopped)`로 비활성.
 - **Quit Prog**: 일반 종료와 같아서 시스템 프록시를 원래대로 되돌린다.
 - **아이콘**: 눈 두 개. 기록 중이면 눈 뜸(눈동자), 서버는 켜졌는데 기록이 꺼지면 눈 감음, 서버가 멈추거나 실패하면 빈 눈 윤곽에 사선. 템플릿 이미지라 밝은·어두운 메뉴 막대 색을 따른다.
 - **빨간 점**: 확인할 일이 있을 때만 오른쪽 위에 뜬다 — 멈춘 Breakpoint가 있음, 서버 시작 실패, 규칙 파일 경고. 셋 다 없으면 점도 없다(평소엔 눈만). 접근성 레이블은 "Prog — 기록 중/일시정지/서버 중지[, 확인 필요]".
-- 설정 ▸ 일반 **상태 막대에 아이콘 표시**(기본 켬)로 숨기고 보인다.
+- 설정 General ▸ **Show Prog Icon on Menu Bar**(기본 켬)로 숨기고 보인다.
 - 앱 아이콘(녹색 개구리)과 상태 막대 아이콘 원본은 `Design/*.svg`(눈은 `MenuBar-Eyes-Open/Closed/Stopped.svg`)이고, `scripts/make-icons.sh`가 `sips`로 렌더해 `Assets.xcassets`의 PNG를 다시 만든다(산출물은 커밋). 앱 아이콘은 macOS 기본 여백(1024 캔버스에 824 본체)과 투명한 모서리를 갖고, 스크립트가 크기와 모서리 알파 0을 검사한다.
 
 ## 문제 해결
@@ -267,7 +451,7 @@ EOF
 
 ### 포트 9090 충돌
 
-Proxyman 등 다른 프록시가 9090을 쓰고 있으면 시작에 실패한다. 그 앱을 끄거나 설정에서 포트를 바꾼다.
+Proxyman 등 다른 프록시가 9090을 쓰고 있으면 시작에 실패한다. 그 앱을 끄거나 설정 General ▸ Port Number를 바꾸고 재시작한다.
 
 ### 방화벽
 
@@ -292,9 +476,9 @@ GitHub 레포가 private이면 Sparkle 업데이트와 Release 다운로드가 �
 - Flow 목록 열 배치 저장 키가 `eyeproxy.flowColumns.v2`로 바뀌어 저장된 열 너비가 한 번 초기화된다.
 - Compose로 임의의 `http://` 주소에 보내기 위해 앱 전체에 `NSAllowsArbitraryLoads`가 켜져 있다.
 
-## 알려진 제한(Certificate·필터 바·상태 막대)
+## 알려진 제한(Certificate·칩 막대·상태 막대)
 
-- 필터 바에 WebSocket 칩이 없다(WebSocket 캡처를 아직 지원하지 않음).
+- 칩 막대에 WebSocket·h1·h2 칩이 없다(WebSocket 캡처를 아직 지원하지 않음).
 - Android는 사용자 CA까지만 설치한다. 앱이 `network_security_config`로 사용자 CA를 허용해야 복호화되고, 시스템 CA는 루팅 기기나 Play 없는 에뮬레이터(`adb root; adb remount`)에서만 넣을 수 있다.
 - P12는 macOS 내장 `/usr/bin/openssl`(LibreSSL, 기본 암호화 방식)로 만든다. openssl이 없거나 실패하면 오류 알림만 뜬다.
 - Listen 주소(상태 막대 메뉴·툴바·Android 섹션)는 네트워크가 바뀌어도 바로 갱신되지 않는다. 메뉴·창을 다시 그릴 때 갱신된다.
@@ -306,7 +490,7 @@ GitHub 레포가 private이면 Sparkle 업데이트와 Release 다운로드가 �
 - Highlight 행 배경은 SwiftUI Table 열 간격(실측 17pt)에 맞춰 칠한다. OS가 열 간격을 바꾸면 행 배경에 틈이나 진한 띠가 생길 수 있다.
 - 다른 앱이 ⇧⌘X를 전역 단축키로 잡고 있으면 Strikethrough 단축키가 Prog에 닿지 않는다(메뉴로는 된다).
 - Breakpoint 등으로 본문을 **같은 길이로만** 고치고 시작 줄·헤더가 그대로면 Raw·본문 탭이 갱신되지 않는다. M3U8 탭은 응답 Breakpoint 편집 뒤에도 갱신되지 않는다.
-- M3U8 URI 열이 넓어 기본 분할에서는 가로 스크롤이나 열 너비 조절이 필요하다. 요약의 펼침 상태는 선택을 해제하면 접힘으로 돌아간다.
+- M3U8 URI 열이 넓어 기본 분할에서는 가로 스크롤이나 열 너비 조절이 필요하다.
 - `.har`는 File ▸ 세션 열기…(⌘O)로만 연다. Finder 더블클릭·`open -a`는 지원하지 않는다(문서 열기 처리 없음).
 - HAR에서 클라이언트 이름(`_prog.client`)은 복원하지 않아 가져온 흐름의 Client 열이 비고 사이드바 기기·프로세스로 나뉘지 않는다(다음 묶음).
 - 다른 도구의 HAR: 복호화 여부는 `https` 여부로 추정하고(`wss`는 복호화 안 함으로), 시각을 못 읽은 항목은 앞 항목의 시각, URL의 사용자 정보·대문자 scheme·명시한 기본 포트는 따로 다루지 않는다.
@@ -324,6 +508,21 @@ GitHub 레포가 private이면 Sparkle 업데이트와 Release 다운로드가 �
 - 트리 Filter에서 남은 객체·배열의 개수 표시는 원래 개수다(`tags [2 items]`인데 자식 하나만 보일 수 있다).
 - 트리 검색은 키 입력마다 전체 트리를 동기로 다시 계산한다. 2 MB·15만 노드 JSON(Debug 빌드)에서 모두 펼치기는 바로, Filter 첫 글자는 0.3초쯤 멈칫, 두 번째 글자부터는 거의 바로였다. 더 큰 JSON에서는 입력이 느릴 수 있다.
 - 트리 Search 중에 손으로 펼치거나 접은 상태는 다음 글자를 칠 때 다시 (열기 전 상태 + 일치 조상 펼침)으로 덮인다.
+
+## 알려진 제한(메인 화면·설정)
+
+- 아직 없는 Proxyman 기능: JSON 탭의 줄 접기·JSON Path·jq·미니맵, 탭 줄 `+`(Custom Previewer Tab), 저장한 필터 버튼(Custom Filters), Command Palette, Favorites ▸ Saved, Remote devices 아래 앱별 묶기(지금은 도메인만), 필터 키 GraphQL.
+- 사이드바 숫자는 칩·필터 막대를 반영하지 않는 전체 수다. 사이드바 Filter가 선택한 줄을 가려도 목록은 그 선택대로 걸러진다.
+- 본문 규칙은 판정할 때마다 본문을 다시 풀어 비교한다(캐시 없음). 1.3 MB 응답 500개를 포함한 5,000 요청(Debug 빌드)에서 결과가 1~4초 뒤에 왔다. 판정 전 새 요청은 AND에서 잠깐 빠진다.
+- 하단 바 속도는 근사값이다(↑ 요청 시작, ↓ 응답 완료 시점에 본문 크기를 센다, 터널 0). 1초마다 세션 전체를 훑는다.
+- HTTPS Response 안내의 `Enable all domains from "<앱>"`은 Prog가 그 요청을 앱(프로세스·시뮬레이터 앱)에 귀속했을 때만 보인다.
+- 상세 머리의 메서드·상태 알약은 URL 길이와 상관없이 늘 세로로 쌓인다. Summary 탭의 행 이름은 한국어 그대로다.
+- Show Update Notification at Launch는 Sparkle 설정 그 자체라 새로 설치하면 Sparkle 권한 질문에 답할 때까지 꺼짐으로 보인다.
+- Show Alert when quitting the app은 Sparkle이 업데이트 설치로 다시 시작할 때와 로그아웃·시스템 종료 때도 묻는다(답하기 전까지 로그아웃이 멈춘다).
+- Hide Unnecessary Apple Requests from iOS Simulators는 켠 뒤 들어온 요청에만 적용된다.
+- Auto Override System Proxy Settings at Launch는 실행 때 서버가 실패하면 그 실행에서는 건너뛴다(나중에 다시 시도해도 켜지 않는다).
+- 루트 인증서 카드는 로그인 키체인 설치 여부만 본다(신뢰 설정은 확인하지 않는다).
+- 기본값이 바뀌었다: 목록 줄무늬 켬, URL 말줄임 Tail(예전 Middle), 상세 본문 글꼴 13pt(예전 12.5pt), Repeat·Compose 타임아웃 30초(예전 60초).
 
 ## 빌드·테스트
 
