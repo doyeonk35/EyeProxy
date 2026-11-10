@@ -58,7 +58,7 @@ private struct CertificateMenu: View {
         .help("루트 CA나 개인키를 파일로 저장")
         Divider()
         Button("Reset all Prog Certificates…") { Task { await model.resetCertificatesWithConfirmation() } }
-            .help("새 루트 CA 만들기 — 설치한 CA는 다시 설치")
+            .help("새 루트 CA 만들기 — 설치한 CA는 다시 설치해야 함")
         Divider()
         Button("Certificate & Devices Window…") { openWindow(id: "devices") }
             .keyboardShortcut("d")

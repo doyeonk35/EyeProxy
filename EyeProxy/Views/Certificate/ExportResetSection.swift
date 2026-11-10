@@ -34,7 +34,7 @@ struct ExportResetSection: View {
                 }
             }
             .disabled(resetting)
-            .help("새 루트 CA 만들기 — 설치한 CA는 다시 설치")
+            .help("새 루트 CA 만들기 — 설치한 CA는 다시 설치해야 함")
         } footer: {
             Text("새 루트 CA를 만듭니다. 이전 CA는 백업 폴더로 옮겨집니다.")
         }

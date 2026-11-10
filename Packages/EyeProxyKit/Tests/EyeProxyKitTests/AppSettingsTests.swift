@@ -93,6 +93,17 @@ import Testing
     #expect(!again.isRecording)
 }
 
+/// 손으로 고친 범위 밖 값은 읽을 때 고정한다(탭 폭 0 이하는 들여쓰기에서 멈춘다, 글꼴 크기는 고르기 칸이 빈다).
+@Test @MainActor func outOfRangeFontSizeAndTabWidthReadClamped() {
+    let d = UserDefaults(suiteName: UUID().uuidString)!
+    for (font, tab, wantFont, wantTab) in [(0, 0, 11, 2), (-5, -1, 11, 2), (99, 3, 16, 2), (14, 4, 14, 4), (16, 8, 16, 2)] {
+        d.set(font, forKey: "eyeproxy.fontSize")
+        d.set(tab, forKey: "eyeproxy.tabWidth")
+        let s = AppSettings(defaults: d)
+        #expect(s.fontSize == wantFont && s.tabWidth == wantTab, "font \(font) tab \(tab)")
+    }
+}
+
 /// 옛 설정(외관·포트·상태 막대 아이콘·줄바꿈·레이아웃)은 키를 바꾸지 않고 그대로 읽는다.
 @Test @MainActor func existingKeysAreReadUnchanged() {
     let d = UserDefaults(suiteName: UUID().uuidString)!

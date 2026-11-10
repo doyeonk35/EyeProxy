@@ -97,15 +97,16 @@ private struct RootCertificateCard: View {
                 Text(verbatim: ca.commonName).fontWeight(.semibold).textSelection(.enabled)
                 Text("유효기간 \(ca.validity.lowerBound.formatted(date: .numeric, time: .omitted)) ~ \(ca.validity.upperBound.formatted(date: .numeric, time: .omitted))")
                     .font(.caption).foregroundStyle(.secondary)
+                // Certificate 창 이 Mac 섹션과 같은 값·문구(키체인에 있는지만 본다 — 신뢰 여부는 확인하지 않는다).
                 Group {
                     if model.macCAInstalled {
-                        Label("이 Mac: 설치됨 · 신뢰함", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        Label("로그인 키체인에 설치됨", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
                     } else {
-                        Label("이 Mac: 설치되지 않음", systemImage: "exclamationmark.circle").foregroundStyle(.orange)
+                        Text("설치되지 않음").foregroundStyle(.secondary)
                     }
                 }
                 .font(.caption)
-                .help("로그인 키체인에 이 CA가 있는지(Certificate 창과 같은 기준)")
+                .help("이 Mac 로그인 키체인에 이 CA가 있는지")
                 HStack {
                     Button("Open Certificate…") {
                         model.certificateSection = .mac
@@ -120,7 +121,7 @@ private struct RootCertificateCard: View {
                         }
                     }
                     .disabled(resetting)
-                    .help("새 루트 CA 만들기 — 설치한 CA는 다시 설치")
+                    .help("새 루트 CA 만들기 — 설치한 CA는 다시 설치해야 함")
                 }
                 .padding(.top, 4)
             }

@@ -78,8 +78,9 @@ public final class AppSettings {
         let startRecording = defaults.object(forKey: "eyeproxy.autoStartRecording") as? Bool ?? true
         autoStartRecording = startRecording
         isRecording = startRecording
-        fontSize = defaults.object(forKey: "eyeproxy.fontSize") as? Int ?? 13
-        tabWidth = defaults.object(forKey: "eyeproxy.tabWidth") as? Int ?? 2
+        // 손으로 고친 값도 고르기 칸 범위로(탭 폭 0 이하는 JSON 들여쓰기에서 멈춘다).
+        fontSize = min(max(defaults.object(forKey: "eyeproxy.fontSize") as? Int ?? 13, 11), 16)
+        tabWidth = defaults.object(forKey: "eyeproxy.tabWidth") as? Int == 4 ? 4 : 2
         useMonospacedFont = defaults.bool(forKey: "eyeproxy.useMonospacedFont")
         showInvisibles = defaults.bool(forKey: "eyeproxy.showInvisibles")
         alternativeRowBackgrounds = defaults.object(forKey: "eyeproxy.alternativeRowBackgrounds") as? Bool ?? true
