@@ -36,7 +36,13 @@ final class AppModel {
     private(set) var serverState: ServerState = .stopped
     /// 목록 필터. 규칙·AND/OR가 바뀌면 저장하고 목록에 반영한다(`filterRulesChanged`).
     var filter = FlowFilter() {
-        didSet { if filter.rules != oldValue.rules || filter.combineWithOr != oldValue.combineWithOr { filterRulesChanged() } }
+        didSet {
+            if filter.rules != oldValue.rules || filter.combineWithOr != oldValue.combineWithOr { filterRulesChanged() }
+            // 칩·숨김 보기 같은 나머지 조건은 바로 반영한다(규칙은 `appliedRules`가 바뀔 때).
+            var rest = filter
+            (rest.rules, rest.combineWithOr) = (oldValue.rules, oldValue.combineWithOr)
+            if rest != oldValue { refreshVisibleRows() }
+        }
     }
     /// 목록 위 필터 막대(스펙 §4). 숨겨도 켜진 규칙은 계속 적용된다.
     var isFilterBarVisible = false
@@ -45,7 +51,7 @@ final class AppModel {
     /// 켜진(적용되는) 규칙이 있다 — 하단 바 Filter 버튼 강조.
     var hasActiveFilterRules: Bool { filter.hasActiveRules }
     /// 목록에 실제로 적용 중인 규칙·AND/OR. 본문 규칙이 바뀌면 백그라운드 판정이 끝난 뒤에 바뀐다(그동안 이전 결과 유지).
-    private var appliedRules = FlowFilter()
+    private var appliedRules = FlowFilter() { didSet { refreshVisibleRows() } }
     /// 본문 규칙(`bodyMatchRules`) 판정 결과. 흐름 id → 판정한 본문 크기·규칙마다 결과.
     private var bodyMatches: [FlowID: BodyMatch] = [:]
     @ObservationIgnored private var bodyMatchRules: [FilterRule] = []
@@ -60,8 +66,17 @@ final class AppModel {
         set { selectedFlowIDs = newValue.map { [$0] } ?? [] }
     }
     /// 기본은 ID 내림차순(최신이 맨 위, Proxyman). 열 머리로 바꾼 정렬은 저장하지 않는다.
-    var sortOrder: [KeyPathComparator<FlowRow>] = [KeyPathComparator(\.number, order: .reverse)]
-    var sidebarSelection: SidebarItem? = .allFlows
+    var sortOrder: [KeyPathComparator<FlowRow>] = [KeyPathComparator(\.number, order: .reverse)] { didSet { refreshVisibleRows() } }
+    var sidebarSelection: SidebarItem? = .allFlows { didSet { refreshVisibleRows() } }
+    /// 목록에 보이는 흐름(세션 순서)과 행(정렬 순서). 사용자 조작은 바로, 트래픽(세션·귀속·본문 판정 변화)은
+    /// 묶어서 최대 `rowsRefreshInterval`마다 다시 계산한다 — 요청이 쏟아져도 메인 스레드가 매 이벤트 전체를 다시 거르지 않게(스펙 §1).
+    private(set) var visibleFlows: [Flow] = []
+    private(set) var visibleRows: [FlowRow] = []
+    /// 사이드바 트리·"전체" 개수. 목록처럼 트래픽 중에는 묶어서 다시 만든다.
+    private(set) var sidebarTree = SidebarTree.build(flows: [], attribution: [:], devices: [], pinned: [], runtimes: [:])
+    private(set) var sidebarFlowCount = 0
+    @ObservationIgnored private lazy var rowsRefresh = ThrottledRefresh { [weak self] in self?.computeVisibleRows() }
+    @ObservationIgnored private lazy var sidebarRefresh = ThrottledRefresh { [weak self] in self?.computeSidebar() }
     /// 우클릭 ▸ Tools로 열 새 규칙. 해당 도구 창이 꺼내 편집기를 연다.
     var pendingNewRule: PendingNewRule?
     /// 별도 창 편집기(`ToolEditorStyle.window`)로 넘기는 규칙. 키 = 규칙 id.
@@ -145,6 +160,8 @@ final class AppModel {
         appliedRules = filter
         bodyMatchRules = filter.activeBodyRules
         isFilterBarVisible = filter.hasActiveRules
+        refreshVisibleRows()
+        sidebarRefresh.now()
         // 백업 없이 VPN 복사본만 남은 경우(종료 때 관리자 인증 취소 등)도 시작 시 알린다.
         Task { await refreshEffectiveProxyWarning() }
     }
@@ -327,6 +344,7 @@ final class AppModel {
         case .host, .scope: sidebarSelection = .allFlows
         case .allFlows, nil: break
         }
+        refreshVisibleRows()
     }
 
     /// Flow ▸ Delete(스펙 §5). 보이는 행만 지운다 — 선택에 남은, 필터·사이드바가 숨긴 행은 몰래 지우지 않는다.
@@ -340,6 +358,7 @@ final class AppModel {
         }
         session.remove(ids: ids)
         for id in ids { processes.remove(id) }
+        refreshVisibleRows()
         if !selectedFlowIDs.isDisjoint(with: ids) { selectedFlowID = next }
     }
 
@@ -411,7 +430,16 @@ final class AppModel {
 
     // MARK: - 목록
 
-    var visibleFlows: [Flow] {
+    /// 사용자 조작(규칙·정렬·사이드바 선택·삭제): 보이는 행을 지금 다시 계산한다.
+    func refreshVisibleRows() { rowsRefresh.now() }
+
+    private func computeVisibleRows() {
+        let flows = computeVisibleFlows()
+        visibleFlows = flows
+        visibleRows = flows.map { FlowRow(flow: $0, number: session.number($0.id) ?? 0) }.sorted(using: sortOrder)
+    }
+
+    private func computeVisibleFlows() -> [Flow] {
         var f = filter
         (f.rules, f.combineWithOr) = (appliedRules.rules, appliedRules.combineWithOr)
         switch sidebarSelection {
@@ -503,10 +531,6 @@ final class AppModel {
         appliedRules = filter
     }
 
-    var visibleRows: [FlowRow] {
-        visibleFlows.map { FlowRow(flow: $0, number: session.number($0.id) ?? 0) }.sorted(using: sortOrder)
-    }
-
     /// View ▸ Auto Select(스펙 §6): 켜져 있으면 보이는 행 중 최신을 선택하고 그 id를 돌려준다(목록이 스크롤한다).
     func selectLatestIfAuto() -> FlowID? {
         guard settings.autoSelectLatest, let id = AutoSelect.latest(in: visibleFlows, number: { session.number($0) ?? 0 }) else { return nil }
@@ -543,9 +567,11 @@ final class AppModel {
         filter.includeHidden ? session.flows : session.flows.filter { !$0.annotations.contains(.hidden) }
     }
 
-    var sidebarTree: SidebarTree {
-        SidebarTree.build(flows: sidebarFlows, attribution: processes.attribution, devices: devices.devices,
-                          pinned: settings.pinnedHosts, runtimes: simulatorRuntimes)
+    private func computeSidebar() {
+        let flows = sidebarFlows
+        sidebarFlowCount = flows.count
+        sidebarTree = SidebarTree.build(flows: flows, attribution: processes.attribution, devices: devices.devices,
+                                        pinned: settings.pinnedHosts, runtimes: simulatorRuntimes)
     }
 
     // MARK: - 온보딩
@@ -692,5 +718,42 @@ final class AppModel {
             return false
         }
         return true
+    }
+}
+
+/// 관찰한 입력이 바뀌면 다시 계산하되, 연달아 바뀌면(요청이 쏟아질 때) `interval`마다 한 번으로 묶는다.
+/// `now()`는 바로 계산한다(사용자 조작). 계산 중 읽은 관찰 값이 다음 변경 감지 대상이 된다.
+@MainActor final class ThrottledRefresh {
+    private let interval: Duration
+    private let compute: @MainActor () -> Void
+    private var pending: Task<Void, Never>?
+    private var lastRun = ContinuousClock.now
+    private var generation = 0
+
+    init(interval: Duration = .milliseconds(250), _ compute: @escaping @MainActor () -> Void) {
+        self.interval = interval
+        self.compute = compute
+    }
+
+    func now() {
+        pending?.cancel()
+        pending = nil
+        lastRun = .now
+        generation += 1
+        let g = generation
+        withObservationTracking { compute() } onChange: { [weak self] in
+            Task { @MainActor in self?.changed(g) }
+        }
+    }
+
+    /// 그사이 `now()`로 이미 다시 계산했으면(generation이 다름) 무시한다.
+    private func changed(_ g: Int) {
+        guard g == generation, pending == nil else { return }
+        let wait = lastRun + interval - .now
+        pending = Task { [weak self] in
+            if wait > .zero { try? await Task.sleep(for: wait) }
+            guard !Task.isCancelled else { return }
+            self?.now()
+        }
     }
 }

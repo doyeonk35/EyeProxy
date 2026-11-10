@@ -8,6 +8,8 @@ struct FlowListView: View {
     @Environment(\.openWindow) private var openWindow
     // 열 구성이 바뀌어(Task 15b) 예전 저장값의 순서·폭이 섞이지 않게 키를 새로 쓴다.
     @AppStorage("eyeproxy.flowColumns.v2") private var columnCustomization = TableColumnCustomization<FlowRow>()
+    /// 창이 열릴 때 첫 포커스는 목록(되살린 필터 막대 검색칸이 아니라) — ⌫·⌘N 같은 단축키가 그대로 동작하게(스펙 §9).
+    @FocusState private var tableFocused: Bool
 
     var body: some View {
         @Bindable var model = model
@@ -130,6 +132,10 @@ struct FlowListView: View {
                 }
             }
             .alternatingRowBackgrounds(.disabled)
+            .focused($tableFocused)
+            .defaultFocus($tableFocused, true)
+            // AppKit이 창을 처음 key로 만들며 키 뷰 순서의 첫 검색칸에 포커스를 주므로, 그 뒤에 목록으로 되돌린다.
+            .task { tableFocused = true }
             // 최신 행이 바뀔 때만 따라간다 — 응답 도착 같은 행 갱신으로 선택을 다시 쓰지 않는다. 켜면 바로 최신을 고른다.
             .onChange(of: latest) { followLatest(proxy) }
             .onChange(of: model.settings.autoSelectLatest, initial: true) { followLatest(proxy) }
