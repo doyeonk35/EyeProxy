@@ -100,10 +100,10 @@ struct MessagePane: View {
             // 내용 영역이 패널 높이를 꽉 채워야 머리글이 위에 고정된다(짧으면 가운데로 밀리고, NSTextView는 넘친다).
             Group {
                 switch shownTab {
-                case .headers: KeyValueTable(rows: headers, emptyTitle: "헤더 없음")
-                case .query: KeyValueTable(rows: query ?? [], emptyTitle: "쿼리 없음")
+                case .headers: KeyValueTable(rows: headers, emptyTitle: "헤더 없음").id(flowID)
+                case .query: KeyValueTable(rows: query ?? [], emptyTitle: "쿼리 없음").id(flowID)
                 case .body: BodyView(data: content, headers: headers).id(flowID)
-                case .cookies: KeyValueTable(rows: cookies, emptyTitle: "쿠키 없음")
+                case .cookies: KeyValueTable(rows: cookies, emptyTitle: "쿠키 없음").id(flowID)
                 case .raw: RawView(source: raw).id(flowID)
                 case .m3u8: M3U8View(data: content, headers: headers, baseURL: playlistURL).id(flowID)
                 }

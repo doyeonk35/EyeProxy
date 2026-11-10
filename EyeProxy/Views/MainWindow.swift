@@ -5,6 +5,7 @@ import SwiftUI
 struct MainWindow: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         @Bindable var model = model
@@ -30,6 +31,8 @@ struct MainWindow: View {
         }
         .toolbar { MainToolbar(model: model) }
         .searchable(text: $model.filter.text, placement: .toolbar, prompt: Text("URL·메서드·상태 검색"))
+        .searchFocused($searchFocused)
+        .focusedSceneValue(\.flowSearch, DetailFind(open: { searchFocused = true }))
         .sheet(isPresented: Binding(get: { model.commentingFlowID != nil }, set: { if !$0 { model.commentingFlowID = nil } })) {
             if let id = model.commentingFlowID { CommentSheet(id: id) }
         }

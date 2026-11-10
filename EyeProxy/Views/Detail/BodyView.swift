@@ -34,7 +34,7 @@ struct BodyView: View {
     @State private var mode = Mode.pretty
     @State private var tree: [JSONTreeNode]?
     @State private var treeExpanded: Set<Int> = []
-    /// 트리 찾기 막대. Task 3의 ⌘F가 이 값을 켠다.
+    /// 트리 찾기 막대. 트리에 포커스가 있을 때 ⌘F로도 켠다(JSONTreeView의 DetailFind).
     @State private var treeFindVisible = false
 
     private var encoding: String? {
@@ -58,13 +58,16 @@ struct BodyView: View {
                     .pickerStyle(.segmented).labelsHidden().fixedSize()
                 }
                 if mode == .tree, let tree {
-                    Button { treeExpanded = JSONTreeSearch.containerIDs(in: tree) } label: { Image(systemName: "rectangle.expand.vertical") }
+                    Button { treeExpanded = JSONTreeSearch.containerIDs(in: tree) } label: { Label("모두 펼치기", systemImage: "rectangle.expand.vertical") }
+                        .labelStyle(.iconOnly)
                         .help("트리 모두 펼치기")
-                    Button { treeExpanded = [] } label: { Image(systemName: "rectangle.compress.vertical") }
+                    Button { treeExpanded = [] } label: { Label("모두 접기", systemImage: "rectangle.compress.vertical") }
+                        .labelStyle(.iconOnly)
                         .help("트리 모두 접기")
-                    Toggle(isOn: $treeFindVisible) { Image(systemName: "magnifyingglass") }
+                    Toggle(isOn: $treeFindVisible) { Label("찾기", systemImage: "magnifyingglass") }
+                        .labelStyle(.iconOnly)
                         .toggleStyle(.button)
-                        .help("트리에서 찾기·거르기")
+                        .help("트리에서 찾기·거르기 (⌘F)")
                 }
                 Spacer()
                 Toggle("줄바꿈", isOn: $settings.wrapLongLines).toggleStyle(.checkbox)

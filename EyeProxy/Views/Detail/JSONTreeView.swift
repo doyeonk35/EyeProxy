@@ -57,10 +57,17 @@ struct JSONTreeView: View {
                     // 조상 펼침이 행 목록에 반영된 다음 굴린다.
                     Task { @MainActor in proxy.scrollTo(id, anchor: .center) }
                 }
+                .overlay {
+                    if filtered?.isEmpty == true { ContentUnavailableView("일치 없음", systemImage: "magnifyingglass") }
+                }
             }
         }
+        // 트리·막대 어디에 포커스가 있어도: ⌘F는 막대를 열고(열려 있으면 검색칸으로), ⌘G·⇧⌘G는 Search 이동, Esc는 닫기.
+        .focusedValue(\.detailFind, DetailFind(open: { findVisible = true; fieldFocused = true }, step: step))
+        .onExitCommand { if findVisible { findVisible = false } }
         .onChange(of: findVisible) { _, open in
-            if open { savedExpanded = expanded; fieldFocused = true } else { reset() }
+            // 막대가 그려진 다음 칸에 포커스를 준다(목록이 포커스를 쥐고 있으면 같은 갱신 안에서는 안 옮겨진다).
+            if open { savedExpanded = expanded; Task { @MainActor in fieldFocused = true } } else { reset() }
         }
         .onDisappear { if findVisible { findVisible = false; reset() } }
     }
@@ -72,6 +79,7 @@ struct JSONTreeView: View {
             if n.children?.isEmpty == false {
                 Button { if open { expanded.remove(n.id) } else { expanded.insert(n.id) } } label: {
                     Image(systemName: "chevron.right")
+                        .accessibilityLabel(open ? "접기" : "펼치기")
                         .rotationEffect(.degrees(open ? 90 : 0))
                         .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                         .frame(width: 12)
@@ -87,7 +95,7 @@ struct JSONTreeView: View {
         }
         .font(.system(.body, design: .monospaced))
         .textSelection(.enabled)
-        .padding(.leading, CGFloat(r.depth) * 14)
+        .padding(.leading, CGFloat(min(r.depth, 32)) * 14)  // 아주 깊으면 들여쓰기만 멈춘다
     }
 
     private var findBar: some View {
@@ -109,22 +117,21 @@ struct JSONTreeView: View {
             .pickerStyle(.segmented).labelsHidden().fixedSize()
             .help("Search는 일치를 강조하고, Filter는 일치한 노드만 남깁니다")
             if findMode == .search {
-                Button { step(-1) } label: { Image(systemName: "chevron.up") }
-                    .disabled(matches.isEmpty).help("이전 일치 (⇧Enter)")
-                Button { step(1) } label: { Image(systemName: "chevron.down") }
-                    .disabled(matches.isEmpty).help("다음 일치 (Enter)")
+                Button { step(-1) } label: { Label("이전 일치", systemImage: "chevron.up").labelStyle(.iconOnly) }
+                    .disabled(matches.isEmpty).help("이전 일치 (⇧Enter·⇧⌘G)")
+                Button { step(1) } label: { Label("다음 일치", systemImage: "chevron.down").labelStyle(.iconOnly) }
+                    .disabled(matches.isEmpty).help("다음 일치 (Enter·⌘G)")
                 Text(verbatim: matches.isEmpty ? "0 / 0" : "\(current + 1) / \(matches.count)")
                     .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             } else {
                 Text("\(matches.count)개 일치").font(.caption).foregroundStyle(.secondary)
             }
-            Button { findVisible = false } label: { Image(systemName: "xmark.circle.fill") }
+            Button { findVisible = false } label: { Label("닫기", systemImage: "xmark.circle.fill").labelStyle(.iconOnly) }
                 .buttonStyle(.borderless).foregroundStyle(.secondary)
                 .help("찾기 막대 닫기 (Esc)")
         }
         .controlSize(.small)
         .padding(.horizontal, 8).padding(.vertical, 4)
-        .onExitCommand { findVisible = false }
         // 새 값을 인자로 넘긴다 — 빠르게 칠 때 클로저 안에서 읽은 query가 한 박자 늦은 값이었다(실측).
         .onChange(of: query) { _, q in apply(q, findMode) }
         .onChange(of: findMode) { _, m in apply(query, m) }
@@ -145,7 +152,7 @@ struct JSONTreeView: View {
     }
 
     private func step(_ d: Int) {
-        guard !matches.isEmpty else { return }
+        guard findVisible, findMode == .search, !matches.isEmpty else { return }
         current = (current + d + matches.count) % matches.count
     }
 

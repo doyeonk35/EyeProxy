@@ -50,6 +50,7 @@ import SwiftUI
                 Toggle("Auto Select the Latest Request", isOn: Bindable(model.settings).autoSelectLatest)
                     .help("새 요청이 오면 자동 선택 — 다른 행을 고르면 꺼짐")
             }
+            FindCommands()
             ToolsCommands(model: model)
             CertificateCommands(model: model)
         }

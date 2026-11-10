@@ -41,6 +41,9 @@ struct CodeTextView: NSViewRepresentable {
         tv.isRichText = false
         tv.allowsUndo = isEditable
         tv.usesFontPanel = false
+        // ⌘F·⌘G: 내장 찾기 막대(일치 모두 강조·개수·대소문자 옵션). 막대는 감싼 NSScrollView 위에 붙는다.
+        tv.usesFindBar = true
+        tv.isIncrementalSearchingEnabled = true
         // JSON·헤더를 고치므로 따옴표·대시 자동 치환과 맞춤법 교정을 끈다.
         tv.isAutomaticQuoteSubstitutionEnabled = false
         tv.isAutomaticDashSubstitutionEnabled = false
