@@ -9,6 +9,7 @@ struct M3U8View: View {
     let headers: [HTTPHeader]
     let baseURL: URL?
     @State private var playlist: M3U8Playlist??
+    @State private var findID = UUID()
 
     var body: some View {
         Group {
@@ -20,6 +21,8 @@ struct M3U8View: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // M3U8 표도 NSTableView라 그대로 두면 ⌘F가 목록 쪽으로 보고 툴바 검색칸으로 간다. 찾기는 없으니 아무 일도 안 하게 받아 둔다.
+        .focusedValue(\.detailFind, DetailFind(id: findID, open: {}))
         .task {
             let (body, headers, base) = (data, headers, baseURL)
             playlist = await Task.detached {

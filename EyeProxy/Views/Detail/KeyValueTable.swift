@@ -10,16 +10,19 @@ struct KeyValueTable: View {
     @State private var filterVisible = false
     @State private var query = ""
     @FocusState private var fieldFocused: Bool
+    @FocusState private var tableFocused: Bool
     @State private var findID = UUID()
 
-    private var shown: [HTTPHeader] {
-        query.isEmpty ? rows : rows.filter { $0.name.localizedCaseInsensitiveContains(query) || $0.value.localizedCaseInsensitiveContains(query) }
+    /// 보이는 행의 원래 인덱스. 행·마우스 강조를 원래 인덱스로 묶어 거른 뒤에도 강조가 다른 행으로 옮겨 가지 않는다.
+    private func shownIndices() -> [Int] {
+        query.isEmpty ? Array(rows.indices)
+            : rows.indices.filter { rows[$0].name.localizedCaseInsensitiveContains(query) || rows[$0].value.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
+        let shown = shownIndices()
         VStack(spacing: 0) {
-            if filterVisible { filterBar; Divider() }
-            let shown = shown
+            if filterVisible { filterBar(count: shown.count); Divider() }
             if rows.isEmpty {
                 ContentUnavailableView(emptyTitle, systemImage: "list.bullet")
             } else if shown.isEmpty {
@@ -27,9 +30,9 @@ struct KeyValueTable: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(shown.indices, id: \.self) { i in
-                            row(shown[i], index: i)
-                            if i < shown.count - 1 { Divider().opacity(0.5) }
+                        ForEach(Array(shown.enumerated()), id: \.element) { pos, i in
+                            row(rows[i], index: i)
+                            if pos < shown.count - 1 { Divider().opacity(0.5) }
                         }
                     }
                 }
@@ -37,20 +40,21 @@ struct KeyValueTable: View {
                 // (탭 제스처로 포커스를 주면 더블클릭 단어 선택·⌘C가 깨져서 쓰지 않는다 — 실측).
                 .focusable(interactions: .edit)
                 .focusEffectDisabled()
+                .focused($tableFocused)
             }
         }
         // 칸이 그려진 다음 포커스를 준다(같은 갱신 안에서는 아직 칸이 없다).
         .focusedValue(\.detailFind, DetailFind(id: findID, open: { filterVisible = true; Task { @MainActor in fieldFocused = true } }))
-        .onExitCommand { close() }
+        .onExitCommand { if filterVisible { close() } }
     }
 
-    private var filterBar: some View {
+    private func filterBar(count: Int) -> some View {
         HStack(spacing: 6) {
             TextField("이름·값 거르기", text: $query)
                 .textFieldStyle(.roundedBorder)
                 .focused($fieldFocused)
                 .help("이름 또는 값에 이 글자가 든 행만 보입니다 (대소문자 무시)")
-            Text("\(shown.count) / 전체 \(rows.count)")
+            Text("\(count) / 전체 \(rows.count)")
                 .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             Button { close() } label: { Label("닫기", systemImage: "xmark.circle.fill").labelStyle(.iconOnly) }
                 .buttonStyle(.borderless).foregroundStyle(.secondary)
@@ -60,9 +64,11 @@ struct KeyValueTable: View {
         .padding(.horizontal, 8).padding(.vertical, 4)
     }
 
+    /// 닫으면 표로 포커스를 돌려 다음 ⌘F가 다시 이 칸을 연다(툴바 검색칸으로 가지 않게).
     private func close() {
         filterVisible = false
         query = ""
+        Task { @MainActor in tableFocused = true }
     }
 
     private func row(_ header: HTTPHeader, index i: Int) -> some View {

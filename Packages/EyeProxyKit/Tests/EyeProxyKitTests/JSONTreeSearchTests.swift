@@ -39,6 +39,18 @@ private let sample = JSONTreeNode.parse(pretty: #"{"user":{"name":"Kim","tags":[
     #expect(JSONTreeSearch.filter(sample, query: "nothing").isEmpty)
 }
 
+@Test func arrayIndexKeysAreNotMatched() {
+    // a 1, "x" 2, "y1" 3, 객체 키 "1" 4 — 배열 원소 키("0","1")는 빼고 값·객체 키는 맞춘다.
+    let n = JSONTreeNode.parse(pretty: #"{"a":["x","y1"],"1":"v"}"#)
+    #expect(JSONTreeSearch.matches(in: n, query: "1") == [3, 4])
+    #expect(JSONTreeSearch.matches(in: n, query: "0") == [])
+    // 루트 배열: parse가 벗겨낸 맨 위 원소도 인덱스 키다. "p" 1, "q1" 2, 객체 3(키 "2") 안 "k1" 4.
+    let root = JSONTreeNode.parse(pretty: #"["p","q1",{"k1":0}]"#)
+    #expect(JSONTreeSearch.matches(in: root, query: "1") == [2, 4])
+    #expect(JSONTreeSearch.matches(in: root, query: "2") == [])
+    #expect(JSONTreeSearch.filter(root, query: "2").isEmpty)
+}
+
 @Test func emptyQueryIsNoOp() {
     #expect(JSONTreeSearch.matches(in: sample, query: "") == [])
     #expect(JSONTreeSearch.filter(sample, query: "").map(\.id) == sample.map(\.id))

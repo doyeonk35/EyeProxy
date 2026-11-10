@@ -17,7 +17,18 @@ struct JSONTreeView: View {
     @State private var filtered: [JSONTreeNode]?
     @State private var savedExpanded: Set<Int> = []
     @FocusState private var fieldFocused: Bool
+    @FocusState private var listFocused: Bool
     @State private var findID = UUID()
+    /// 보이는 행과 Search 일치 집합은 펼침·거르기·일치가 바뀔 때만 다시 만든다(본문을 다시 그릴 때마다 아니라).
+    @State private var rows: [Row]
+    @State private var hits: Set<Int> = []
+
+    init(nodes: [JSONTreeNode], expanded: Binding<Set<Int>>, findVisible: Binding<Bool>) {
+        self.nodes = nodes
+        _expanded = expanded
+        _findVisible = findVisible
+        _rows = State(initialValue: Self.rows(nodes, expanded.wrappedValue))
+    }
 
     private struct Row: Identifiable {
         let node: JSONTreeNode
@@ -46,13 +57,13 @@ struct JSONTreeView: View {
         VStack(spacing: 0) {
             if findVisible { findBar; Divider() }
             ScrollViewReader { proxy in
-                let hits = findVisible && findMode == .search ? Set(matches) : []
-                List(Self.rows(filtered ?? nodes, expanded)) { r in
+                List(rows) { r in
                     row(r)
                         .listRowBackground(
                             r.id == currentID ? Color.accentColor.opacity(0.4)
                                 : hits.contains(r.id) ? Color.yellow.opacity(0.18) : Color.clear)
                 }
+                .focused($listFocused)
                 .onChange(of: currentID) { _, id in
                     guard let id else { return }
                     // 조상 펼침이 행 목록에 반영된 다음 굴린다.
@@ -68,8 +79,10 @@ struct JSONTreeView: View {
         .onExitCommand { if findVisible { findVisible = false } }
         .onChange(of: findVisible) { _, open in
             // 막대가 그려진 다음 칸에 포커스를 준다(목록이 포커스를 쥐고 있으면 같은 갱신 안에서는 안 옮겨진다).
-            if open { savedExpanded = expanded; Task { @MainActor in fieldFocused = true } } else { reset() }
+            // 닫으면 트리로 포커스를 돌려 다음 ⌘F가 다시 이 막대를 연다(툴바 검색칸으로 가지 않게).
+            if open { savedExpanded = expanded; Task { @MainActor in fieldFocused = true } } else { reset(); Task { @MainActor in listFocused = true } }
         }
+        .onChange(of: expanded) { refreshRows() }
         .onDisappear { if findVisible { findVisible = false; reset() } }
     }
 
@@ -139,17 +152,28 @@ struct JSONTreeView: View {
     }
 
     /// 검색어·모드가 바뀔 때: 일치를 다시 구하고 펼침을 (열 때 저장한 상태 + 필요한 만큼)으로 맞춘다.
+    // ponytail: 키 입력마다 동기 전체 계산(2.5 MB·144k 노드 ≈ Search 150 ms·Filter 280 ms, -O). 느리면 디바운스 + Task.detached.
     private func apply(_ query: String, _ mode: FindMode) {
-        matches = JSONTreeSearch.matches(in: nodes, query: query)
+        let old = expanded
+        let ids = JSONTreeSearch.matches(in: nodes, query: query)
+        let hitSet = Set(ids)
+        matches = ids
         current = 0
         if mode == .filter, !query.isEmpty {
-            let f = JSONTreeSearch.filter(nodes, query: query)
+            let f = JSONTreeSearch.filter(nodes, hits: hitSet)  // 일치를 다시 구하지 않는다
             filtered = f
+            hits = []
             expanded = JSONTreeSearch.containerIDs(in: f)
         } else {
             filtered = nil
-            expanded = savedExpanded.union(JSONTreeSearch.ancestors(of: Set(matches), in: nodes))
+            hits = hitSet
+            expanded = savedExpanded.union(JSONTreeSearch.ancestors(of: hitSet, in: nodes))
         }
+        if expanded == old { refreshRows() }  // 펼침이 바뀌었으면 onChange가 다시 만든다
+    }
+
+    private func refreshRows() {
+        rows = Self.rows(filtered ?? nodes, expanded)
     }
 
     private func step(_ d: Int) {
@@ -159,10 +183,13 @@ struct JSONTreeView: View {
 
     /// 막대를 닫으면 원래 트리·펼침 상태로.
     private func reset() {
-        expanded = savedExpanded
+        let old = expanded
         query = ""
         matches = []
+        hits = []
         current = 0
         filtered = nil
+        expanded = savedExpanded
+        if expanded == old { refreshRows() }
     }
 }
