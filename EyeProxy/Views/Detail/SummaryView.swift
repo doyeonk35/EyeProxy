@@ -2,24 +2,9 @@ import EyeProxyCore
 import EyeProxyKit
 import SwiftUI
 
-/// 상세 상단의 접히는 요약(스펙 §7 Summary). 응답이 없거나 실패한 흐름도 보이도록 패널 탭이 아니라 머리글 아래에 둔다.
-struct SummaryView: View {
-    @Environment(AppModel.self) private var model
-    let flow: Flow
-    @State private var expanded = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            DisclosureGroup("요약", isExpanded: $expanded) {
-                KeyValueTable(rows: rows, emptyTitle: "").frame(height: 220)
-                    .id(flow.id)  // 흐름을 바꾸면 거르기 칸·검색어를 비운다
-            }
-            .padding(.horizontal, 12).padding(.vertical, 4)
-            Divider()
-        }
-    }
-
-    private var rows: [HTTPHeader] {
+/// 요청 패널 Summary 탭의 행(스펙 §7). 응답이 없거나 실패한 흐름도 요청 패널은 늘 있으니 그 탭에 둔다.
+@MainActor enum SummaryView {
+    static func rows(_ flow: Flow, model: AppModel) -> [HTTPHeader] {
         let row = FlowRow(flow: flow, number: 0)  // 목록 열과 같은 파생 값(소요 시간·크기·SSL·Edited)
         let request = flow.request
         let status = flow.response.map { "\($0.status) \($0.reason)" } ?? flow.error.map { "오류: \($0)" } ?? "응답 대기 중"

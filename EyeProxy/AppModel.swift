@@ -334,6 +334,17 @@ final class AppModel {
         await applySettingsToServer()
     }
 
+    /// HTTPS Response 안내의 "Enable all domains from <앱>": 그 앱(`ProcessIdentity.groupKey`)의 흐름이 쓴 모든 호스트를 넣는다.
+    func enableSSLProxying(forHostsOfApp groupKey: String) async {
+        var patterns = settings.sslPatterns
+        for flow in session.flows where processes.attribution[flow.id]?.groupKey == groupKey && !patterns.contains(flow.request.host) {
+            patterns.append(flow.request.host)
+        }
+        settings.sslPatterns = patterns
+        settings.sslEnabled = true
+        await applySettingsToServer()
+    }
+
     func clear() {
         session.clear()
         processes.clear()

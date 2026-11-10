@@ -8,7 +8,8 @@ struct BodyView: View {
     let headers: [HTTPHeader]
     @Environment(AppModel.self) private var model
 
-    private enum Mode { case pretty, tree, raw }
+    /// JSON 본문의 보기. 트리는 Treeview 탭, Content-Type과 상관없는 JSON 보기는 JSON 탭(JSONTabView).
+    private enum Mode { case pretty, raw }
 
     /// 디코드 결과와 화면용 문자열(2MB 컷·hex 덤프·JSON 색)을 한 번만 만든다.
     private struct Loaded {
@@ -32,10 +33,6 @@ struct BodyView: View {
 
     @State private var loaded: Loaded?
     @State private var mode = Mode.pretty
-    @State private var tree: [JSONTreeNode]?
-    @State private var treeExpanded: Set<Int> = []
-    /// 트리 찾기 막대. 트리에 포커스가 있을 때 ⌘F로도 켠다(JSONTreeView의 DetailFind).
-    @State private var treeFindVisible = false
 
     private var encoding: String? {
         headers.first { $0.name.caseInsensitiveCompare("Content-Encoding") == .orderedSame }?.value
@@ -52,22 +49,9 @@ struct BodyView: View {
                 if case .json? = loaded?.decoded {
                     Picker("", selection: $mode) {
                         Text("Pretty").tag(Mode.pretty)
-                        Text("Tree").tag(Mode.tree)
                         Text("Raw").tag(Mode.raw)
                     }
                     .pickerStyle(.segmented).labelsHidden().fixedSize()
-                }
-                if mode == .tree, let tree {
-                    Button { treeExpanded = JSONTreeSearch.containerIDs(in: tree) } label: { Label("모두 펼치기", systemImage: "rectangle.expand.vertical") }
-                        .labelStyle(.iconOnly)
-                        .help("트리 모두 펼치기")
-                    Button { treeExpanded = [] } label: { Label("모두 접기", systemImage: "rectangle.compress.vertical") }
-                        .labelStyle(.iconOnly)
-                        .help("트리 모두 접기")
-                    Toggle(isOn: $treeFindVisible) { Label("찾기", systemImage: "magnifyingglass") }
-                        .labelStyle(.iconOnly)
-                        .toggleStyle(.button)
-                        .help("트리에서 찾기·거르기 (⌘F)")
                 }
                 Spacer()
                 Toggle("줄바꿈", isOn: $settings.wrapLongLines).toggleStyle(.checkbox)
@@ -83,9 +67,6 @@ struct BodyView: View {
             let p = await Task.detached { Self.prepare(b, h) }.value
             var image: NSImage?
             if case .image(let img) = p.decoded { image = NSImage(data: img) }
-            tree = nil
-            treeExpanded = []
-            treeFindVisible = false
             loaded = Loaded(
                 decoded: p.decoded, display: Self.highlighted(p.display, p.tokens), truncated: p.truncated,
                 raw: p.raw.map { CodeTextView.base($0) }, rawTruncated: p.rawTruncated, image: image)
@@ -94,7 +75,7 @@ struct BodyView: View {
 
     private nonisolated static let textLimit = 2_000_000
     private nonisolated static let hexLimit = 64 * 1024
-    private nonisolated static let highlightLimit = 256_000
+    nonisolated static let highlightLimit = 256_000
 
     private nonisolated static func prepare(_ body: Data, _ headers: [HTTPHeader]) -> Prepared {
         let d = BodyDecoder.decode(body: body, headers: headers)
@@ -121,7 +102,7 @@ struct BodyView: View {
         .keyword: NSColor(named: "JSONKeyword") ?? .textColor,
     ]
 
-    private static func highlighted(_ s: String, _ tokens: [JSONToken]) -> NSAttributedString {
+    static func highlighted(_ s: String, _ tokens: [JSONToken]) -> NSAttributedString {
         let a = CodeTextView.base(s)
         a.beginEditing()
         for t in tokens { a.addAttribute(.foregroundColor, value: tokenColors[t.kind] ?? NSColor.textColor, range: t.range) }
@@ -130,7 +111,7 @@ struct BodyView: View {
     }
 
     /// UTF-8 바이트 기준 2MB로 자르되 줄 경계에서 끊는다.
-    private nonisolated static func capped(_ s: String) -> (String, Bool) {
+    nonisolated static func capped(_ s: String) -> (String, Bool) {
         let u = s.utf8
         guard u.count > textLimit else { return (s, false) }
         var end = u.index(u.startIndex, offsetBy: textLimit)
@@ -151,15 +132,10 @@ struct BodyView: View {
     @ViewBuilder private func content(_ l: Loaded) -> some View {
         switch l.decoded {
         case .empty: Text("(없음)").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .json(let pretty, _):
+        case .json:
             switch mode {
             case .pretty: CodeBody(text: l.display, truncated: l.truncated)
             case .raw: CodeBody(text: l.raw ?? l.display, truncated: l.rawTruncated)
-            case .tree:
-                if let tree { JSONTreeView(nodes: tree, expanded: $treeExpanded, findVisible: $treeFindVisible) } else {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .task { tree = await Task.detached { JSONTreeNode.parse(pretty: pretty) }.value }
-                }
             }
         case .text: CodeBody(text: l.display, truncated: l.truncated)
         case .html: HTMLBody(source: l.display, truncated: l.truncated)
@@ -176,7 +152,7 @@ struct BodyView: View {
 }
 
 /// `CodeTextView` + 2MB 컷 안내. 줄바꿈은 설정을 따른다.
-private struct CodeBody: View {
+struct CodeBody: View {
     let text: NSAttributedString
     let truncated: Bool
     @Environment(AppModel.self) private var model

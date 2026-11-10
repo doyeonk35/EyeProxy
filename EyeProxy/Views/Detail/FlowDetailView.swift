@@ -9,7 +9,6 @@ struct FlowDetailView: View {
         if let id = model.selectedFlowID, let flow = model.session.flow(id) {
             VStack(spacing: 0) {
                 FlowHeaderBar(flow: flow)
-                SummaryView(flow: flow)
                 panes(flow)
             }
         } else {
@@ -17,26 +16,35 @@ struct FlowDetailView: View {
         }
     }
 
+    /// 응답 쪽은 ZStack으로 감싼다 — 안내·대기·패널로 갈래가 바뀔 때 분할 뷰 칸이 새로 꽂히면 나눔선이 새 보기의
+    /// 이상 폭으로 밀려 그대로 남았다(실측: HTTPS 안내 후 응답 칸이 좁아짐).
     @ViewBuilder
     private func panes(_ flow: Flow) -> some View {
         if model.settings.layout == .classic {
             HSplitView {
                 request(flow).frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
-                response(flow).frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
+                ZStack { response(flow) }.frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {
             VSplitView {
                 request(flow).frame(maxWidth: .infinity, minHeight: 140, maxHeight: .infinity)
-                response(flow).frame(maxWidth: .infinity, minHeight: 140, maxHeight: .infinity)
+                ZStack { response(flow) }.frame(maxWidth: .infinity, minHeight: 140, maxHeight: .infinity)
             }
         }
     }
 
+    /// 응답이 HLS 재생목록이면 요청 URL(상대 URI 기준). 아니면 nil — M3U8 탭을 숨긴다.
+    private static func playlistURL(_ flow: Flow) -> URL? {
+        guard let response = flow.response,
+              M3U8.isPlaylist(path: flow.request.path, contentType: response.header("Content-Type")) else { return nil }
+        return URL(string: flow.request.url)
+    }
+
     private func request(_ flow: Flow) -> some View {
-        MessagePane(title: "요청", headers: flow.request.headers, content: flow.request.body,
-                    query: Self.query(flow.request.path),
-                    cookies: CookieParser.requestCookies(flow.request.header("Cookie") ?? ""), flowID: flow.id,
-                    raw: .request(flow.request))
+        let playlist = Self.playlistURL(flow)
+        return MessagePane(title: "요청", tabs: DetailTabs.request(flow.request, isPlaylist: playlist != nil),
+                           headers: flow.request.headers, content: flow.request.body, flowID: flow.id, raw: .request(flow.request),
+                           query: Self.query(flow.request.path), summary: SummaryView.rows(flow, model: model), playlistURL: playlist)
     }
 
     private static func query(_ path: String) -> [HTTPHeader] {
@@ -45,13 +53,13 @@ struct FlowDetailView: View {
 
     @ViewBuilder
     private func response(_ flow: Flow) -> some View {
-        if let response = flow.response {
-            let setCookies = response.headers.filter { $0.name.caseInsensitiveCompare("Set-Cookie") == .orderedSame }.map(\.value)
-            MessagePane(title: "응답", headers: response.headers, content: response.body, query: nil,
-                        cookies: CookieParser.responseCookies(setCookies), flowID: flow.id,
-                        raw: .response(response),
-                        playlistURL: M3U8.isPlaylist(path: flow.request.path, contentType: response.header("Content-Type"))
-                            ? URL(string: flow.request.url) : nil)
+        if flow.isTunnel, flow.error == nil {
+            HTTPSNotice(flow: flow)
+        } else if let response = flow.response {
+            let playlist = Self.playlistURL(flow)
+            MessagePane(title: "응답", tabs: DetailTabs.response(response, isPlaylist: playlist != nil),
+                        headers: response.headers, content: response.body, flowID: flow.id, raw: .response(response),
+                        playlistURL: playlist)
         } else if let error = flow.error {
             ContentUnavailableView("실패", systemImage: "exclamationmark.triangle", description: Text(error))
         } else {
@@ -60,56 +68,134 @@ struct FlowDetailView: View {
     }
 }
 
-/// 요청·응답 한쪽(헤더·쿼리·본문·쿠키·Raw, 재생목록이면 M3U8). Compose 창의 응답 쪽도 쓴다.
-struct MessagePane: View {
-    enum Tab: Hashable { case headers, query, body, cookies, raw, m3u8 }
+/// 복호화하지 않은 터널(CONNECT 행)의 응답 자리(스펙 §10). 켜면 v1.1.1의 터널 재판정으로 기기가 다시 연결할 때 복호화된다.
+/// 앱을 모르면(원격 기기) 첫 버튼만.
+private struct HTTPSNotice: View {
+    @Environment(AppModel.self) private var model
+    let flow: Flow
 
+    var body: some View {
+        let host = flow.request.host
+        let listed = model.settings.sslEnabled && model.settings.sslPatterns.contains(host)
+        VStack(spacing: 10) {
+            Image(systemName: "lock.fill").font(.system(size: 34)).foregroundStyle(.secondary)
+            Text(verbatim: "HTTPS Response").font(.headline)
+            Text("암호화된 터널이라 내용을 볼 수 없습니다 — SSL Proxying을 켜면 다음 연결부터 복호화해 보여 줍니다")
+                .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 380)
+            HStack(spacing: 8) {
+                Button("Enable only this domain") { Task { await model.enableSSLProxying(for: host) } }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(listed)
+                    .help("\(host)을(를) SSL Proxying 목록에 넣습니다")
+                if let app = model.processKey(for: flow) {
+                    Text(verbatim: "or").foregroundStyle(.tertiary)
+                    Button { Task { await model.enableSSLProxying(forHostsOfApp: app) } } label: {
+                        Text(verbatim: "Enable all domains from \"\(model.clientName(for: flow))\"")
+                    }
+                    .help("이 앱이 연 모든 도메인을 SSL Proxying 목록에 넣습니다")
+                }
+            }
+            if listed {
+                Label("SSL Proxying 목록에 있습니다 — 다시 연결하면 복호화됩니다", systemImage: "checkmark.circle")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// 요청·응답 한쪽 패널. 탭 줄 `Header · … │ … · JSON`(묶음은 `DetailTabs`) + 오른쪽 `≡`(표 거르기). Compose 창의 응답 쪽도 쓴다.
+struct MessagePane: View {
     let title: LocalizedStringKey
+    let tabs: [[DetailTab]]
     let headers: [HTTPHeader]
     let content: Data
-    let query: [HTTPHeader]?
-    let cookies: [HTTPHeader]
     let flowID: FlowID
     let raw: RawSource
-    /// 응답이 HLS 재생목록일 때 요청 URL(상대 URI 기준). nil이면 M3U8 탭을 숨긴다.
+    var query: [HTTPHeader] = []
+    var summary: [HTTPHeader] = []
+    /// 응답이 HLS 재생목록일 때 요청 URL(상대 URI 기준).
     var playlistURL: URL?
-    @State private var tab = Tab.headers
-    /// 재생목록이 아닌 흐름으로 옮기면 M3U8 대신 헤더를 보인다(고른 탭은 남겨 재생목록으로 돌아오면 다시 M3U8).
-    private var shownTab: Tab { tab == .m3u8 && playlistURL == nil ? .headers : tab }
+    /// 마지막으로 고른 탭. 흐름을 바꿔도 남고, 이 흐름에 없는 탭이면 Header를 보인다(돌아오면 다시 그 탭).
+    @State private var tab = DetailTab.header
+    @State private var filterVisible = false
+    @State private var filterOptions = TableFilter()
+    private var shownTab: DetailTab { DetailTabs.shown(tab, in: tabs) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(spacing: 6) {
                 Text(title).font(.headline)
-                Spacer()
-                Picker("", selection: Binding(get: { shownTab }, set: { tab = $0 })) {
-                    Text("헤더").tag(Tab.headers)
-                    if query != nil { Text("쿼리").tag(Tab.query) }
-                    Text("본문").tag(Tab.body)
-                    Text("쿠키").tag(Tab.cookies)
-                    Text("Raw").tag(Tab.raw)
-                    if playlistURL != nil { Text("M3U8").tag(Tab.m3u8) }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 1) {
+                        ForEach(Array(tabs.enumerated()), id: \.offset) { i, group in
+                            if i > 0 { Divider().frame(height: 14).padding(.horizontal, 4) }
+                            ForEach(group, id: \.self) { tabButton($0) }
+                        }
+                    }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                .id(playlistURL != nil)  // 칸 수가 바뀌면 다시 만들어야 폭이 맞는다
+                Button { filterVisible.toggle() } label: {
+                    Label("표 거르기", systemImage: "line.3.horizontal").labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(filterVisible && shownTab.isTable ? Color.accentColor : .secondary)
+                .disabled(!shownTab.isTable)
+                .help("표 거르기 (⌘F)")
             }
-            .padding(8)
+            .padding(.horizontal, 8).padding(.vertical, 5)
             Divider()
             // 내용 영역이 패널 높이를 꽉 채워야 머리글이 위에 고정된다(짧으면 가운데로 밀리고, NSTextView는 넘친다).
-            Group {
-                switch shownTab {
-                case .headers: KeyValueTable(rows: headers, emptyTitle: "헤더 없음").id(flowID)
-                case .query: KeyValueTable(rows: query ?? [], emptyTitle: "쿼리 없음").id(flowID)
-                case .body: BodyView(data: content, headers: headers).id(flowID)
-                case .cookies: KeyValueTable(rows: cookies, emptyTitle: "쿠키 없음").id(flowID)
-                case .raw: RawView(source: raw).id(flowID)
-                case .m3u8: M3U8View(data: content, headers: headers, baseURL: playlistURL).id(flowID)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
+            // 흐름이 바뀌면 표 검색어·본문 보기·트리 펼침을 새로 시작한다.
+            content(shownTab)
+                .id(flowID)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+        }
+    }
+
+    private func tabButton(_ t: DetailTab) -> some View {
+        let on = t == shownTab
+        return Button { tab = t } label: {
+            Text(verbatim: t.title)
+                .font(.system(size: 12, weight: on ? .semibold : .regular))
+                .foregroundStyle(on ? .primary : .secondary)
+                .padding(.horizontal, 8).padding(.vertical, 2)
+                .background(on ? Color.primary.opacity(0.1) : .clear, in: RoundedRectangle(cornerRadius: 5))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func header(_ name: String) -> String? {
+        headers.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?.value
+    }
+
+    private func table(_ rows: [HTTPHeader], _ empty: LocalizedStringKey) -> some View {
+        KeyValueTable(rows: rows, emptyTitle: empty, filterVisible: $filterVisible, options: $filterOptions)
+    }
+
+    @ViewBuilder
+    private func content(_ tab: DetailTab) -> some View {
+        switch tab {
+        case .header: table(headers, "헤더 없음")
+        case .query: table(query, "쿼리 없음")
+        case .body: BodyView(data: content, headers: headers)
+        case .form:
+            // ponytail: 탭을 그릴 때마다 본문을 다시 푼다(폼 본문은 작다). 큰 multipart가 느리면 .task로 옮긴다.
+            table(FormFields.parse(body: BodyDecoder.decompressed(body: content, contentEncoding: header("Content-Encoding")) ?? content,
+                                   contentType: header("Content-Type")), "폼 필드 없음")
+        case .cookies: table(CookieParser.requestCookies(header("Cookie") ?? ""), "쿠키 없음")
+        case .auth: table(AuthFields.parse(header("Authorization") ?? ""), "인증 정보 없음")
+        case .setCookie:
+            table(CookieParser.responseCookies(headers.filter { $0.name.caseInsensitiveCompare("Set-Cookie") == .orderedSame }.map(\.value)),
+                  "쿠키 없음")
+        case .raw: RawView(source: raw)
+        case .summary: table(summary, "")
+        case .treeview: JSONTabView(data: content, headers: headers, tree: true)
+        case .m3u8: M3U8View(data: content, headers: headers, baseURL: playlistURL)
+        case .json: JSONTabView(data: content, headers: headers, tree: false)
         }
     }
 }

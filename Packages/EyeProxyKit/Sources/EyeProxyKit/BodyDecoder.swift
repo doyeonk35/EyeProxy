@@ -17,6 +17,13 @@ public enum BodyDecoder {
         return type == "text/html" ? .html(s) : .text(s)
     }
 
+    /// JSON·Treeview 탭: Content-Type과 상관없이 (압축을 푼) 본문이 JSON이면 들여쓴 문자열, 아니면 nil.
+    public static func json(body: Data, headers: [HTTPHeader]) -> String? {
+        let encoding = headers.first { $0.name.caseInsensitiveCompare("Content-Encoding") == .orderedSame }?.value
+        guard let data = decompressed(body: body, contentEncoding: encoding) else { return nil }
+        return reindentJSON(Array(data))
+    }
+
     private static let jsonSpace: Set<UInt8> = [32, 9, 10, 13]
     private static let jsonDelimiters: Set<UInt8> = [32, 9, 10, 13, 0x7b, 0x7d, 0x5b, 0x5d, 0x3a, 0x2c, 0x22]
     private static let maxJSONDepth = 512

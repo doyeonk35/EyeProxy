@@ -165,9 +165,8 @@ struct ComposeView: View {
                 ContentUnavailableView("요청 실패", systemImage: "exclamationmark.triangle", description: Text(error))
                     .frame(maxHeight: .infinity)
             } else if let result {
-                MessagePane(title: "", headers: result.response.headers, content: result.response.body, query: nil,
-                            cookies: CookieParser.responseCookies(result.response.headers
-                                .filter { $0.name.caseInsensitiveCompare("Set-Cookie") == .orderedSame }.map(\.value)),
+                MessagePane(title: "", tabs: DetailTabs.response(result.response, isPlaylist: false),
+                            headers: result.response.headers, content: result.response.body,
                             flowID: result.id, raw: .response(result.response))
                     .id(result.id)
             } else {
