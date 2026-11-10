@@ -98,27 +98,48 @@ public actor ProxyServer {
         try? await running.group.shutdownGracefully()   // 열린 클라이언트 연결도 함께 닫힌다
     }
 
-    /// SSL 정책이 터널로 정한 열린 연결(호스트별). 정책이 바뀌어 그 호스트를 복호화하게 되면 닫는다.
-    private var policyTunnels: [UUID: (host: String, channel: Channel)] = [:]
+    /// 열린 터널. 기기는 연결 하나를 오래 열어 두고 그 안으로 요청을 계속 보내므로, SSL Proxying이나
+    /// 자동 복호화 규칙(Map Local 등)을 나중에 켜도 그 터널은 끝날 때까지 복호화되지 않는다.
+    /// 그래서 설정이 바뀌면 다시 판정해 이제 복호화할 터널을 닫는다(기기가 다시 연결하면 MITM).
+    private var openTunnels: [UUID: (host: String, port: Int, context: ConnectContext, channel: Channel)] = [:]
 
-    /// 기기는 연결 하나를 오래 열어 두고 그 안으로 요청을 계속 보낸다. SSL Proxying을 나중에 켜도 그 터널은
-    /// 끝날 때까지 복호화되지 않으므로, 새 정책이 복호화하는 호스트의 열린 터널을 닫아 다시 연결하게 한다.
-    public func update(sslPolicy: SSLProxyingPolicy) {
+    public func update(sslPolicy: SSLProxyingPolicy) async {
         self.sslPolicy = sslPolicy
-        for (key, tunnel) in policyTunnels where sslPolicy.shouldDecrypt(host: tunnel.host) {
-            policyTunnels[key] = nil
-            tunnel.channel.close(promise: nil)
+        await closeTunnelsNowDecrypted()
+    }
+
+    public func update(interceptors: InterceptorChain) async {
+        self.interceptors = interceptors
+        await closeTunnelsNowDecrypted()
+    }
+
+    /// CONNECT 판정: 인터셉터 결과와, 그에 따라 이 연결을 복호화할지.
+    func connectDecision(host: String, port: Int, context: ConnectContext) async -> (verdict: ConnectVerdict, decrypt: Bool) {
+        let verdict = await interceptors.runConnect(host: host, port: port, context: context)
+        switch verdict.action {
+        case .decrypt: return (verdict, verdict.record)
+        case .useDefault: return (verdict, verdict.record && sslPolicy.shouldDecrypt(host: host))
+        case .tunnel, .drop: return (verdict, false)
         }
     }
 
-    /// 터널 쪽(이벤트루프)에서 부른다. 이미 닫혔으면 넣지 않는다.
-    func registerPolicyTunnel(_ key: UUID, host: String, channel: Channel) {
+    /// 터널 쪽(이벤트루프)에서 부른다. 이미 닫혔으면 넣지 않고, 판정 뒤 설정이 바뀌었으면 바로 다시 판정한다.
+    func registerTunnel(_ key: UUID, host: String, port: Int, context: ConnectContext, channel: Channel) async {
         guard channel.isActive else { return }
-        policyTunnels[key] = (host, channel)
+        openTunnels[key] = (host, port, context, channel)
+        await closeTunnelsNowDecrypted(only: [key])
     }
 
-    func unregisterPolicyTunnel(_ key: UUID) { policyTunnels[key] = nil }
-    public func update(interceptors: InterceptorChain) { self.interceptors = interceptors }
+    func unregisterTunnel(_ key: UUID) { openTunnels[key] = nil }
+
+    private func closeTunnelsNowDecrypted(only keys: [UUID]? = nil) async {
+        for key in keys ?? Array(openTunnels.keys) {
+            guard let t = openTunnels[key] else { continue }
+            guard await connectDecision(host: t.host, port: t.port, context: t.context).decrypt else { continue }
+            openTunnels[key] = nil
+            t.channel.close(promise: nil)
+        }
+    }
 
     /// CONNECT 대상 호스트용 서버 TLS 컨텍스트(ALPN http/1.1만). 호스트당 한 번 만든다.
     func leafContext(for rawHost: String) throws -> NIOSSLContext {

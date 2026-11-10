@@ -86,9 +86,24 @@ struct ProxyServerTunnelTests {
 
         await server.update(sslPolicy: .init(patterns: ["localhost"]))     // localhost 터널만 닫힌다
         #expect(await waitUntilClosed(tunnel))
-        #expect(other.isActive)
+        #expect(!(await waitUntilClosed(other, seconds: 0.3)))
 
         try await other.close()
+        await server.stop(); await origin.stop()
+    }
+
+    /// Map Local 같은 규칙이 자동 복호화하게 되어도(인터셉터 교체) 열린 터널을 닫는다.
+    @Test func interceptorUpdateClosesTunnelsNowAutoDecrypted() async throws {
+        let ca = try CertificateAuthority.generate()
+        let origin = TestOrigin(tls: try ca.leaf(for: "localhost")) { _ in FlowResponse(status: 200, reason: "OK", headers: [], body: Data()) }
+        let originPort = try await origin.start()
+        let server = ProxyServer(configuration: .init(bindHost: "127.0.0.1", port: 0, sslPolicy: .init(patterns: [])),
+                                 certificateAuthority: ca, interceptors: .init())
+        let port = try await server.start()
+        let tunnel = try await openTunnel(proxyPort: port, target: "localhost:\(originPort)")
+        try await Task.sleep(for: .milliseconds(200))
+        await server.update(interceptors: .init(connect: [FixedVerdict(verdict: .init(action: .decrypt))]))
+        #expect(await waitUntilClosed(tunnel))
         await server.stop(); await origin.stop()
     }
 
@@ -101,9 +116,9 @@ struct ProxyServerTunnelTests {
                                  interceptors: .init(connect: [FixedVerdict(verdict: .init(action: .tunnel))]))
         let port = try await server.start()
         let tunnel = try await openTunnel(proxyPort: port, target: "localhost:\(originPort)")
+        try await Task.sleep(for: .milliseconds(200))   // 등록이 끝난 뒤 바꾼다
         await server.update(sslPolicy: .init(patterns: ["localhost"]))
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(tunnel.isActive)
+        #expect(!(await waitUntilClosed(tunnel, seconds: 0.3)))
         try await tunnel.close()
         await server.stop(); await origin.stop()
     }
