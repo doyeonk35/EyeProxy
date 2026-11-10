@@ -68,6 +68,46 @@ struct ProxyServerTunnelTests {
         await server.stop(); await origin.stop()
     }
 
+    /// 기기는 연결 하나를 오래 열어 두고 그 안으로 요청을 계속 보낸다. SSL Proxying을 나중에 켜면
+    /// 그 터널은 끝날 때까지 복호화되지 않으므로, 새로 복호화 대상이 된 호스트의 열린 터널은 닫아 다시 연결하게 한다.
+    @Test func sslPolicyUpdateClosesOpenTunnelsForNewlyDecryptedHosts() async throws {
+        let ca = try CertificateAuthority.generate()
+        let origin = TestOrigin(tls: try ca.leaf(for: "localhost")) { _ in FlowResponse(status: 200, reason: "OK", headers: [], body: Data()) }
+        let originPort = try await origin.start()
+        let server = ProxyServer(configuration: .init(bindHost: "127.0.0.1", port: 0, sslPolicy: .init(patterns: [])),
+                                 certificateAuthority: ca, interceptors: .init())
+        let port = try await server.start()
+        let tunnel = try await openTunnel(proxyPort: port, target: "localhost:\(originPort)")
+        let other = try await openTunnel(proxyPort: port, target: "127.0.0.1:\(originPort)")
+
+        await server.update(sslPolicy: .init(patterns: ["example.com"]))   // 열린 터널과 무관한 변경 → 그대로
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(tunnel.isActive && other.isActive)
+
+        await server.update(sslPolicy: .init(patterns: ["localhost"]))     // localhost 터널만 닫힌다
+        #expect(await waitUntilClosed(tunnel))
+        #expect(other.isActive)
+
+        try await other.close()
+        await server.stop(); await origin.stop()
+    }
+
+    /// 규칙이 터널로 정한 연결(SSL 정책이 고른 게 아님)은 정책이 바뀌어도 닫지 않는다.
+    @Test func sslPolicyUpdateKeepsRuleDecidedTunnels() async throws {
+        let ca = try CertificateAuthority.generate()
+        let origin = TestOrigin(tls: try ca.leaf(for: "localhost")) { _ in FlowResponse(status: 200, reason: "OK", headers: [], body: Data()) }
+        let originPort = try await origin.start()
+        let server = ProxyServer(configuration: .init(bindHost: "127.0.0.1", port: 0, sslPolicy: .init(patterns: [])), certificateAuthority: ca,
+                                 interceptors: .init(connect: [FixedVerdict(verdict: .init(action: .tunnel))]))
+        let port = try await server.start()
+        let tunnel = try await openTunnel(proxyPort: port, target: "localhost:\(originPort)")
+        await server.update(sslPolicy: .init(patterns: ["localhost"]))
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(tunnel.isActive)
+        try await tunnel.close()
+        await server.stop(); await origin.stop()
+    }
+
     @Test func connectDropClosesWithoutTunnel() async throws {
         let ca = try CertificateAuthority.generate()
         let origin = TestOrigin(tls: try ca.leaf(for: "localhost")) { _ in FlowResponse(status: 200, reason: "OK", headers: [], body: Data()) }

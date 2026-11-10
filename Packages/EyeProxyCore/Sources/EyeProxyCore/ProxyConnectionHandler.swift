@@ -153,7 +153,9 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
                 }
                 context.close(promise: nil)
             case .success((let verdict, nil)):
-                self.tunnel(head, host: host, port: port, record: verdict.record, shaping: verdict.shaping, context: context)
+                // SSL 정책이 고른 터널만 정책 변경 때 닫는다(규칙이 터널·기록 안 함으로 정한 연결은 그대로).
+                self.tunnel(head, host: host, port: port, record: verdict.record, shaping: verdict.shaping,
+                            policyDecided: verdict.action == .useDefault && verdict.record, context: context)
             case .success((let verdict, let sslContext?)):
                 self.intercept(head, host: host, port: port, sslContext: sslContext, note: verdict.note, context: context)
             case .failure(let error):   // 리프 발급 실패
@@ -204,7 +206,9 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
     /// 패스스루: 업스트림 TCP 연결 → 200 → HTTP 핸들러 제거 → 양쪽에 GlueHandler. 바이트는 보지 않는다.
     /// `record == false`면 이벤트를 내지 않는다. `shaping`은 GlueHandler가 바이트 전달을 늦춘다.
     /// ponytail: half-close 미지원(한쪽 EOF면 양쪽 다 닫는다). 필요하면 allowRemoteHalfClosure를 양쪽에 켠다.
-    private func tunnel(_ head: HTTPRequestHead, host: String, port: Int, record: Bool, shaping: TunnelShaping?, context: ChannelHandlerContext) {
+    /// `policyDecided`면 SSL 정책이 바뀌어 이 호스트를 복호화하게 될 때 서버가 이 터널을 닫는다.
+    private func tunnel(_ head: HTTPRequestHead, host: String, port: Int, record: Bool, shaping: TunnelShaping?,
+                        policyDecided: Bool, context: ChannelHandlerContext) {
         let server = self.server
         let emit: @Sendable (FlowEvent) -> Void = { if record { server.emit($0) } }
         let id = FlowID()
@@ -251,7 +255,10 @@ final class ProxyConnectionHandler: ChannelInboundHandler, RemovableChannelHandl
                 context.close(promise: nil)
                 return
             }
+            let key = UUID()
+            if policyDecided { Task { await server.registerPolicyTunnel(key, host: host, channel: channel) } }
             channel.closeFuture.whenComplete { _ in
+                if policyDecided { Task { await server.unregisterPolicyTunnel(key) } }
                 emit(.responseReceived(id: id, response: FlowResponse(status: 200, reason: "Connection Established", headers: [], body: Data()),
                                               completedAt: Date()))
             }

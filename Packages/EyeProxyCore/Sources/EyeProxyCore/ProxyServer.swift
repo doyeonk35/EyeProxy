@@ -98,7 +98,26 @@ public actor ProxyServer {
         try? await running.group.shutdownGracefully()   // 열린 클라이언트 연결도 함께 닫힌다
     }
 
-    public func update(sslPolicy: SSLProxyingPolicy) { self.sslPolicy = sslPolicy }
+    /// SSL 정책이 터널로 정한 열린 연결(호스트별). 정책이 바뀌어 그 호스트를 복호화하게 되면 닫는다.
+    private var policyTunnels: [UUID: (host: String, channel: Channel)] = [:]
+
+    /// 기기는 연결 하나를 오래 열어 두고 그 안으로 요청을 계속 보낸다. SSL Proxying을 나중에 켜도 그 터널은
+    /// 끝날 때까지 복호화되지 않으므로, 새 정책이 복호화하는 호스트의 열린 터널을 닫아 다시 연결하게 한다.
+    public func update(sslPolicy: SSLProxyingPolicy) {
+        self.sslPolicy = sslPolicy
+        for (key, tunnel) in policyTunnels where sslPolicy.shouldDecrypt(host: tunnel.host) {
+            policyTunnels[key] = nil
+            tunnel.channel.close(promise: nil)
+        }
+    }
+
+    /// 터널 쪽(이벤트루프)에서 부른다. 이미 닫혔으면 넣지 않는다.
+    func registerPolicyTunnel(_ key: UUID, host: String, channel: Channel) {
+        guard channel.isActive else { return }
+        policyTunnels[key] = (host, channel)
+    }
+
+    func unregisterPolicyTunnel(_ key: UUID) { policyTunnels[key] = nil }
     public func update(interceptors: InterceptorChain) { self.interceptors = interceptors }
 
     /// CONNECT 대상 호스트용 서버 TLS 컨텍스트(ALPN http/1.1만). 호스트당 한 번 만든다.
