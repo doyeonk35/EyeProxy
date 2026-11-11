@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "tving-mac-tools"
+  },
+  "targets": {
+    "tving-mac-tools": {
+      "hosting": {
+        "app": ["tving-prog"]
+      }
+    }
+  }
+}

@@ -6,9 +6,9 @@ macOS용 MITM 디버깅 프록시 (Proxyman류). Mac·시뮬레이터·Apple TV�
 
 ## 설치
 
-1. GitHub Releases에서 최신 `Prog-<version>.zip`을 받는다.
-2. 압축을 풀어 `Prog.app`을 `/Applications`로 옮긴다. (Developer ID 서명·공증 완료 — 바로 실행된다.)
-3. 이후 업데이트는 앱 메뉴 `Prog > 업데이트 확인…` (Sparkle).
+1. [TvingCorp/Prog Releases](https://github.com/TvingCorp/Prog/releases)에서 최신 `Prog-<version>.dmg`를 받는다(TvingCorp 조직 권한 필요). 권한이 없으면 고정 주소의 zip을 받는다: `https://tving-prog.web.app/Prog.zip`
+2. DMG를 열고 `Prog`를 `Applications`로 끌어다 놓는다. 이미 설치돼 있으면 "대치"를 누른다(설정과 루트 인증서는 그대로). zip이면 압축을 풀어 `Prog.app`을 `/Applications`로 옮긴다. (Developer ID 서명·공증 완료 — 바로 실행된다.)
+3. 이후 업데이트는 앱 메뉴 `Prog > 업데이트 확인…` (Sparkle). 업데이트 창에 그 버전의 릴리스 노트가 보인다.
 
 0.2.0(EyeProxy)에서 Sparkle로 업데이트하면 앱은 Prog으로 실행되지만 파일명은 `EyeProxy.app`으로 남는다. 바꾸려면 Finder에서 이름을 바꾸거나 zip으로 재설치하고 옛 복사본을 지운다(같은 번들 ID라 둘 다 두면 안 된다).
 
@@ -459,7 +459,7 @@ Proxyman 등 다른 프록시가 9090을 쓰고 있으면 시작에 실패한다
 
 ### 업데이트·다운로드
 
-GitHub 레포가 private이면 Sparkle 업데이트와 Release 다운로드가 동작하지 않는다(공개 레포 또는 유료 플랜 필요).
+업데이트 피드와 zip은 Firebase Hosting(`https://tving-prog.web.app/appcast.xml`)에서 받는다. 1.1.1 이하 설치본은 이전 피드(개인 레포 GitHub Pages)를 한 번 거쳐 새 버전으로 올라오고, 그다음부터는 Firebase 피드를 쓴다. 업데이트 확인이 실패하면 회사 네트워크·VPN이 `*.web.app`을 막는지 본다.
 
 ## 알려진 제한(P1)
 
@@ -539,16 +539,16 @@ xcodebuild build -scheme EyeProxy -configuration Debug -destination 'platform=ma
 
 ## 릴리스
 
-Release 빌드는 unsigned로 만든 뒤 회사 Developer ID로 재서명 → 공증 → 스테이플 → zip → Sparkle EdDSA 서명 → `docs/appcast.xml` 갱신까지 스크립트가 처리한다. 사전 조건: `notarytool` 키체인 프로필, Developer ID 인증서, Xcode에서 한 번 빌드(Sparkle 도구).
-
 ```bash
+brew install firebase-cli create-dmg   # 최초 1회, firebase login 필요
+# docs/release-notes/<version>.md 에 릴리스 노트를 먼저 쓴다
 ./scripts/release.sh <version>
-git add -A && git commit -m "release: v<version>"
-git tag v<version>
-git push origin main --tags
-gh release create v<version> releases/<version>/Prog-<version>.zip --title "v<version>"
 ```
 
-Sparkle 서명 키: TVAccountManager와 같은 EdDSA 키를 공유한다(키체인 보관).
+Release 빌드(unsigned) → 회사 Developer ID 재서명 → 공증 → zip·DMG → Sparkle EdDSA 서명 → Firebase Hosting(`tving-prog.web.app`, 프로젝트 `tving-mac-tools`)에 피드와 zip 배포까지 한 번에 한다. 릴리스 노트(`docs/release-notes/<version>.md`)는 HTML로 바꿔 피드에 넣으므로 Sparkle 업데이트 창에 그대로 보인다(`scripts/notes-html.py` — 제목·목록·굵게·코드·링크만 지원). 사전 조건: `notarytool` 키체인 프로필, Developer ID 인증서, Xcode에서 한 번 빌드(Sparkle 도구), `firebase login`.
 
-appcast는 GitHub Pages(`main`/`docs`)로 서빙된다: `https://doyeonk35.github.io/EyeProxy/appcast.xml`
+끝나면 출력된 순서대로 커밋·태그·푸시하고 `gh release create`로 DMG와 zip을 TvingCorp/Prog 릴리스에 올린다. Firebase는 무료(Spark) 플랜이라 DMG는 올릴 수 없어 GitHub 릴리스에만 둔다. 배포는 사이트 전체를 바꾸므로 Firebase에는 최신 버전만 남는다.
+
+이전 피드 다리: 1.1.1 이하 설치본은 `https://doyeonk35.github.io/EyeProxy/appcast.xml`(개인 레포 `docs/appcast.xml`, GitHub Pages)을 본다. 스크립트가 이 파일에도 새 버전(다운로드는 Firebase zip)을 넣으므로 릴리스마다 `git push personal main`으로 개인 레포에 올린다. 그 버전을 받은 설치본부터는 Firebase 피드를 쓴다. 개인 레포를 비공개로 돌리면 이 단계(release.sh 8번)를 지운다. 개인 레포가 공개인 동안에는 커밋 파일에 회사 내부 도메인을 넣지 않는다.
+
+Sparkle 서명 키: TVAccountManager와 같은 EdDSA 키를 공유한다(키체인 보관).

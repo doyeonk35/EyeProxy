@@ -11,7 +11,9 @@ xcodegen generate
 xcodebuild build -scheme EyeProxy -configuration Debug -destination 'platform=macOS' -allowProvisioningUpdates
 ```
 
-릴리스(unsigned 빌드 → Developer ID 재서명 → 공증 → zip → appcast): `./scripts/release.sh <version>` 후 commit·tag·push·`gh release create` (README 참고).
+릴리스(unsigned 빌드 → Developer ID 재서명 → 공증 → zip·DMG → Firebase Hosting 피드): `docs/release-notes/<version>.md` 작성 → `./scripts/release.sh <version>` → commit·tag → `git push origin main --tags`(TvingCorp/Prog) → `git push personal main`(이전 피드 다리) → `gh release create` (README 참고).
+
+개인 레포(doyeonk35/EyeProxy)가 공개인 동안은 커밋 파일에 회사 내부 도메인·로컬 경로를 넣지 않는다.
 
 ## 모듈 의존 방향
 
