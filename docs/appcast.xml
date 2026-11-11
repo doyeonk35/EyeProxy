@@ -3,6 +3,67 @@
     <channel>
         <title>EyeProxy</title>
         <item>
+            <title>1.2.0</title>
+            <pubDate>Wed, 11 Nov 2026 13:51:40 +0900</pubDate>
+            <sparkle:version>8</sparkle:version>
+            <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<!doctype html><html><head><meta charset="utf-8"><style>
+:root { color-scheme: light dark; }
+body { font: 13px -apple-system, sans-serif; margin: 12px 16px; line-height: 1.45; }
+.release { font-size: 26px; font-weight: 700; margin: 4px 0 6px; padding-bottom: 8px; border-bottom: 1px solid #8884; }
+.release .v { color: #2f7cf6; }
+h2 { font-size: 17px; margin: 18px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #8884; }
+h3 { font-size: 14px; margin: 14px 0 4px; }
+ul { margin: 4px 0; padding-left: 20px; }
+li { margin: 3px 0; }
+code { font: 12px ui-monospace, Menlo, monospace; background: #8882; padding: 0 3px; border-radius: 3px; }
+a { color: #2f7cf6; }
+</style></head><body>
+<div class="release">Release <span class="v">1.2.0</span> - 2026-11-11</div>
+<p>메인 화면을 Proxyman 배치·이름·단축키에 맞췄다. 자세한 설명은 README의 메인 화면·상세 패널·설정 절.</p>
+<h2>메인 화면</h2>
+<ul><li>
+<b>기록 버튼</b>: 누르면 할 일을 보인다(기록 중 ⏸, 멈춤 ▶). 목록은 최신 요청이 위(ID 내림차순).
+</li><li>
+<b>툴바 캡슐</b>: <code>● Prog | Listening on &lt;IP&gt;:&lt;포트&gt;</code>. 새 버전이 있으면 오른쪽에 <code>New Update ⚠</code> 배지가 뜨고, 누르면 업데이트 창이 열린다.
+</li><li>
+<b>필터 막대(⌘F)</b>: 툴바 검색칸 대신 규칙 여러 줄(키 16가지 × 매칭 12가지, AND/OR, 최대 10줄). 규칙은 다시 켜도 남는다.
+</li><li>
+<b>사이드바</b>: Favorites ▸ Pinned, Remote devices, All ▸ All Requests·Apps·Domains, 도메인 아래 경로 트리. <code>+</code>로 도메인 고정, 우클릭 Pin·Enable SSL Proxying·Copy Domain.
+</li><li>
+<b>하단 바</b>: Clear·Filter·Auto Select, 선택 행 수, 메모리·속도, 켜진 도구 배지(누르면 그 도구 창).
+</li><li>
+트래픽이 몰릴 때도 목록·필터 입력이 버벅이지 않게 했다.
+</li></ul>
+<h2>상세 패널</h2>
+<ul><li>
+메서드·상태·URL을 색으로 나눈 머리, Request·Response 탭 묶음.
+</li><li>
+내용이 있을 때만 보이는 탭: Form·Cookies·Auth·Set-Cookie·M3U8.
+</li><li>
+Summary·Treeview·JSON 탭, 표 거르기 옵션(대소문자·정규식).
+</li><li>
+복호화되지 않은 CONNECT 행에서 그 도메인만 또는 그 앱의 모든 도메인을 바로 SSL Proxying에 넣는 버튼.
+</li></ul>
+<h2>설정</h2>
+<ul><li>
+General·Appearance·Tools·SSL Proxying·Bypass·Advanced 여섯 탭.
+</li><li>
+새 설정: 실행 시 시스템 프록시 자동 적용, 자동 기록 시작, 글꼴 크기·탭 폭·줄무늬·공백 표시, Request Timeout, cURL <code>--proxy</code>, Export 뒤 Finder 열기, Stay On Top, 종료 확인, 시뮬레이터의 Apple 요청 숨김.
+</li><li>
+기본값 변경: 목록 줄무늬 켬, 긴 URL은 끝을 줄임, 본문 글꼴 13pt, Request Timeout 30초.
+</li></ul>
+<h2>설치·업데이트</h2>
+<ul><li>
+업데이트 주소를 새 서버로 옮겼다. 이 버전부터는 업데이트 창에 릴리스 노트가 보인다.
+</li><li>
+처음 설치는 DMG로: 열어서 Prog를 Applications 폴더로 끌어다 놓는다. 설정과 루트 인증서는 그대로 유지된다.
+</li></ul>
+</body></html>]]></description>
+            <enclosure url="https://tving-prog.web.app/1.2.0/Prog-1.2.0.zip" length="9264219" type="application/octet-stream" sparkle:edSignature="9Kb37Pdlr3koIwq/wOsuaHW3oXz4qhh2+906HMDMnODSaSnNnJ//tap4wxMOvpV3ggayqO68EB+MVMFGrA8xAw=="/>
+        </item>
+        <item>
             <title>1.1.1</title>
             <pubDate>Tue, 10 Nov 2026 15:30:11 +0900</pubDate>
             <sparkle:version>7</sparkle:version>
