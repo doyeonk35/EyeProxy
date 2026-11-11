@@ -9,6 +9,8 @@
 #   .firebaserc 의 default 프로젝트와 hosting 타깃 "app"에 연결된 사이트로 배포한다.
 
 set -euo pipefail
+# 셸에 남은 프록시 변수(예: 꺼진 Prog 127.0.0.1:9090)를 따라가면 firebase·curl 요청이 모두 실패한다.
+unset HTTPS_PROXY HTTP_PROXY https_proxy http_proxy ALL_PROXY all_proxy
 
 ZIP_PATH="${1:?zip 경로가 필요합니다}"
 VERSION="${2:?버전이 필요합니다}"
