@@ -56,7 +56,8 @@ private struct FlowMenu: View {
         .disabled(ids.count != 1 || noTab)
         .help("선택한 요청의 코멘트 쓰기·고치기")
         Divider()
-        HighlightMenu(tab: tab) { selection == nil ? [] : model.activeTab?.visibleSelectedFlowIDs ?? [] }
+        // 대상 탭과 선택은 같은 탭에서 읽는다(대상은 그린 때의 앞 탭, 선택은 실행 시점).
+        HighlightMenu(tab: tab) { selection == nil ? [] : tab?.visibleSelectedFlowIDs ?? [] }
         Divider()
         Button("Delete") { if listSelection != nil, let tab = model.activeTab { tab.deleteFlows(tab.selectedFlowIDs) } }
             .keyboardShortcut(.delete, modifiers: [])
@@ -71,7 +72,7 @@ private struct FlowMenu: View {
             .disabled(selection == nil || (tab?.visibleSelectedFlowIDs ?? []).isEmpty)
             .help("선택한 요청을 Prog 세션 파일로 저장")
         // 선택이 있으면 선택, 없으면 보이는 행 전체(스펙 §8.4).
-        ExportMenu(tab: tab) { model.activeTab?.selectedFlowIDs ?? [] }
+        ExportMenu(tab: tab) { tab?.selectedFlowIDs ?? [] }
             .disabled((visibleCount ?? 0) == 0)
     }
 }

@@ -8,45 +8,50 @@ import SwiftUI
     private var model: AppModel { appDelegate.model }
 
     var body: some Scene {
-        Window("Prog", id: "main") {
-            MainWindow(tab: model.mainTab)
-                .environment(model)
-                .frame(minWidth: 1100, minHeight: 700)
-                .task {
-                    await model.startServer()
-                    await model.autoOverrideSystemProxyAtLaunch()
-                }
-                // 앱 전체(설정·기기 창 포함)에 적용되도록 NSApp 수준에서 바꾼다.
-                .onChange(of: model.settings.appearance, initial: true) { _, appearance in
-                    NSApp.appearance = switch appearance {
-                    case .system: nil
-                    case .light: NSAppearance(named: .aqua)
-                    case .dark: NSAppearance(named: .darkAqua)
-                    }
-                }
-                .pendingProxyRestoreAlert(model)
-                .systemErrorAlert(model, presenting: !model.devicesWindowOpen)
-                .infoMessageAlert(model, presenting: !model.devicesWindowOpen)
+        // 메인 창 = 세션 탭 하나(스펙 §4.1). 값 없이 열면(실행·Dock 클릭·탭 막대 +) 라이브 탭, 처음 한 번은 실행 탭.
+        WindowGroup("Prog", id: "main", for: UUID.self) { $id in
+            if let tab = model.tab(id) {
+                let isActive = model.activeTab?.id == tab.id
+                MainWindow(tab: tab)
+                    .environment(model)
+                    .frame(minWidth: 1100, minHeight: 700)
+                    // 앱 전체 알림은 앞 탭 창 하나에서만 띄운다(탭마다 뜨지 않게).
+                    .pendingProxyRestoreAlert(model, presenting: isActive)
+                    .systemErrorAlert(model, presenting: isActive && !model.devicesWindowOpen)
+                    .infoMessageAlert(model, presenting: isActive && !model.devicesWindowOpen)
+            } else {
+                ClosedTabWindow()
+            }
+        } defaultValue: {
+            model.defaultTabID()
         }
+        .restorationBehavior(.disabled)
+        // 외부 URL(파일 열기)은 AppDelegate가 받는다 — 새 메인 창을 만들지 않는다.
+        .handlesExternalEvents(matching: [])
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("업데이트 확인…") { model.checkForUpdates() }
                     .help("새 버전이 있는지 확인")
             }
+            CommandGroup(replacing: .newItem) {
+                NewSessionButton(model: model)
+            }
             CommandGroup(after: .newItem) {
-                Button("세션 열기…") { Task { await model.openSession() } }
+                Button("Open…") { Task { await model.openSession() } }
                     .keyboardShortcut("o")
                     .disabled(model.activeTab == nil)
                     .help("세션·HAR 파일을 열어 현재 세션 교체 (⌘O)")
-                Button("세션 저장…") { Task { await model.activeTab?.saveSession() } }
+                Button("Save Session…") { Task { await model.activeTab?.saveSession() } }
                     .keyboardShortcut("s")
                     .disabled(model.activeTab == nil)
                     .help("현재 세션 전체를 Prog 세션 파일로 저장 (⌘S)")
-                Button("세션 지우기") { model.activeTab?.clear() }
+                Button("Clear Session") { model.activeTab?.clear() }
                     .keyboardShortcut("k")
                     .disabled(model.activeTab == nil)
                     .help("세션의 모든 요청 지우기 (⌘K)")
             }
+            // Close ⌘W와 Close All ⌥⌘W는 시스템 기본(Close의 ⌥ 대체 항목)을 쓴다 — 탭 창이 닫히며 `closeTab`이 불린다.
+            // `CommandGroup(after: .saveItem)`에 넣은 항목은 메뉴에 나오지 않았다(문서 앱이 아니라 saveItem 묶음이 없다).
             CommandGroup(after: .pasteboard) {
                 CopyCurlButton(model: model)
             }
@@ -54,6 +59,16 @@ import SwiftUI
                 LayoutPicker(model: model)
                 Toggle("Auto Select the Latest Request", isOn: Bindable(model.settings).autoSelectLatest)
                     .help("새 요청이 오면 자동 선택 — 다른 행을 고르면 꺼짐")
+                // 앞 탭이 바뀌거나 탭이 열리고 닫힐 때 다시 그린다(`activeTab`·`tabs` 관찰).
+                let single = model.tabs.isEmpty || (model.activeTab?.window?.tabbedWindows?.count ?? 1) < 2
+                Button("Select Next Tab") { NSApp.keyWindow?.selectNextTab(nil) }
+                    .keyboardShortcut("]", modifiers: [.command, .shift])
+                    .disabled(single)
+                    .help("다음 탭으로 (⇧⌘])")
+                Button("Select Previous Tab") { NSApp.keyWindow?.selectPreviousTab(nil) }
+                    .keyboardShortcut("[", modifiers: [.command, .shift])
+                    .disabled(single)
+                    .help("이전 탭으로 (⇧⌘[)")
             }
             FindCommands()
             ToolsCommands(model: model)
@@ -126,6 +141,23 @@ import SwiftUI
     }
 }
 
+/// File ▸ New Session ⌘T: 새 라이브 탭.
+private struct NewSessionButton: View {
+    let model: AppModel
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("New Session") { openWindow(id: "main", value: model.newLiveTabID()) }
+            .keyboardShortcut("t")
+            .help("새 라이브 탭 열기 (⌘T)")
+    }
+}
+
+/// 이미 닫힌 탭의 창(값만 남은 경우): 빈 창을 바로 닫는다.
+private struct ClosedTabWindow: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View { Color.clear.onAppear { dismiss() } }
+}
+
 private struct CopyCurlButton: View {
     let model: AppModel
     var body: some View {
@@ -159,6 +191,24 @@ private struct LayoutPicker: View {
         // Advanced ▸ Show Update Notification at Launch: Sparkle 값을 그대로 보이고, 바꿀 때만 Sparkle에 쓴다.
         model.automaticUpdateChecks = updater.updater.automaticallyChecksForUpdates
         model.setAutomaticUpdateChecks = { updater.updater.automaticallyChecksForUpdates = $0 }
+        // 창과 무관하게 실행할 때 한 번(창이 모두 닫혀도 프록시는 돈다).
+        Task { [model] in
+            await model.startServer()
+            await model.autoOverrideSystemProxyAtLaunch()
+        }
+        observeAppearance()
+    }
+
+    /// 앱 전체(설정·기기 창 포함)에 적용되도록 NSApp 수준에서 바꾼다.
+    private func observeAppearance() {
+        let appearance = withObservationTracking { model.settings.appearance } onChange: { [weak self] in
+            Task { @MainActor in self?.observeAppearance() }
+        }
+        NSApp.appearance = switch appearance {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
     }
 
     // 자동·수동 확인 모두 여기로 온다. 새 버전이 있을 때만 툴바 배지를 띄운다.
@@ -217,9 +267,9 @@ extension View {
         }
     }
 
-    func pendingProxyRestoreAlert(_ model: AppModel) -> some View {
+    func pendingProxyRestoreAlert(_ model: AppModel, presenting: Bool) -> some View {
         alert("이전 실행이 비정상 종료되어 시스템 프록시가 남아 있습니다. 복원할까요?",
-              isPresented: Binding(get: { model.pendingProxyRestore != nil }, set: { if !$0 { model.pendingProxyRestore = nil } })) {
+              isPresented: Binding(get: { presenting && model.pendingProxyRestore != nil }, set: { if !$0 { model.pendingProxyRestore = nil } })) {
             Button("복원", role: .cancel) { Task { await model.restorePendingProxy() } }
                 .keyboardShortcut(.defaultAction)
             Button("유지") { Task { await model.adoptPendingProxy() } }

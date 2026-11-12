@@ -16,6 +16,8 @@ struct MainWindow: View {
             BottomBar()
         }
         .toolbar { MainToolbar(model: model, tab: tab) }
+        .navigationTitle(tab.title)
+        .background(MainWindowHost(tab: tab))
         // Advanced ▸ Stay On Top: 켤 때·끌 때, 그리고 창이 새로 열려 앞으로 올 때마다 Prog 창 전체에 맞춘다.
         .onChange(of: model.settings.stayOnTop, initial: true) { _, on in StayOnTop.apply(on) }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in

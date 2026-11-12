@@ -11,10 +11,7 @@ struct StatusMenu: View {
         @Bindable var settings = model.settings
         let port = model.runningPort.map(String.init)
         let ip = model.lanAddresses.first ?? "127.0.0.1"
-        Button("Show Prog") {
-            NSApp.activate(ignoringOtherApps: true)
-            openWindow(id: "main")
-        }
+        Button("Show Prog") { model.showMainWindow(openWindow: openWindow) }
         .help("Prog 메인 창을 앞으로 가져오기")
         Divider()
         Toggle("Record Traffic", isOn: $settings.isRecording)

@@ -31,8 +31,12 @@ final class SessionTab: Identifiable {
         }
     }
 
-    /// 화면에 보이는 탭인가. false면 목록·트리 계산을 미루고, true가 되면 한 번 계산한다.
-    @ObservationIgnored var isOnScreen = true {
+    /// 이 탭을 보이는 창(`MainWindowHost`가 붙인다). 탭 이동 메뉴·상태 막대 Show Prog가 쓴다.
+    @ObservationIgnored weak var window: NSWindow?
+
+    /// 화면에 보이는 탭인가(창의 가림 상태). false면 목록·트리 계산을 미루고, true가 되면 한 번 계산한다.
+    /// 처음엔 false — 창에 붙어 보이기 전(뒤에서 만든 탭)에는 계산하지 않는다.
+    @ObservationIgnored var isOnScreen = false {
         didSet { if isOnScreen, !oldValue { refreshVisibleRows(); sidebarRefresh.now() } }
     }
 
@@ -115,8 +119,6 @@ final class SessionTab: Identifiable {
         self.session = session
         self.processes = processes
         self.fileURL = fileURL
-        refreshVisibleRows()
-        sidebarRefresh.now()
     }
 
     func clear() {
@@ -189,7 +191,8 @@ final class SessionTab: Identifiable {
     // MARK: - 목록
 
     /// 사용자 조작(규칙·정렬·사이드바 선택·삭제): 보이는 행을 지금 다시 계산한다.
-    func refreshVisibleRows() { rowsRefresh.now() }
+    /// 보이지 않는 탭도 이번 한 번은 계산한다(관찰은 걸지 않음) — 지우기·내보내기가 낡은 목록을 읽지 않게.
+    func refreshVisibleRows() { if isOnScreen { rowsRefresh.now() } else { computeVisibleRows() } }
 
     private func computeVisibleRows() {
         let flows = computeVisibleFlows()

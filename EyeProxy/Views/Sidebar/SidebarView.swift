@@ -6,6 +6,7 @@ import SwiftUI
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
     @Environment(SessionTab.self) private var tab
+    @Environment(\.openWindow) private var openWindow
     /// 기본값과 다르게 펼치거나 접은 줄의 키.
     @State private var toggled: Set<String> = []
     @State private var addingPin = false
@@ -36,6 +37,7 @@ struct SidebarView: View {
                                 Label(device.displayName, systemImage: icon(device.kind))
                                     .badge(device.count)
                                     .tag(SidebarItem.scope(FlowScope(device: device.address)))
+                                    .contextMenu { openAsNewTab(.scope(FlowScope(device: device.address))) }
                             }
                         }
                     }
@@ -52,6 +54,7 @@ struct SidebarView: View {
                                 Label { Text(app.displayName) } icon: { AppIcon(path: app.path) }
                                     .badge(app.count)
                                     .tag(SidebarItem.scope(FlowScope(device: SidebarTree.thisMac, process: app.groupKey)))
+                                    .contextMenu { openAsNewTab(.scope(FlowScope(device: SidebarTree.thisMac, process: app.groupKey))) }
                             }
                         }
                     } label: {
@@ -108,6 +111,7 @@ struct SidebarView: View {
                     Label("/" + path.segment, systemImage: path.children.isEmpty ? "doc" : "folder")
                         .badge(path.count)
                         .tag(SidebarItem.path(host: node.host, prefix: path.fullPath))
+                        .contextMenu { openAsNewTab(.path(host: node.host, prefix: path.fullPath)) }
                 }
             } label: { row }
         } else {
@@ -122,6 +126,8 @@ struct SidebarView: View {
             .badge(node.count)
             .tag(tag)
             .contextMenu {
+                openAsNewTab(tag)
+                Divider()
                 Button(isPinned ? "Unpin" : "Pin") { model.settings.togglePin(host) }
                     .help(isPinned ? "Pinned에서 빼기" : "Pinned에 고정")
                 Button("Enable SSL Proxying") { Task { await model.enableSSLProxying(for: host) } }
@@ -132,6 +138,12 @@ struct SidebarView: View {
                 }
                 .help("도메인 이름 복사")
             }
+    }
+
+    /// 우클릭 맨 위(스펙 §4.4): 같은 세션을 보고 이 항목을 고른 새 탭.
+    private func openAsNewTab(_ item: SidebarItem) -> some View {
+        Button("Open as New Tab") { openWindow(id: "main", value: model.newTabID(sharing: tab, selecting: item)) }
+            .help("이 항목을 고른 새 탭 열기")
     }
 
     private func icon(_ kind: DeviceKind) -> String {

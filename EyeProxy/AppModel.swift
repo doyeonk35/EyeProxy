@@ -3,6 +3,7 @@ import EyeProxyCore
 import EyeProxyKit
 import Foundation
 import Observation
+import SwiftUI
 import UniformTypeIdentifiers
 
 enum ServerState: Equatable {
@@ -127,6 +128,44 @@ final class AppModel {
     }
 
     func tab(_ id: UUID) -> SessionTab? { tabs[id] }
+
+    /// 값 없이 여는 메인 창(실행·Dock 클릭·탭 막대 +)의 탭. 처음 한 번은 실행 탭(`mainTab`, 마지막 필터 규칙)이다.
+    func defaultTabID() -> UUID {
+        guard mainTabHandedOut else { mainTabHandedOut = true; return mainTab.id }
+        return newLiveTabID()
+    }
+    @ObservationIgnored private var mainTabHandedOut = false
+
+    /// New Session ⌘T: 빈 필터로 라이브 세션을 보는 새 탭.
+    func newLiveTabID(selecting item: SidebarItem? = nil) -> UUID {
+        let tab = makeTab(fileURL: nil, session: liveSession, processes: processes, restoreSavedRules: false)
+        if let item { tab.sidebarSelection = item }
+        return tab.id
+    }
+
+    /// 사이드바 ▸ Open as New Tab: 같은 세션·귀속을 보고, 그 항목을 고른 새 탭.
+    func newTabID(sharing tab: SessionTab, selecting item: SidebarItem) -> UUID {
+        let new = makeTab(fileURL: tab.fileURL, session: tab.session, processes: tab.processes, restoreSavedRules: false)
+        new.sidebarSelection = item
+        return new.id
+    }
+
+    /// 탭 창이 닫혔다. 닫힌 탭은 다시 계산하지 않는다.
+    func closeTab(_ id: UUID) {
+        tabs[id]?.isOnScreen = false
+        tabs[id] = nil
+        if activeTab?.id == id { activeTab = nil }
+    }
+
+    /// 상태 막대 Show Prog: 열린 메인 창을 앞으로, 없으면 새 라이브 탭 창.
+    func showMainWindow(openWindow: OpenWindowAction) {
+        NSApp.activate()
+        if let window = activeTab?.window ?? tabs.values.lazy.compactMap(\.window).first {
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            openWindow(id: "main")
+        }
+    }
 
     /// 손상(한쪽 파일만 있음·읽기 실패)이면 기존 파일을 덮어쓰지 않고 이번 실행만 임시 CA를 쓴다.
     /// 저장 실패(caSaveError)는 기기 윈도우에 표시한다. ponytail: 손상으로 임시 CA를 쓰는 경우는 아직 UI에 알리지 않음.
