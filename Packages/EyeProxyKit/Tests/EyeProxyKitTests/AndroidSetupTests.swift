@@ -23,8 +23,7 @@ import Foundation
     #expect(AndroidSetup.proxyArguments(host: "10.0.2.2", port: 9090) == ["shell", "settings", "put", "global", "http_proxy", "10.0.2.2:9090"])
     #expect(AndroidSetup.clearProxyArguments == ["shell", "settings", "put", "global", "http_proxy", ":0"])
     #expect(AndroidSetup.pushArguments(crt: URL(fileURLWithPath: "/tmp/Prog-CA.crt")) == ["push", "/tmp/Prog-CA.crt", "/sdcard/Download/Prog-CA.crt"])
-    #expect(AndroidSetup.connectArguments("192.168.0.20") == ["connect", "192.168.0.20:5555"])
-    #expect(AndroidSetup.installIntentArguments == ["shell", "am", "start", "-a", "android.intent.action.VIEW", "-t", "application/x-x509-ca-cert", "-d", "file:///sdcard/Download/Prog-CA.crt"])
+    #expect(AndroidSetup.connectArguments("192.0.2.20") == ["connect", "192.0.2.20:5555"])
 }
 
 @Test func commandLinesContainBoth() {
@@ -34,13 +33,34 @@ import Foundation
                       "adb push /tmp/Prog-CA.crt /sdcard/Download/Prog-CA.crt"])
 }
 
-@Test func tvCommandLinesContainConnectAndIntent() {
-    let text = AndroidSetup.tvCommandLines(adb: "adb", tvIP: "192.168.0.20", host: "192.168.0.5", port: 9090, crt: URL(fileURLWithPath: "/tmp/Prog-CA.crt"))
-    let lines = text.split(separator: "\n").map(String.init)
-    #expect(lines.count == 4)
-    #expect(lines[0] == "adb connect 192.168.0.20:5555")
-    #expect(lines[1] == "adb shell settings put global http_proxy 192.168.0.5:9090")
-    #expect(lines[2].hasPrefix("adb push "))
-    #expect(lines[3].contains("android.intent.action.VIEW"))
-    #expect(!text.contains("10.0.2.2"))
+@Test func tvCommandLinesAreConnectAndProxyOnly() {
+    let lines = AndroidSetup.tvCommandLines(adb: "adb", tvIP: "192.0.2.20", host: "192.0.2.5", port: 9090).split(separator: "\n").map(String.init)
+    #expect(lines == ["adb connect 192.0.2.20:5555", "adb shell settings put global http_proxy 192.0.2.5:9090"])
+}
+
+@Test func connectKeepsExplicitPort() {
+    #expect(AndroidSetup.connectArguments("192.0.2.20:37199") == ["connect", "192.0.2.20:37199"])
+}
+
+@Test func clearProxyCommandIsExact() {
+    #expect(AndroidSetup.clearProxyCommand(adb: "adb") == "adb shell settings put global http_proxy :0")
+}
+
+@Test func bundledConfigTrustsRawCA() {
+    let xml = AndroidSetup.bundledNetworkSecurityConfigXML
+    #expect(xml.contains("<certificates src=\"@raw/proxy_ca\""))
+    #expect(xml.contains("src=\"system\""))
+    #expect(xml.contains("src=\"user\""))
+    #expect(xml.contains("app/src/debug/res/xml/network_security_config.xml"))
+}
+
+@Test func debugManifestPointsToConfig() {
+    let xml = AndroidSetup.debugManifestXML
+    #expect(xml.contains("android:networkSecurityConfig=\"@xml/network_security_config\""))
+    #expect(xml.contains("tools:replace=\"android:networkSecurityConfig\""))
+}
+
+@Test func copyCACommandQuotesPath() {
+    #expect(AndroidSetup.copyCACommand(caPEMPath: "/tmp/Prog CA/ca.pem")
+            == "mkdir -p app/src/debug/res/raw && cp \"/tmp/Prog CA/ca.pem\" app/src/debug/res/raw/proxy_ca.crt")
 }

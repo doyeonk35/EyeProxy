@@ -77,8 +77,7 @@ struct AndroidSection: View {
             steps {
                 Text("1. TV 설정 ▸ 기기 환경설정 ▸ 정보 ▸ 빌드를 7번 눌러 개발자 옵션을 켜고, 개발자 옵션 ▸ 네트워크 디버깅을 켭니다.")
                 Text("2. adb connect <TV IP>:5555 로 TV에 연결합니다.")
-                Text("3. 프록시 설정·CA 복사는 에뮬레이터와 같은 명령입니다(호스트는 Mac LAN IP).")
-                Text("4. 설치 인텐트로 인증서 설치 화면을 띄워 리모컨으로 진행합니다. 화면이 안 뜨면 설정 ▸ 보안 ▸ 저장소에서 설치합니다.")
+                Text("3. 프록시 설정은 에뮬레이터와 같은 명령입니다(호스트는 Mac LAN IP). TV에는 사용자 CA를 설치할 수 없으니 아래 디버그 빌드 번들 방식을 씁니다.")
             }
             TextField("TV IP", text: $tvIP, prompt: Text(verbatim: "192.168.0.10"))
             if adb != nil {
@@ -89,12 +88,10 @@ struct AndroidSection: View {
                     .help("TV 프록시를 Prog로 설정하고 CA를 Download로 복사")
                 adbButton("adb로 프록시 해제") { await model.runADB(AndroidSetup.clearProxyArguments) }
                     .help("기기의 프록시 설정 지우기")
-                adbButton("인증서 설치 화면 열기") { await model.runADB(AndroidSetup.installIntentArguments) }
-                    .help("기기에 인증서 설치 화면 띄우기")
                 adbResult
             } else {
                 commandText(AndroidSetup.tvCommandLines(adb: "adb", tvIP: tvIP.isEmpty ? "<TV IP>" : tvIP,
-                                                        host: macIP, port: port, crt: savedCRT))
+                                                        host: macIP, port: port))
             }
         }
     }
@@ -106,10 +103,10 @@ struct AndroidSection: View {
             } else {
                 Text("Android 7 이상 앱은 사용자 CA를 기본으로 신뢰하지 않습니다. 디버그 빌드에 network_security_config로 사용자 CA를 허용해야 합니다.")
             }
-            Text(verbatim: AndroidSetup.networkSecurityConfigXML)
+            Text(verbatim: AndroidSetup.bundledNetworkSecurityConfigXML)
                 .font(.caption.monospaced())
                 .textSelection(.enabled)
-            Button("XML 복사") { copy(AndroidSetup.networkSecurityConfigXML) }
+            Button("XML 복사") { copy(AndroidSetup.bundledNetworkSecurityConfigXML) }
                 .help("network_security_config XML 복사")
         }
         .font(.callout)
