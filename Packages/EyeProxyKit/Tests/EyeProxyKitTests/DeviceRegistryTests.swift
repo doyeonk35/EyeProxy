@@ -54,3 +54,44 @@ import EyeProxyCore
     let corrupt = try #require(names.first { $0.hasPrefix("devices.corrupt-") && $0.hasSuffix(".json") })
     #expect(try Data(contentsOf: dir.appendingPathComponent(corrupt)) == Data("{not json".utf8))
 }
+
+@Test @MainActor func autoNameNeverOverridesManualName() throws {
+    let r = DeviceRegistry(storageURL: nil)
+    r.observe(.requestStarted(.fixture(client: "192.0.2.10", decrypted: false)))
+    r.rename("192.0.2.10", name: "내 기기", kind: .unknown)
+    #expect(r.applyDiscovered(.init(address: "192.0.2.10", name: "거실 Apple TV", kind: nil)))
+    #expect(r.devices.first?.displayName == "내 기기")
+    r.rename("192.0.2.10", name: nil, kind: .unknown)
+    #expect(r.devices.first?.displayName == "거실 Apple TV")
+}
+
+@Test @MainActor func autoKindOnlyFillsUnknown() throws {
+    let r = DeviceRegistry(storageURL: nil)
+    r.observe(.requestStarted(.fixture(client: "192.0.2.11", decrypted: false)))
+    r.observe(.requestStarted(.fixture(client: "192.0.2.12", decrypted: false)))
+    r.rename("192.0.2.11", name: nil, kind: .iPad)
+    r.applyDiscovered(.init(address: "192.0.2.11", name: "a", kind: .appleTV))
+    r.applyDiscovered(.init(address: "192.0.2.12", name: "b", kind: .appleTV))
+    #expect(r.devices.first { $0.address == "192.0.2.11" }?.kind == .iPad)
+    #expect(r.devices.first { $0.address == "192.0.2.12" }?.kind == .appleTV)
+}
+
+@Test @MainActor func discoveryBeforeTrafficIsApplied() throws {
+    let r = DeviceRegistry(storageURL: nil)
+    #expect(r.applyDiscovered(.init(address: "192.0.2.20", name: "안방 TV", kind: nil)) == false)
+    r.observe(.requestStarted(.fixture(client: "192.0.2.20", decrypted: false)))
+    #expect(r.devices.first?.displayName == "안방 TV")
+}
+
+@Test @MainActor func autoNamePersistsAndOldFileLoads() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "devices-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+    let r = DeviceRegistry(storageURL: url)
+    r.observe(.requestStarted(.fixture(client: "192.0.2.30", decrypted: false)))
+    r.applyDiscovered(.init(address: "192.0.2.30", name: "거실 Apple TV", kind: nil))
+    try r.save()
+    #expect(DeviceRegistry(storageURL: url).devices.first?.autoName == "거실 Apple TV")
+    let old = #"[{"address":"192.0.2.31","kind":"unknown","lastSeen":"2026-01-01T00:00:00Z","flowCount":1,"decryptedCount":0,"tlsFailureCount":0}]"#
+    try old.write(to: url, atomically: true, encoding: .utf8)
+    #expect(DeviceRegistry(storageURL: url).devices.first?.autoName == nil)
+}

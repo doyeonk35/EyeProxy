@@ -100,11 +100,14 @@ final class AppModel {
     /// 시스템 프록시를 마지막으로 켠 포트(끌 때 "우리 것"을 가려내는 기준).
     @ObservationIgnored private var capturePort: Int?
     @ObservationIgnored private var didAutoOverride = false
+    /// Bonjour로 원격 기기 이름을 찾는다. 루프백이 아닌 기기가 보일 때 처음 시작한다.
+    @ObservationIgnored private var discovery: DeviceDiscovery?
 
     init() {
         try? FileManager.default.createDirectory(at: Self.supportDirectory, withIntermediateDirectories: true)
         devices = DeviceRegistry(storageURL: Self.supportDirectory.appending(path: "devices.json"))
         (certificateAuthority, caSaveError) = Self.loadOrCreateCA()
+        startDiscoveryIfRemoteDeviceSeen()
         // 이 실행은 아직 캡처를 켜지 않았으므로 백업이 있으면 이전 실행이 복원하지 못한 것이다.
         pendingProxyRestore = systemProxy.pendingRestore()
         systemProxyBackupExists = pendingProxyRestore != nil
@@ -310,11 +313,22 @@ final class AppModel {
         await update.value
     }
 
+    private func startDiscoveryIfRemoteDeviceSeen() {
+        guard discovery == nil, devices.devices.contains(where: { !FlowFilter.isLoopback($0.address) && !$0.address.isEmpty }) else { return }
+        let found = DeviceDiscovery { [weak self] device in
+            guard let self, devices.applyDiscovered(device) else { return }
+            try? devices.save()
+        }
+        discovery = found
+        found.start()
+    }
+
     private func handle(_ event: FlowEvent) {
         let isNewFlow = if case .requestStarted = event { true } else { false }
         // 기록 중지 상태에서도 이미 보이는 요청의 응답·실패는 반영한다.
         if settings.isRecording || !isNewFlow { liveSession.apply(event) }
         devices.observe(event)
+        startDiscoveryIfRemoteDeviceSeen()
         if case .annotated(let id, .unrecorded) = event { processes.remove(id) }
         // 소켓 조회는 비동기로 하고, 결과가 오면 귀속만 기록한다. 실제로 세션에 반영된 흐름만.
         if case .requestStarted(let flow) = event, liveSession.number(flow.id) != nil,

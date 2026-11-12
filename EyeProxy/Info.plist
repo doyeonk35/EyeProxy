@@ -24,7 +24,13 @@
         <true/>
     </dict>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>같은 네트워크의 기기(Apple TV·iPhone)와 서버에 연결하기 위해 필요합니다.</string>
+    <string>같은 네트워크의 기기(Apple TV·iPhone)와 서버에 연결하고 기기 이름을 찾기 위해 필요합니다.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_airplay._tcp</string>
+        <string>_companion-link._tcp</string>
+        <string>_googlecast._tcp</string>
+    </array>
     <key>SUFeedURL</key>
     <string>https://tving-prog.web.app/appcast.xml</string>
     <key>SUPublicEDKey</key>

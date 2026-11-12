@@ -2,12 +2,25 @@ import EyeProxyCore
 import Foundation
 import Observation
 
+public struct DiscoveredDevice: Equatable, Sendable {
+    public var address: String
+    public var name: String
+    public var kind: DeviceKind?
+    public init(address: String, name: String, kind: DeviceKind?) {
+        self.address = address
+        self.name = name
+        self.kind = kind
+    }
+}
+
 public enum DeviceKind: String, Codable, CaseIterable, Sendable { case thisMac, appleTV, iPhone, iPad, unknown }
 
 public struct Device: Identifiable, Codable, Equatable, Sendable {
     public var id: String { address }
     public let address: String
     public var name: String?
+    /// Bonjour 광고에서 찾은 이름. 직접 붙인 `name`이 없을 때만 보인다.
+    public var autoName: String?
     public var kind: DeviceKind
     public var lastSeen: Date
     public var flowCount: Int
@@ -26,6 +39,7 @@ public struct Device: Identifiable, Codable, Equatable, Sendable {
 
     public var displayName: String {
         if let name, !name.isEmpty { return name }
+        if let autoName, !autoName.isEmpty { return autoName }
         return kind == .thisMac ? "이 Mac" : address
     }
 }
@@ -34,6 +48,8 @@ public struct Device: Identifiable, Codable, Equatable, Sendable {
 public final class DeviceRegistry {
     public private(set) var devices: [Device] = []
     @ObservationIgnored private var storageURL: URL?
+    /// 트래픽보다 먼저 온 광고를 기억해 둔다(저장하지 않는다).
+    @ObservationIgnored private var discovered: [String: DiscoveredDevice] = [:]
 
     public init(storageURL: URL?) {
         self.storageURL = storageURL
@@ -75,6 +91,21 @@ public final class DeviceRegistry {
         devices[i].kind = kind
     }
 
+    /// 광고를 기억하고, 그 주소의 기기가 있으면 자동 이름·종류를 붙인다. 기기 정보가 바뀌면 true.
+    @discardableResult
+    public func applyDiscovered(_ found: DiscoveredDevice) -> Bool {
+        discovered[found.address] = found
+        guard let i = devices.firstIndex(where: { $0.address == found.address }) else { return false }
+        return applyDiscovery(found, to: &devices[i])
+    }
+
+    private func applyDiscovery(_ found: DiscoveredDevice, to device: inout Device) -> Bool {
+        let before = device
+        device.autoName = found.name
+        if device.kind == .unknown, let kind = found.kind { device.kind = kind }
+        return device != before
+    }
+
     public func save() throws {
         guard let storageURL else { return }
         let encoder = JSONEncoder()
@@ -85,7 +116,9 @@ public final class DeviceRegistry {
     private func update(_ address: String, at date: Date, _ change: (inout Device) -> Void) {
         let i = devices.firstIndex { $0.address == address } ?? {
             let isLocal = address == "127.0.0.1" || address == "::1"
-            devices.append(Device(address: address, kind: isLocal ? .thisMac : .unknown, lastSeen: date))
+            var device = Device(address: address, kind: isLocal ? .thisMac : .unknown, lastSeen: date)
+            if let found = discovered[address] { _ = applyDiscovery(found, to: &device) }
+            devices.append(device)
             return devices.count - 1
         }()
         devices[i].lastSeen = max(devices[i].lastSeen, date)
