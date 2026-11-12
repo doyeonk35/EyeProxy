@@ -3,7 +3,7 @@ import EyeProxyKit
 import Foundation
 
 enum CertificateExportFormat {
-    case pem, der, p12, privateKey, crt
+    case pem, der, p12, privateKey, crt, androidRaw
 
     var defaultFileName: String {
         switch self {
@@ -12,6 +12,7 @@ enum CertificateExportFormat {
         case .p12: "Prog-CA.p12"
         case .privateKey: "Prog-CA-key.pem"
         case .crt: "Prog-CA.crt"
+        case .androidRaw: "proxy_ca.crt"
         }
     }
 }
@@ -42,7 +43,7 @@ extension AppModel {
         case .p12:
             guard let entered = askP12Password() else { return }
             password = entered
-        case .pem, .der, .crt: break
+        case .pem, .der, .crt, .androidRaw: break
         }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = format.defaultFileName
@@ -51,7 +52,7 @@ extension AppModel {
         Task {
             do {
                 switch format {
-                case .pem, .crt: try CertificateExporter.writePEM(ca, to: url)
+                case .pem, .crt, .androidRaw: try CertificateExporter.writePEM(ca, to: url)
                 case .der: try CertificateExporter.writeDER(ca, to: url)
                 case .privateKey: try CertificateExporter.writePrivateKey(ca, to: url)
                 case .p12: try await CertificateExporter.writeP12(ca, to: url, password: password)
@@ -64,6 +65,9 @@ extension AppModel {
 
     /// Android용 PEM을 `Prog-CA.crt`로 저장.
     func exportCACrt() { exportCertificate(.crt) }
+
+    /// 디버그 빌드 번들용 PEM을 `proxy_ca.crt`로 저장(`app/src/debug/res/raw/`에 넣는다).
+    func exportAndroidRawCA() { exportCertificate(.androidRaw) }
 
     /// 찾은 adb로 실행해 출력을 돌려준다. adb가 없거나 실패하면 그 사실을 문장으로 돌려준다.
     func runADB(_ args: [String]) async -> String {
@@ -78,9 +82,14 @@ extension AppModel {
         }
     }
 
-    /// 프록시를 host:현재 포트로 설정한 뒤, 현재 CA를 임시 `Prog-CA.crt`로 써서 기기 다운로드 폴더로 push. 두 출력을 합친다.
+    /// 기기 프록시만 host:현재 포트로 설정.
+    func adbSetProxy(host: String) async -> String {
+        await runADB(AndroidSetup.proxyArguments(host: host, port: runningPort ?? settings.port))
+    }
+
+    /// 프록시를 설정한 뒤, 현재 CA를 임시 `Prog-CA.crt`로 써서 기기 다운로드 폴더로 push. 두 출력을 합친다. 에뮬레이터 탭 전용.
     func adbSetProxyAndPushCA(host: String) async -> String {
-        let proxy = String(localized: "프록시: ") + (await runADB(AndroidSetup.proxyArguments(host: host, port: runningPort ?? settings.port)))
+        let proxy = String(localized: "프록시: ") + (await adbSetProxy(host: host))
         let crt = FileManager.default.temporaryDirectory.appending(path: "Prog-CA.crt")
         do {
             try CertificateExporter.writePEM(certificateAuthority, to: crt)
