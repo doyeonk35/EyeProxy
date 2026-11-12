@@ -11,3 +11,14 @@ import Testing
 }
 @Test func disabledNeverDecrypts() { #expect(!SSLProxyingPolicy(isEnabled: false, patterns: ["*"]).shouldDecrypt(host: "a")) }
 @Test func starMatchesEverything() { #expect(SSLProxyingPolicy(patterns: ["*"]).shouldDecrypt(host: "x.y")) }
+
+@Test func questionMarkMatchesOneCharacter() {
+    let p = SSLProxyingPolicy(patterns: ["v?.example.net"])
+    #expect(p.shouldDecrypt(host: "v1.example.net")); #expect(!p.shouldDecrypt(host: "v10.example.net")); #expect(!p.shouldDecrypt(host: "v.example.net"))
+}
+@Test func hostPatternSetExactAndWildcard() {
+    let s = HostPatternSet(["API.example.com", "*.example.org"])
+    #expect(s.matches("api.example.com")); #expect(!s.matches("x.api.example.com"))
+    #expect(s.matches("a.example.org")); #expect(!s.matches("example.org"))
+}
+@Test func emptyPatternSetMatchesNothing() { #expect(HostPatternSet([]).isEmpty); #expect(!HostPatternSet([]).matches("a")) }

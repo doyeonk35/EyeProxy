@@ -2,7 +2,7 @@ import Foundation
 
 public struct SSLProxyingPolicy: Equatable, Codable, Sendable {
     public var isEnabled: Bool
-    /// "api.example.com", "*.example.com", "*" — `*`는 임의 문자열, 비교는 대소문자 무시.
+    /// "api.example.com", "*.example.com", "*" — `*`는 임의 문자열, `?`는 한 글자, 비교는 대소문자 무시.
     public var patterns: [String]
 
     public init(isEnabled: Bool = true, patterns: [String] = []) {
@@ -11,15 +11,6 @@ public struct SSLProxyingPolicy: Equatable, Codable, Sendable {
     }
 
     public func shouldDecrypt(host: String) -> Bool {
-        guard isEnabled else { return false }
-        return patterns.contains { Self.matches(pattern: $0, host: host) }
-    }
-
-    private static func matches(pattern: String, host: String) -> Bool {
-        let body = pattern.split(separator: "*", omittingEmptySubsequences: false)
-            .map { NSRegularExpression.escapedPattern(for: String($0)) }
-            .joined(separator: ".*")
-        guard let regex = try? NSRegularExpression(pattern: "^\(body)$", options: .caseInsensitive) else { return false }
-        return regex.firstMatch(in: host, range: NSRange(host.startIndex..., in: host)) != nil
+        isEnabled && HostPatternSet(patterns).matches(host)
     }
 }

@@ -127,7 +127,7 @@ public enum ProxymanImporter {
     }
 
     /// `{"nodes":[{"kind":{"domain":[{"url":…}]}}]}`. `excludeNodes`는 읽지 않는다.
-    private static func sslHosts(_ data: Data) -> [String]? {
+    static func sslHosts(_ data: Data) -> [String]? {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
         let nodes = root["nodes"] as? [[String: Any]] ?? []
         return nodes.flatMap { n -> [String] in
