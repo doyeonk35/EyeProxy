@@ -3,6 +3,7 @@ import EyeProxyCore
 import EyeProxyKit
 import Foundation
 import Observation
+import SystemConfiguration
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -109,10 +110,14 @@ final class AppModel {
     @ObservationIgnored private var didAutoOverride = false
     /// Bonjour로 원격 기기 이름을 찾는다. 루프백이 아닌 기기가 보일 때 처음 시작한다.
     @ObservationIgnored private var discovery: DeviceDiscovery?
+    /// 이번 실행에서 이미 "이 Mac의 주소인가"를 확인한 주소.
+    @ObservationIgnored var checkedOwnAddresses: Set<String> = []
+
+    static var computerName: String? { SCDynamicStoreCopyComputerName(nil, nil) as String? }
 
     init() {
         try? FileManager.default.createDirectory(at: Self.supportDirectory, withIntermediateDirectories: true)
-        devices = DeviceRegistry(storageURL: Self.supportDirectory.appending(path: "devices.json"))
+        devices = DeviceRegistry(storageURL: Self.supportDirectory.appending(path: "devices.json"), macLookup: { ARPTable.macAddress(for: $0) })
         (certificateAuthority, caSaveError) = Self.loadOrCreateCA()
         restorePlan = settings.restoreTabsAtLaunch ? settings.openTabs?.restorePlan() : nil
         startDiscoveryIfRemoteDeviceSeen()
@@ -418,6 +423,11 @@ final class AppModel {
         // 기록 중지 상태에서도 이미 보이는 요청의 응답·실패는 반영한다.
         if settings.isRecording || !isNewFlow { liveSession.apply(event) }
         devices.observe(event)
+        if case .requestStarted(let flow) = event, !FlowFilter.isLoopback(flow.clientAddress),
+           checkedOwnAddresses.insert(flow.clientAddress).inserted, lanAddresses.contains(flow.clientAddress),
+           devices.markThisMac(flow.clientAddress, name: Self.computerName) {
+            try? devices.save()
+        }
         startDiscoveryIfRemoteDeviceSeen()
         if case .annotated(let id, .unrecorded) = event { processes.remove(id) }
         // 소켓 조회는 비동기로 하고, 결과가 오면 귀속만 기록한다. 실제로 세션에 반영된 흐름만.

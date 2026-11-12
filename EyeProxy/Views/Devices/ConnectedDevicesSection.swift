@@ -42,7 +42,17 @@ private struct DeviceRow: View {
                     .focused($nameFocused)
                     .onSubmit(commitName)
                     .onChange(of: nameFocused) { if !nameFocused { commitName() } }
-                Text(device.address).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                HStack(spacing: 6) {
+                    Text(device.mac.map { "\(device.address) · \($0)" } ?? device.address)
+                        .textSelection(.enabled)
+                    if !model.devices.isCurrent(device) {
+                        Text("이전")
+                            .padding(.horizontal, 4)
+                            .background(.quaternary, in: .rect(cornerRadius: 3))
+                            .help("이 주소는 지금 다른 기기가 쓰고 있습니다 — 같은 MAC이 다시 보이면 이름이 따라갑니다")
+                    }
+                }
+                .font(.caption).foregroundStyle(.secondary)
             }
             Picker("종류", selection: Binding(get: { device.kind }, set: { update(name: device.name, kind: $0) })) {
                 ForEach(DeviceKind.allCases, id: \.self) { Text(ConnectedDevicesSection.label($0)).tag($0) }
