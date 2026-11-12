@@ -26,15 +26,14 @@ extension AppModel {
         }
     }
 
-    /// File ▸ 세션 열기의 HAR 경로(스펙 §8.5): 탭의 세션을 교체. 번호·코멘트·Highlight를 복원하고 프로세스 귀속은 비운다.
-    func importHAR(from url: URL, into tab: SessionTab) async throws {
+    /// `open(_:)`의 HAR 경로(스펙 §8.5): 새 파일 탭의 세션을 채운다. 번호·코멘트·Highlight를 복원한다(프로세스 귀속은 없다).
+    func importHAR(from url: URL, into session: SessionStore) async throws {
         let imported = try await Task.detached { try FlowImport.har(Data(contentsOf: url)) }.value
-        tab.session.replace(
+        session.replace(
             flows: imported.map(\.flow),
             comments: Dictionary(uniqueKeysWithValues: imported.compactMap { i in i.comment.map { (i.flow.id, $0) } }),
             highlights: Dictionary(uniqueKeysWithValues: imported.compactMap { i in i.highlight.map { (i.flow.id, $0) } }),
             numbers: Dictionary(uniqueKeysWithValues: imported.compactMap { i in i.number.map { (i.flow.id, $0) } }))
-        tab.processes.replace([:])
     }
 
     /// Info.plist의 UTImportedTypeDeclarations와 일치해야 한다.

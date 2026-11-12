@@ -37,10 +37,7 @@ import SwiftUI
                 NewSessionButton(model: model)
             }
             CommandGroup(after: .newItem) {
-                Button("Open…") { Task { await model.openSession() } }
-                    .keyboardShortcut("o")
-                    .disabled(model.activeTab == nil)
-                    .help("세션·HAR 파일을 열어 현재 세션 교체 (⌘O)")
+                OpenCommands(model: model)
                 Button("Save Session…") { Task { await model.activeTab?.saveSession() } }
                     .keyboardShortcut("s")
                     .disabled(model.activeTab == nil)
@@ -152,6 +149,25 @@ private struct NewSessionButton: View {
     }
 }
 
+/// File ▸ Open… ⌘O, Open Recent ▸: 파일을 새 탭으로 연다(스펙 §4.3).
+private struct OpenCommands: View {
+    let model: AppModel
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("Open…") { Task { await model.openSession(openWindow: openWindow) } }
+            .keyboardShortcut("o")
+            .help("세션·HAR 파일을 새 탭에 열기 (⌘O)")
+        Menu("Open Recent") {
+            ForEach(model.recentURLs, id: \.self) { url in
+                Button(url.lastPathComponent) { Task { await model.open([url], openWindow: openWindow) } }
+            }
+            Divider()
+            Button("Clear Menu") { model.clearRecent() }
+                .disabled(model.recentURLs.isEmpty)
+        }
+    }
+}
+
 /// 이미 닫힌 탭의 창(값만 남은 경우): 빈 창을 바로 닫는다.
 private struct ClosedTabWindow: View {
     @Environment(\.dismiss) private var dismiss
@@ -185,6 +201,10 @@ private struct LayoutPicker: View {
     private var updaterController: SPUStandardUpdaterController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 파일로 실행하면 SwiftUI가 메인 창 대신 첫 단일 창(Breakpoints)을 띄운다 — 닫는다. 메인 창은 `application(_:open:)`이 연다.
+        if notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool == false, model.breakpoints.pending.isEmpty {
+            NSApp.windows.filter { $0.identifier?.rawValue == "breakpoints" }.forEach { $0.close() }
+        }
         let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
         updaterController = updater
         model.checkForUpdates = { updater.checkForUpdates(nil) }
@@ -197,6 +217,32 @@ private struct LayoutPicker: View {
             await model.autoOverrideSystemProxyAtLaunch()
         }
         observeAppearance()
+        model.refreshRecent()
+    }
+
+    /// 파일 열기 Apple Event를 SwiftUI보다 먼저 가로챈다. SwiftUI가 받으면 `handlesExternalEvents`와 상관없이
+    /// 엉뚱한 창(Breakpoints)이나 빈 메인 창을 띄운다. 실행할 때 온 이벤트도 받도록 실행 완료 전에 건다.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleOpenDocuments(_:withReply:)),
+                                                     forEventClass: AEEventClass(kCoreEventClass), andEventID: AEEventID(kAEOpenDocuments))
+    }
+
+    @objc private func handleOpenDocuments(_ event: NSAppleEventDescriptor, withReply reply: NSAppleEventDescriptor) {
+        guard let list = event.paramDescriptor(forKeyword: keyDirectObject) else { return }
+        let items = list.numberOfItems > 0 ? (1...list.numberOfItems).compactMap { list.atIndex($0) } : [list]
+        application(NSApp, open: items.compactMap(\.fileURLValue))
+    }
+
+    /// Finder 더블클릭·`open -a`: 새 파일 탭으로 읽고, 창은 앞 탭의 `MainWindow`가 연다(`pendingOpenTabIDs`).
+    /// 창이 하나도 없으면 메인 창을 띄운다 — 그 창이 대기 탭을 열고 오류 알림도 거기 뜬다.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        Task { [model] in
+            for url in urls {
+                if let id = await model.open(url) { model.pendingOpenTabIDs.append(id) }
+            }
+            // Dock 클릭처럼 SwiftUI가 기본 메인 창(라이브 탭)을 연다.
+            if !model.tabs.values.contains(where: { $0.window != nil }) { _ = NSApp.delegate?.applicationOpenUntitledFile?(NSApp) }
+        }
     }
 
     /// 앱 전체(설정·기기 창 포함)에 적용되도록 NSApp 수준에서 바꾼다.

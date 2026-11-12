@@ -165,7 +165,9 @@ final class SessionTab: Identifiable {
         let stamp = DateFormatter()
         stamp.locale = Locale(identifier: "en_US_POSIX")
         stamp.dateFormat = "yyyyMMdd-HHmm"
-        panel.nameFieldStringValue = "Prog-\(stamp.string(from: .now)).\(SessionDocument.pathExtension)"
+        // 파일 탭은 그 파일 이름(HAR 탭이면 확장자만 세션으로).
+        let name = fileURL?.deletingPathExtension().lastPathComponent ?? "Prog-\(stamp.string(from: .now))"
+        panel.nameFieldStringValue = "\(name).\(SessionDocument.pathExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let (flows, log, attribution, comments, highlights, numbers) =
             (session.flows, session.connectionLog, processes.attribution, session.comments, session.highlights, session.numbersByID)
@@ -174,6 +176,7 @@ final class SessionTab: Identifiable {
                 try SessionDocument.save(flows: flows, connectionLog: log, processes: attribution, comments: comments,
                                          highlights: highlights, numbers: numbers, to: url)
             }.value
+            model.noteRecent(url)
         } catch {
             model.systemError = String(localized: "세션을 저장하지 못했습니다: \(error.localizedDescription)")
         }

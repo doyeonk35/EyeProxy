@@ -36,6 +36,8 @@ final class AppModel {
     var activeTab: SessionTab?
     /// 실행할 때 여는 라이브 탭. 마지막 필터 규칙을 되살린다.
     @ObservationIgnored private(set) lazy var mainTab = makeTab(fileURL: nil, session: liveSession, processes: processes, restoreSavedRules: true)
+    /// Finder·`open -a`로 연 파일의 탭(`AppDelegate`). 앞 탭의 `MainWindow`가 창을 열고 비운다.
+    var pendingOpenTabIDs: [UUID] = []
     /// 우클릭 ▸ Tools로 열 새 규칙. 해당 도구 창이 꺼내 편집기를 연다.
     var pendingNewRule: PendingNewRule?
     /// 별도 창 편집기(`ToolEditorStyle.window`)로 넘기는 규칙. 키 = 규칙 id.
@@ -354,33 +356,80 @@ final class AppModel {
 
     // MARK: - 세션 파일
 
-    /// 앞 탭의 세션을 연 파일로 교체한다.
-    func openSession() async {
-        guard let tab = activeTab else { return }
+    /// 세션·HAR 파일을 새 파일 탭으로 읽는다(스펙 §4.3). 창은 부르는 쪽이 `openWindow(id: "main", value:)`로 연다.
+    /// 이미 열린 파일이면 그 탭 창을 앞으로 내고 nil. 실패하면 `systemError`에 쓰고 nil — 탭을 만들지 않는다.
+    func open(_ url: URL) async -> UUID? {
+        if bringOpenTab(for: url) { return nil }
+        let session = SessionStore()
+        let processes = ProcessRegistry()
+        do {
+            if url.pathExtension.lowercased() == "har" {
+                try await importHAR(from: url, into: session)
+            } else {
+                let loaded = try await Task.detached { try SessionDocument.load(from: url) }.value
+                session.replace(flows: loaded.flows, connectionLog: loaded.connectionLog, comments: loaded.comments,
+                                highlights: loaded.highlights, numbers: loaded.numbers)
+                processes.replace(loaded.processes)
+            }
+        } catch {
+            systemError = if case FlowImportError.invalidHAR(let reason) = error {
+                String(localized: "HAR 파일을 열지 못했습니다: \(reason)")
+            } else {
+                String(localized: "세션을 열지 못했습니다: \(error.localizedDescription)")
+            }
+            refreshRecent()   // 사라진 파일이면 목록에서 빠진다
+            return nil
+        }
+        // 읽는 동안 같은 파일이 열렸으면(연달아 더블클릭) 그 탭으로.
+        if bringOpenTab(for: url) { return nil }
+        let tab = makeTab(fileURL: url, session: session, processes: processes, restoreSavedRules: false)
+        noteRecent(url)
+        return tab.id
+    }
+
+    private func bringOpenTab(for url: URL) -> Bool {
+        let url = url.standardizedFileURL
+        guard let tab = tabs.values.first(where: { $0.fileURL?.standardizedFileURL == url }) else { return false }
+        tab.window?.makeKeyAndOrderFront(nil)
+        return true
+    }
+
+    /// Open…·Open Recent·끌어다 놓기: 열어서 새 탭 창을 띄운다. 창이 하나도 없으면 오류 알림을 띄울 창을 연다.
+    func open(_ urls: [URL], openWindow: OpenWindowAction) async {
+        for url in urls {
+            if let id = await open(url) { openWindow(id: "main", value: id) }
+        }
+        if systemError != nil, tabs.isEmpty { showMainWindow(openWindow: openWindow) }
+    }
+
+    /// File ▸ Open… ⌘O.
+    func openSession(openWindow: OpenWindowAction) async {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [Self.sessionType] + Self.harTypes
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            if url.pathExtension.lowercased() == "har" {
-                try await importHAR(from: url, into: tab)
-            } else {
-                let loaded = try await Task.detached { try SessionDocument.load(from: url) }.value
-                tab.session.replace(flows: loaded.flows, connectionLog: loaded.connectionLog, comments: loaded.comments,
-                                    highlights: loaded.highlights, numbers: loaded.numbers)
-                tab.processes.replace(loaded.processes)
-            }
-            // 칩·숨김 보기는 처음으로, 필터 막대 규칙은 남긴다(저장된 마지막 설정).
-            var fresh = FlowFilter()
-            (fresh.rules, fresh.combineWithOr) = (tab.filter.rules, tab.filter.combineWithOr)
-            tab.filter = fresh
-            tab.selectedFlowID = nil
-            tab.sidebarSelection = .allFlows
-        } catch FlowImportError.invalidHAR(let reason) {
-            systemError = String(localized: "HAR 파일을 열지 못했습니다: \(reason)")
-        } catch {
-            systemError = String(localized: "세션을 열지 못했습니다: \(error.localizedDescription)")
-        }
+        await open([url], openWindow: openWindow)
+    }
+
+    // MARK: - 최근 파일 (File ▸ Open Recent)
+
+    /// macOS 최근 문서 목록. 개별 삭제 API가 없어 다시 계산할 때 사라진 파일을 거른다.
+    private(set) var recentURLs: [URL] = []
+
+    private static func currentRecent() -> [URL] {
+        NSDocumentController.shared.recentDocumentURLs.filter { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    func refreshRecent() { recentURLs = Self.currentRecent() }
+
+    func noteRecent(_ url: URL) {
+        NSDocumentController.shared.noteNewRecentDocumentURL(url)
+        refreshRecent()
+    }
+
+    func clearRecent() {
+        NSDocumentController.shared.clearRecentDocuments(nil)
+        refreshRecent()
     }
 
     /// Info.plist의 UTExportedTypeDeclarations와 일치해야 한다.

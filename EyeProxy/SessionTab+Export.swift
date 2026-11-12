@@ -58,6 +58,8 @@ extension SessionTab {
                         numbers: Dictionary(uniqueKeysWithValues: items.map { ($0.flow.id, $0.number) }), to: url)
                 }
             }.value
+            // Open Recent에는 다시 열 수 있는 형식만(CSV 제외).
+            if format != .csv { model.noteRecent(url) }
             // Tools ▸ Auto open the Export Directory after exporting.
             if model.settings.autoOpenExportDirectory { NSWorkspace.shared.activateFileViewerSelecting([url]) }
         } catch {

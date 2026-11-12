@@ -29,6 +29,20 @@ struct MainWindow: View {
         }
         // 새로 멈춘 건이 생기면 Breakpoint 창을 앞으로(스펙 §5.1). 관찰은 앱 수준(AppModel.observeBreakpoints)이 한다.
         .onAppear { model.openBreakpointsWindow = { openWindow(id: "breakpoints") } }
+        // Finder·`open -a`로 연 파일의 탭 창을 연다. 앞 탭(없거나 아직 창이 없으면 아무 탭)이 한 번만 가져간다.
+        .onChange(of: model.pendingOpenTabIDs, initial: true) {
+            guard !model.pendingOpenTabIDs.isEmpty, model.activeTab?.window == nil || model.activeTab === tab else { return }
+            let ids = model.pendingOpenTabIDs
+            model.pendingOpenTabIDs = []
+            for id in ids { openWindow(id: "main", value: id) }
+        }
+        // 창에 끌어다 놓은 세션·HAR 파일을 새 탭으로.
+        .dropDestination(for: URL.self) { urls, _ in
+            let files = urls.filter { ["eyeproxy", "har"].contains($0.pathExtension.lowercased()) }
+            guard !files.isEmpty else { return false }
+            Task { await model.open(files, openWindow: openWindow) }
+            return true
+        }
         // 규칙 파일을 읽거나 저장하지 못했으면 알린다. 확인하면 경고를 지운다.
         .onChange(of: model.rules.loadWarnings.count, initial: true) { _, count in
             if count > 0 { model.showRuleWarnings = true }

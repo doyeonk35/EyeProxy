@@ -29,6 +29,34 @@
     <string>https://tving-prog.web.app/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>RgZtpQan1Ne3LilKRJ1x1dnn6vsZnbK+MLyZL7QAr2k=</string>
+    <!-- Finder 더블클릭·open -a로 세션·HAR을 연다(AppDelegate.application(_:open:)). 최근 파일 목록도 이 형식만 받는다. -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Prog Session</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>com.tv.eyeproxy.session</string>
+            </array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>HTTP Archive</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>com.tv.eyeproxy.har</string>
+            </array>
+        </dict>
+    </array>
     <key>UTExportedTypeDeclarations</key>
     <array>
         <dict>
