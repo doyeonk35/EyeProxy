@@ -21,6 +21,15 @@ public final class AppSettings {
     public var layout: FlowLayout { didSet { defaults.set(layout.rawValue, forKey: "eyeproxy.layout") } }
     public var pinnedHosts: [String] { didSet { defaults.set(pinnedHosts, forKey: "eyeproxy.pinnedHosts") } }
     public var hostGroups: [HostGroup] { didSet { defaults.set(try? JSONEncoder().encode(hostGroups), forKey: "eyeproxy.hostGroups") } }
+    /// Restore Tabs at Launch. 기본 켬.
+    public var restoreTabsAtLaunch: Bool { didSet { defaults.set(restoreTabsAtLaunch, forKey: "eyeproxy.restoreTabsAtLaunch") } }
+    /// 마지막으로 열려 있던 탭. nil이면 키를 지운다.
+    public var openTabs: OpenTabs? {
+        didSet {
+            if let openTabs, let data = try? JSONEncoder().encode(openTabs) { defaults.set(data, forKey: "eyeproxy.openTabs") }
+            else { defaults.removeObject(forKey: "eyeproxy.openTabs") }
+        }
+    }
     public var wrapLongLines: Bool { didSet { defaults.set(wrapLongLines, forKey: "eyeproxy.wrapLongLines") } }
     public var appearance: Appearance { didSet { defaults.set(appearance.rawValue, forKey: "eyeproxy.appearance") } }
     public var toolSwitches: ToolSwitches {
@@ -93,6 +102,8 @@ public final class AppSettings {
         layout = defaults.string(forKey: "eyeproxy.layout").flatMap(FlowLayout.init(rawValue:)) ?? .classic
         pinnedHosts = defaults.stringArray(forKey: "eyeproxy.pinnedHosts") ?? []
         hostGroups = defaults.data(forKey: "eyeproxy.hostGroups").flatMap { try? JSONDecoder().decode([HostGroup].self, from: $0) } ?? []
+        restoreTabsAtLaunch = defaults.object(forKey: "eyeproxy.restoreTabsAtLaunch") as? Bool ?? true
+        openTabs = defaults.data(forKey: "eyeproxy.openTabs").flatMap { try? JSONDecoder().decode(OpenTabs.self, from: $0) }
         wrapLongLines = defaults.object(forKey: "eyeproxy.wrapLongLines") as? Bool ?? true
         appearance = defaults.string(forKey: "eyeproxy.appearance").flatMap(Appearance.init(rawValue:)) ?? .system
         mapLocalDefaultFolder = defaults.string(forKey: "eyeproxy.mapLocalDefaultFolder")

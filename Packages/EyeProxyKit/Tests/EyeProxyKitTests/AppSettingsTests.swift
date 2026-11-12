@@ -161,3 +161,15 @@ import Testing
     s.deleteGroup(id: b.id)
     #expect(AppSettings(defaults: d).hostGroups == [a])
 }
+
+@Test @MainActor func openTabsPersistAndRestoreDefaultIsOn() {
+    let d = UserDefaults(suiteName: UUID().uuidString)!
+    let s = AppSettings(defaults: d)
+    #expect(s.restoreTabsAtLaunch)
+    #expect(s.openTabs == nil)
+    let tabs = OpenTabs(tabs: [TabSnapshot(filePath: nil, selection: .host("api.example.com"), filter: FlowFilter())], activeIndex: 0)
+    s.openTabs = tabs
+    #expect(AppSettings(defaults: d).openTabs == tabs)
+    s.openTabs = nil
+    #expect(AppSettings(defaults: d).openTabs == nil)
+}
