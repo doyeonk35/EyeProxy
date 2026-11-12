@@ -77,11 +77,16 @@ Certificate
 
 - **this Mac**: 확인 알림 → 관리자 인증 → 결과 알림. 창을 열지 않는다(Certificate 창이 닫혀 있으면 결과는 메인 창에 뜬다).
 - **iOS·Android·Developments·Firefox**: Certificate 창을 해당 섹션(Android는 탭, 개발 환경은 플랫폼)으로 연다.
-- **Android 섹션**: 탭 세 개.
-  - 실기기: Wi-Fi ▸ 프록시 수동에 Mac IP·포트(복사 버튼) → Chrome으로 `http://prog/ssl` → `Prog-CA.crt` 다운로드 → 설정 ▸ 보안 ▸ 암호화 및 사용자 인증 정보 ▸ 인증서 설치 ▸ CA 인증서. `CA 저장(.crt)…` 버튼도 있다.
-  - 에뮬레이터: Mac 주소는 `10.0.2.2`. adb가 있으면 `adb로 프록시 설정 + CA 복사`(`settings put global http_proxy` + `/sdcard/Download/Prog-CA.crt`로 push)·`adb로 프록시 해제` 버튼, 없으면 복사용 명령을 보여 준다. adb는 `$ANDROID_HOME/platform-tools`, `~/Library/Android/sdk/platform-tools`, PATH 순으로 찾고 **창을 만들 때 한 번만** 찾으므로 adb를 설치했으면 Prog를 다시 켠다.
-  - Android TV: 개발자 옵션 ▸ 네트워크 디버깅 → `adb connect` 버튼(TV IP 입력, `:5555`) → 에뮬레이터와 같은 프록시·CA 복사(호스트는 Mac LAN IP) → `인증서 설치 화면 열기`(CA 설치 인텐트, 리모컨으로 진행).
-  - 아래 주의: Android 7 이상 앱은 사용자 CA를 기본으로 신뢰하지 않으므로 디버그 빌드에 `network_security_config`(XML 복사 버튼)가 필요하다.
+- **Android 섹션**: 탭 세 개(실기기 / 에뮬레이터 / Android TV·Google TV)와, 모든 탭 아래 "디버그 빌드에 CA 넣기" 절.
+  - 실기기: Wi-Fi ▸ 프록시 수동에 Mac IP·포트(복사 버튼) → Chrome으로 `http://prog/ssl` → `Prog-CA.crt` 다운로드 → 설정 ▸ 보안 ▸ 암호화 및 사용자 인증 정보 ▸ 인증서 설치 ▸ CA 인증서. Android 11+는 내려받은 파일을 눌러서는 설치되지 않고 이 설정 화면에서만 된다. `CA 저장(.crt)…` 버튼도 있다.
+  - 에뮬레이터: Mac 주소는 `10.0.2.2`. adb가 있으면 `adb로 프록시 설정 + CA 복사`(`settings put global http_proxy` + `/sdcard/Download/Prog-CA.crt`로 push)·`adb로 프록시 해제` 버튼, 없으면 복사용 명령을 보여 준다. 아래 번들 방법도 된다. adb는 `$ANDROID_HOME/platform-tools`, `~/Library/Android/sdk/platform-tools`, PATH 순으로 찾고 **창을 만들 때 한 번만** 찾으므로 adb를 설치했으면 Prog를 다시 켠다.
+  - **Android TV·Google TV**: TV에는 CA를 **설치하지 않는다**(Android 11+는 설정 화면에서만 설치되는데 Google TV에는 그 화면도 파일 선택기도 없고, 설치해도 앱이 믿지 않는다). 순서는 다섯 단계다: 개발자 옵션 ▸ 네트워크(무선) 디버깅 → `adb connect <TV IP>:<포트>`(버튼, TV IP 입력) → `adb로 프록시 설정`(`settings put global http_proxy <Mac IP>:<포트>`) → 디버그 빌드 실행 → 끝나면 `adb로 프록시 해제`(`:0`). adb가 없으면 connect·설정 두 줄과 해제 한 줄을 복사용 명령으로 보여 준다. **프록시를 켜 둔 채 Prog를 끄면 TV의 모든 네트워크가 끊기므로** 해제 버튼 바로 아래 주황색 경고가 있다.
+  - **디버그 빌드에 CA 넣기**(모든 탭 공통): Android 7 이상 앱은 사용자 CA를 믿지 않고 앱의 `network_security_config`가 허용해야 하며, 스토어(release) 빌드는 볼 수 없어 디버그 빌드가 필요하다(스토어 앱이 깔려 있으면 서명이 달라 디버그 APK를 덮어 깔 수 없다 — 스토어 앱을 지우면 로그인 데이터도 지워진다).
+    - **Prog CA SHA-256 지문**(복사 버튼)과 **CA를 proxy_ca.crt로 저장…** 버튼, 그리고 `app/src/debug/res/raw/proxy_ca.crt`로 복사하는 명령(CA 경로는 실행 때 채워진다).
+    - XML 두 개(각각 복사 버튼): `app/src/debug/res/xml/network_security_config.xml`(system·user·`@raw/proxy_ca`를 믿음)과 `app/src/debug/AndroidManifest.xml`의 `android:networkSecurityConfig`(main 매니페스트에 이미 있으면 `tools:replace`).
+    - 확인: `openssl x509 -in app/src/debug/res/raw/proxy_ca.crt -noout -fingerprint -sha256`의 지문이 창의 SHA-256과 같아야 한다.
+    - CA는 Mac마다 다르므로 커밋하지 않고(`.git/info/exclude`), Prog CA를 Reset하면 다시 복사해 다시 빌드한다.
+    - 진단: logcat에 `Trust anchor for certification path not found`가 보이면 앱이 CA를 믿지 않는 것이다(앱은 스플래시에서 멈출 수 있다). `adb logcat | grep -i "trust anchor"`도 복사할 수 있다.
 - **개발 환경 섹션**: HTTP Clients·NodeJS·Python·Ruby·Java·Docker·Electron·React Native·Flutter·NextJS·Firefox별 절차와 복사 버튼 달린 스니펫. CA 경로는 `~/Library/Application Support/com.tv.eyeproxy/ca/ca.pem`의 절대 경로, 프록시는 `http://127.0.0.1:<포트>`(Docker는 `host.docker.internal`)로 채워진다. 환경변수만으로는 복호화되지 않는다: 복호화할 호스트를 Tools ▸ SSL Proxying List…에 먼저 넣어야 하고(도구 규칙이 가리키는 호스트는 자동), 목록 밖 HTTPS는 원래 인증서로 지나간다. `SSL_CERT_FILE`·`REQUESTS_CA_BUNDLE`·`--cacert`는 시스템 신뢰 저장소를 대체하므로 스니펫은 `/etc/ssl/cert.pem`과 Prog CA를 합친 `~/prog-bundle.pem`을 가리킨다.
 - **`/ssl` 주소**: 기기가 Prog를 프록시로 쓸 때 호스트 `prog`로 응답한다(이전 주소 `http://eyeproxy/ssl`도 계속 동작).
   - `/ssl`: iOS·macOS는 `Prog-CA.mobileconfig`, User-Agent에 Android가 있으면 PEM `Prog-CA.crt`.
@@ -161,6 +166,7 @@ Show ⌘F · New ⌘N · Remove ⇧⌘N · Up ⌘↑ · Down ⌘↓ · On/Off �
 ```
 Favorites
   Pinned                       고정한 도메인
+  Groups                       도메인·앱 묶음(⇧⌘K) — 없으면 안내 글자
 Remote devices                 이 Mac이 아닌 기기 — 없으면 섹션째 숨김
   192.168.0.20             3   기기 이름을 알면 이름
     api.example.com        2
@@ -302,7 +308,8 @@ All
 ```
 File ▸ New Session ⌘T · Open… ⌘O · Open Recent ▸ (최근 파일 · Clear Menu) · Save Session… ⌘S · Clear Session ⌘K · Close ⌘W · Close All ⌥⌘W
 View ▸ Select Next Tab ⇧⌘] · Select Previous Tab ⇧⌘[
-사이드바 항목 우클릭 ▸ Open as New Tab   (앱·기기·도메인·경로)
+사이드바 항목 우클릭 ▸ Open as New Tab   (앱·기기·도메인·경로·그룹)
+File ▸ New Domain or App… ⇧⌘K              (호스트 그룹 만들기)
 ```
 
 - **라이브 탭**: 앱에 라이브 세션이 하나라, 라이브 탭은 모두 같은 캡처를 본다. 어느 탭에서든 Clear·Delete·Highlight·코멘트를 하면 모든 라이브 탭에 반영된다. 필터·선택·정렬·사이드바 선택은 탭마다 따로다. New Session(⌘T)은 모든 요청 보기·빈 필터로 시작하고, 탭 제목은 사이드바에서 고른 항목 이름(없으면 `All Requests`)이다.
@@ -310,7 +317,18 @@ View ▸ Select Next Tab ⇧⌘] · Select Previous Tab ⇧⌘[
 - **파일 탭**: `.eyeproxy`·`.har`를 열면 새 탭이 생기고 제목은 파일 이름이다. 라이브 요청은 들어오지 않고, 여기서 한 Clear·Delete·Highlight는 그 탭에만 적용된다. 저장하지 않고 닫아도 묻지 않는다(Save Session…으로 미리 저장). 이미 열린 파일은 그 탭으로 이동한다.
 - **파일 여는 방법**: Open…(⌘O), Open Recent, 창에 끌어다 놓기, Finder 더블클릭·`open -a`. Open Recent는 macOS 최근 문서 목록이라 열거나 저장할 때 올라가고, 없는 파일을 고르면 오류 알림과 함께 목록에서 빠진다. Clear Menu로 비운다.
 - **Save Session…(⌘S)**: 앞 탭의 세션 전체를 저장한다(라이브 탭이면 라이브 세션 전체). 저장해도 탭은 남는다.
-- **닫기**: Close(⌘W)는 앞 탭, Close All(⌥⌘W)은 macOS 기본 동작이라 Prog 창을 **전부** 닫는다(Compose·Breakpoints·설정 포함). 창이 다 닫혀도 프록시는 계속 돈다 — Dock 아이콘, 상태 막대 메뉴 Show Prog, ⌘T로 다시 연다. 실행하면 라이브 탭 하나로 시작한다.
+- **닫기**: Close(⌘W)는 앞 탭, Close All(⌥⌘W)은 macOS 기본 동작이라 Prog 창을 **전부** 닫는다(Compose·Breakpoints·설정 포함). 창이 다 닫혀도 프록시는 계속 돈다 — Dock 아이콘, 상태 막대 메뉴 Show Prog, ⌘T로 다시 연다. 창을 다 닫고 종료하면 다음 실행은 라이브 탭 하나로 시작한다.
+- **호스트 그룹 탭**: 도메인 여러 개와 앱을 묶어 탭 하나로 본다.
+  - **File ▸ New Domain or App… ⇧⌘K**가 앞 탭 창에 시트를 띄운다. 이름은 비우면 첫 항목 이름에 "외 N"이 붙는다. 도메인 패턴은 여러 줄 입력(줄이나 쉼표로 구분, URL을 붙여 넣으면 호스트만)이고, 아래 목록에서 이 탭 세션의 도메인·앱을 검색해 체크로 고를 수도 있다. `가져오기…`는 호스트 목록 파일(아래 절)의 패턴을 더한다. 시트를 열 때 사이드바 선택이 도메인이면 그 호스트를, 앱이면 그 앱을 미리 채운다.
+  - 패턴 문법은 SSL Proxying List와 같다: `*`는 임의 문자열, `?`는 한 글자, 대소문자 무시(`api.example.com`, `*.example.com`, `v?.example.net`). 요청이 그룹에 맞는 조건은 **호스트가 패턴 중 하나에 맞거나 귀속된 앱이 목록에 있을 때(OR)**다. 원격 기기의 요청은 귀속 앱이 없어 도메인으로만 맞는다.
+  - `Favorites에 저장`(기본 켬)을 끄면 이 탭에서만 쓰고 저장하지 않는다. **Open**은 앞 탭과 같은 세션을 보는 새 탭을 열고 그 그룹을 고른 상태로 둔다(파일 탭이면 같은 파일). 항목이 하나도 없으면 비활성이다. 탭 제목은 그룹 이름이다.
+  - **사이드바 Favorites ▸ Groups**는 Pinned 아래에 저장한 그룹을 보인다(배지는 그룹에 맞는 요청 수). 우클릭: **Open as New Tab** · **Edit…**(같은 시트, 저장하면 그 그룹을 보는 탭이 새 정의로 다시 거른다) · **Enable SSL Proxying**(그룹의 도메인 패턴을 SSL 목록에 더함, `*`가 있으면 확인 알림) · **Export…**(호스트 목록 파일로 저장, 앱은 넣지 않는다) · **Delete**(확인 없음, 이미 그 그룹을 보는 탭은 그대로). 앱만 든 그룹은 Enable·Export가 꺼진다. 같은 탭에서 사이드바의 다른 항목을 누르면 출처가 그 항목으로 바뀐다.
+  - 그룹은 설정(`eyeproxy.hostGroups`)에 저장된다.
+- **탭 복원**: 설정 General ▸ **Restore Tabs at Launch**(기본 켬).
+  - 종료가 확정될 때(종료 확인 알림을 통과한 뒤) 열린 탭을 한 번 저장한다. 탭마다 라이브인지 파일(경로)인지, 사이드바 선택(그룹은 정의를 통째로), 필터 규칙과 AND/OR, 앞 탭이 몇 번째인지를 저장한다. 칩·숨김 포함·정렬·선택·펼친 도메인은 저장하지 않는다. 크래시·강제 종료 때는 저장하지 않으므로 그 전 저장본이 남는다. 종료 알림에서 취소하면 저장본은 바뀌지 않는다.
+  - 복원하면 앞 창의 탭 순서대로, 다른 창의 탭은 그 뒤에 붙어 **한 창**에 모인다. 첫 탭은 늘 라이브 탭이다. 저장본에 라이브 탭이 없으면(파일 탭만 있었거나 창을 다 닫고 종료) 라이브 탭은 마지막으로 저장된 필터 규칙으로 시작한다. 저장한 그룹을 지웠더라도 그 그룹을 보던 탭은 저장해 둔 정의로 복원된다.
+  - 파일 탭은 파일을 다시 읽어 연다. 파일이 사라졌거나 읽을 수 없으면 그 탭만 알림 없이 건너뛰고 Open Recent도 건드리지 않는다. 파일 더블클릭으로 실행해도 복원은 그대로 하고, 연 파일은 그 뒤에 새 탭으로 붙는다.
+  - 끄면 라이브 탭 하나로 시작한다(마지막 라이브 탭 필터 규칙은 그대로 쓴다).
 - Show Tab Bar·Show All Tabs·Move Tab to New Window·Merge All Windows·탭 우클릭은 macOS 기본 메뉴다. 뒤에 있는 탭은 목록을 다시 계산하지 않고 앞으로 나올 때 한 번 계산한다.
 
 ### 원격 기기 이름 자동 찾기
@@ -321,11 +339,35 @@ View ▸ Select Next Tab ⇧⌘] · Select Previous Tab ⇧⌘[
 |---|---|---|---|
 | `_airplay._tcp` | Apple TV, Mac | 서비스 이름 | TXT `model` |
 | `_companion-link._tcp` | iPhone, iPad, Apple TV | 서비스 이름 | TXT `rpMd` |
-| `_googlecast._tcp` | Chromecast, Google TV | TXT `fn` | 없음 |
+| `_googlecast._tcp` | Chromecast, Google TV | TXT `fn` | TXT `md` → Google TV·Android TV |
 
-- 우선순위는 **직접 붙인 이름 > 자동 이름 > IP**. 직접 붙인 이름을 지우면 자동 이름이 보이고, 이름 칸의 안내 글자도 자동 이름이다. 자동 종류는 종류가 "알 수 없음"일 때만 채운다(`AppleTV`·`iPhone`·`iPad`로 시작하는 모델 값).
+- 우선순위는 **직접 붙인 이름 > 자동 이름 > IP**. 직접 붙인 이름을 지우면 자동 이름이 보이고, 이름 칸의 안내 글자도 자동 이름이다. 자동 종류는 종류가 "알 수 없음"일 때만 채운다(`AppleTV`·`iPhone`·`iPad`로 시작하는 모델 값, Cast `md`).
+- Cast `md`가 "Google TV"를 포함하거나 "Chromecast"로 시작하면 **Google TV**, "Google Home"·"Google Nest"·"Nest"로 시작하면(스피커·디스플레이) 비우고, 그 밖은 **Android TV**다. **Android 폰**은 Cast 광고를 내지 않으므로 설정 ▸ 연결된 기기의 종류에서 직접 고른다.
 - 이름은 사이드바 Remote devices, Client 열, Export, 설정 ▸ 연결된 기기에 쓰이고 `devices.json`에도 저장돼 기기가 꺼져도 남는다. 같은 IP에서 다른 이름이 광고되면 새 이름으로 바꾼다.
 - 루프백이 아닌 기기가 **처음 트래픽을 보낼 때**(또는 실행 때 `devices.json`에 원격 기기가 있으면) 찾기를 시작해 앱이 도는 동안 계속 듣는다. 그때 macOS **로컬 네트워크 권한** 창이 한 번 뜬다. 이 Mac 트래픽만 쓰면 뜨지 않는다. 거부하거나 이름을 알리지 않는 기기는 지금처럼 IP로 보이고 알림은 없다.
+- **MAC으로 알아보기**: 같은 네트워크(같은 Wi-Fi·유선)의 기기는 ARP 표의 MAC(`arp -a`와 같은 표를 시스템 호출로 읽는다)으로 알아본다. 공유기가 IP를 바꿔도 직접 붙인 이름·종류·자동 이름이 새 IP로 따라간다. 연결된 기기 행에 `주소 · MAC`이 보인다.
+  - 다른 기기가 옛 IP를 받으면 새 기록이 생기고, 옛 기록은 이름과 MAC을 그대로 가진 채 회색 **"이전"** 표시가 붙는다. 그 기기가 다시 나타나면 새 주소로 옮겨 가 이름이 되살아난다.
+  - 공유기·VPN 너머(다른 서브넷)의 기기는 ARP 항목이 없어 IP로 알아본다. 프라이빗 Wi-Fi 주소가 **주기적으로 바뀌는** 설정(iOS 18 회전 주소, Android 비영구 임의화)이면 MAC이 바뀔 때 새 기기로 보인다. 네트워크마다 고정된 임의 MAC은 같은 Wi-Fi에서 바뀌지 않으므로 괜찮다.
+  - 이 macOS 버전에서는 로컬 네트워크 권한이 없으면 ARP 표가 비어 올 수 있다(그러면 MAC 없이 IP로 알아본다). 권한을 허용한 뒤에 MAC이 보이는지 설정 ▸ 연결된 기기에서 확인한다.
+- **이 Mac의 LAN IP**: 다른 기기의 프록시 설정에 Mac LAN IP를 넣거나 Mac 브라우저가 LAN IP 프록시로 보낸 트래픽은 Remote devices에 이 Mac의 **컴퓨터 이름**과 노트북 아이콘으로 보인다(종류 "이 Mac"). 컴퓨터 이름은 시스템에서 바로 읽으므로 권한 창이 뜨지 않는다.
+
+## 호스트 목록 파일(SSL Proxying 묶음)
+
+SSL Proxying List의 호스트 패턴을 파일로 주고받는다. 형식은 UTF-8 평문, 한 줄에 패턴 하나다.
+
+```
+# Prog host list — 한 줄에 호스트 패턴 하나. *는 임의 문자열, ?는 한 글자.
+api.example.com
+*.example.com
+v?.example.net
+```
+
+- **해석**: 앞뒤 공백을 지우고 빈 줄과 `#`로 시작하는 줄은 무시한다(CRLF·BOM도 읽는다). `://`가 있는 줄은 URL로 보고 호스트만 쓰고 끝의 `:포트`는 뗀다. 소문자로 바꾸고 중복은 처음 나온 순서대로 뺀다. 허용 글자는 `a-z 0-9 . - _ * ?`이고 그 밖의 글자가 있는 줄은 버린 뒤 개수만 알려 준다. 1 MB보다 큰 파일은 읽지 않는다. 파일 이름(확장자 뺀 것)이 그룹 이름이 된다.
+- **Proxyman JSON**: 첫 글자가 `{`면 Proxyman SSL 목록 JSON(`{"nodes":[…]}`)으로 읽는다(`.json`·`.config`도 고를 수 있다).
+- **가져오기**: 설정 ▸ SSL Proxying ▸ `가져오기…`. 확인 알림이 "호스트 패턴 N개(새로 M개)를 SSL Proxying List에 더할까요?"를 묻고, 버린 줄 수와 `*`가 있으면 "모든 HTTPS를 복호화합니다" 경고를 같이 보인다. `호스트 그룹으로도 저장`(기본 켬)을 두면 Favorites ▸ Groups에도 생긴다. 확인하면 기존 목록 뒤에 새 패턴만 붙이고(Append, 덮어쓰기는 없다) SSL Proxying을 켜서 서버에 적용한다.
+- **내보내기**: 설정 ▸ SSL Proxying ▸ `내보내기…`는 지금 목록 전체를 위 형식(머리 주석 한 줄)으로 `ssl-proxying-list.txt`에 저장한다. 그룹 우클릭 ▸ Export…는 그 그룹의 도메인 패턴을 `<그룹 이름>.txt`로 저장한다. 내보낸 파일을 다시 가져오면 "새로 0개"다.
+- **팀 공용 목록**은 레포 밖에서 파일로 주고받는다. 레포에는 회사 호스트 목록을 넣지 않는다.
+- **기기·앱 한 번에 켜기**: 사이드바 Remote devices의 기기나 앱을 우클릭 ▸ **Enable SSL Proxying for All Domains**는 이 탭 세션에서 그 기기·앱이 쓴 모든 호스트를 SSL 목록에 더하고 복호화를 켠다(사이드바 거르기와 무관).
 
 ## Export·HAR 열기
 
@@ -369,6 +411,7 @@ struct ExportItem { flow: Flow; number: Int; comment: String?; highlight: FlowHi
 | General | Port Number | 9090 | 1024–65535. 바꾸면 "재시작 후 적용" — **재시작** 버튼으로 서버를 다시 연다 |
 | General | Auto Override System Proxy Settings at Launch | 끔 | 켜면 실행 때 서버가 뜬 뒤 "이 Mac 캡처"를 한 번 켠다(복원 알림이 떠 있거나 서버가 실패하면 건너뜀) |
 | General | Auto Start Recording Traffic at Launch | 켬 | 끄면 기록 멈춤(▶, ` \| Pause`)으로 시작 |
+| General | Restore Tabs at Launch | 켬 | 종료할 때 열린 탭(라이브·파일, 사이드바 선택, 필터 규칙, 앞 탭)을 다음 실행에 한 창으로 복원(세션 탭 절) |
 | General | 루트 인증서 카드 | — | CA 이름·유효기간·이 Mac 로그인 키체인 설치 여부. **Open Certificate…**(Certificate 창 › 이 Mac), **Generate new…**(Reset all Prog Certificates…와 같다, 확인 알림) |
 | Appearance | Font Size | 13 | 11~16. 상세 Body·JSON·Raw 본문과 표 글자 |
 | Appearance | Tab Width | 2 Spaces | 2 / 4. Body Pretty·JSON 탭 들여쓰기(Treeview는 그대로) |
@@ -382,7 +425,7 @@ struct ExportItem { flow: Flow; number: Int; comment: String?; highlight: FlowHi
 | Tools | Request Timeout | 30 seconds | Repeat 타임아웃과 Compose 기본 타임아웃. 0 = 없음 |
 | Tools | Add --proxy flag into cURL command | 끔 | cURL 복사(메뉴·우클릭·상세 cURL 버튼)에 `--proxy 'http://<IP>:<포트>'`(본문 앞). IP·포트는 툴바 캡슐과 같다 |
 | Tools | Auto open the Export Directory after exporting | 끔 | Export·Save Requests 뒤 Finder에서 파일을 보여 준다 |
-| SSL Proxying | SSL Proxying 사용, 호스트 패턴 | — | 예전과 같다(Tools ▸ SSL Proxying List…) |
+| SSL Proxying | SSL Proxying 사용, 호스트 패턴, 가져오기…·내보내기… | — | 목록은 예전과 같다(Tools ▸ SSL Proxying List…). 가져오기·내보내기는 호스트 목록 파일 절 |
 | Bypass | 시스템 프록시 Bypass 호스트 | — | 예전과 같다. Mac 캡처를 다시 켤 때 적용 |
 | Advanced | Restore to previous HTTP/HTTPS Proxy when Prog is closed | 켬(고정) | Prog는 늘 복원한다. 켜진 채 비활성 |
 | Advanced | Show Update Notification at Launch | Sparkle 값 | Sparkle 자동 확인(`SUEnableAutomaticChecks`) 그 자체. 새로 설치하면 Sparkle 권한 질문에 답할 때까지 꺼짐으로 보인다 |
@@ -415,6 +458,7 @@ struct ExportItem { flow: Flow; number: Int; comment: String?; highlight: FlowHi
 | ⇧⌘R | Restart Server | |
 | ⌘D | Certificate 창 | |
 | ⌘T | New Session(새 라이브 탭) | |
+| ⇧⌘K | New Domain or App…(호스트 그룹 만들기) | |
 | ⌘O | Open…(.eyeproxy·.har, 새 파일 탭) | |
 | ⌘S | Save Session… | |
 | ⌘W / ⌥⌘W | Close / Close All | |
@@ -535,9 +579,13 @@ Proxyman 등 다른 프록시가 9090을 쓰고 있으면 시작에 실패한다
 
 ## 알려진 제한(세션 탭·기기 이름)
 
-- 탭은 다시 실행할 때 복원되지 않는다(실행하면 라이브 탭 하나).
 - HAR에서 되살린 클라이언트 이름이 Client 값이라, 가져온 요청의 IP Address 필터는 IP가 아니라 이름에 걸린다.
-- 이름을 알리지 않는 기기는 IP로 보인다. 직접 붙인 이름은 IP에 묶여 있어, 공유기가 IP를 바꾸면 다시 붙여야 한다. 자동 이름은 IPv4 주소만 맞춘다.
+- 이름을 알리지 않는 기기는 IP로 보인다. 자동 이름과 MAC 알아보기는 IPv4 주소만 맞춘다.
+- 탭 복원은 여러 창의 배치까지 되살리지 않고 한 창으로 모은다.
+- 다른 서브넷(공유기·VPN 너머)이나 주기적으로 바뀌는 임의 MAC 기기는 IP로 알아본다.
+- 옛 버전 Prog가 `devices.json`을 다시 저장하면 MAC과 Android 종류가 빠진다(MAC은 다시 배우고 직접 고른 Android 종류는 "알 수 없음"이 된다).
+- 호스트 그룹에 원격 기기를 넣을 수 없다. 기기와 도메인을 함께 거르려면 그룹 탭에서 필터 막대의 Client 규칙을 쓴다.
+- SSL 목록은 더하기만 되고 가져온 파일 단위로 빼기는 없다(목록에서 하나씩 지운다). Exclude List와 항목별 켜기·끄기도 아직 없다.
 - Close All(⌥⌘W)은 Compose·Breakpoints·설정 창도 닫는다(보내지 않은 Compose 편집은 사라진다).
 - 파일을 받으며 시작하면 SwiftUI가 여는 Breakpoints 창을 닫는데 잠깐 보일 수 있고, 새 탭이 잠깐 별도 창으로 깜빡일 수 있다.
 - 개발 빌드(Debug)가 문서 종류를 선언해, 이 Info.plist가 든 릴리스가 나오기 전에는 Finder가 Debug 빌드를 `.eyeproxy` 기본 앱으로 고를 수 있다.
