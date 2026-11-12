@@ -94,6 +94,8 @@ public final class DeviceRegistry {
     /// 광고를 기억하고, 그 주소의 기기가 있으면 자동 이름·종류를 붙인다. 기기 정보가 바뀌면 true.
     @discardableResult
     public func applyDiscovered(_ found: DiscoveredDevice) -> Bool {
+        // 이 Mac(루프백)은 "이 Mac"으로 둔다.
+        guard !FlowFilter.isLoopback(found.address) else { return false }
         discovered[found.address] = found
         guard let i = devices.firstIndex(where: { $0.address == found.address }) else { return false }
         return applyDiscovery(found, to: &devices[i])
@@ -104,6 +106,15 @@ public final class DeviceRegistry {
         device.autoName = found.name
         if device.kind == .unknown, let kind = found.kind { device.kind = kind }
         return device != before
+    }
+
+    /// 다른 기기에서 온 트래픽이 있었는지(기기 찾기 시작 조건, 스펙 §3).
+    /// 루프백·주소 없음(`unknown`)·이 Mac의 주소는 빼고, 이 Mac의 주소는 후보가 있을 때만 묻는다.
+    public func hasRemoteDevice(ownAddresses: () -> [String]) -> Bool {
+        let candidates = devices.filter { !FlowFilter.isLoopback($0.address) && !$0.address.isEmpty && $0.address != "unknown" }
+        guard !candidates.isEmpty else { return false }
+        let own = Set(ownAddresses())
+        return candidates.contains { !own.contains($0.address) }
     }
 
     public func save() throws {

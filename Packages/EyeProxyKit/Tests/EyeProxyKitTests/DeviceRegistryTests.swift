@@ -95,3 +95,23 @@ import EyeProxyCore
     try old.write(to: url, atomically: true, encoding: .utf8)
     #expect(DeviceRegistry(storageURL: url).devices.first?.autoName == nil)
 }
+
+@Test @MainActor func loopbackDiscoveryKeepsThisMacName() throws {
+    let r = DeviceRegistry(storageURL: nil)
+    r.observe(.requestStarted(.fixture(client: "127.0.0.1", decrypted: false)))
+    #expect(r.applyDiscovered(.init(address: "127.0.0.1", name: "테스트 Mac", kind: nil)) == false)
+    #expect(r.devices.first?.displayName == "이 Mac")
+}
+
+@Test @MainActor func remoteDeviceExcludesUnknownAndOwnAddresses() throws {
+    let r = DeviceRegistry(storageURL: nil)
+    var asked = false
+    r.observe(.requestStarted(.fixture(client: "127.0.0.1", decrypted: false)))
+    #expect(r.hasRemoteDevice(ownAddresses: { asked = true; return [] }) == false)
+    #expect(asked == false)
+    r.observe(.requestStarted(.fixture(client: "unknown", decrypted: false)))
+    r.observe(.requestStarted(.fixture(client: "192.0.2.5", decrypted: false)))
+    #expect(r.hasRemoteDevice(ownAddresses: { ["192.0.2.5"] }) == false)
+    r.observe(.requestStarted(.fixture(client: "192.0.2.6", decrypted: false)))
+    #expect(r.hasRemoteDevice(ownAddresses: { ["192.0.2.5"] }))
+}

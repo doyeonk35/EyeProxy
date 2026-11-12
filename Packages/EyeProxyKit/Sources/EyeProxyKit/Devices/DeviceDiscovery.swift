@@ -29,6 +29,13 @@ public final class DeviceDiscovery {
         return (trimmed, model.flatMap(kind(forModel:)))
     }
 
+    /// `.changed`는 TXT가 자주 바뀌어 온다. 찾은 이름·종류가 바뀌었을 때만 다시 연결한다.
+    public nonisolated static func needsResolve(serviceType: String, old: (name: String, txt: [String: String]), new: (name: String, txt: [String: String])) -> Bool {
+        let a = parse(serviceType: serviceType, serviceName: old.name, txt: old.txt)
+        let b = parse(serviceType: serviceType, serviceName: new.name, txt: new.txt)
+        return a?.name != b?.name || a?.kind != b?.kind
+    }
+
     public nonisolated static func normalize(_ address: String) -> String {
         address.hasPrefix("::ffff:") ? String(address.dropFirst(7)) : address
     }
@@ -50,7 +57,9 @@ public final class DeviceDiscovery {
             browser.browseResultsChangedHandler = { [weak self] _, changes in
                 let results = changes.compactMap { change -> NWBrowser.Result? in
                     switch change {
-                    case .added(let r), .changed(old: _, new: let r, flags: _): r
+                    case .added(let r): r
+                    case .changed(old: let old, new: let new, flags: _):
+                        if let o = DeviceDiscovery.service(old), let n = DeviceDiscovery.service(new), !DeviceDiscovery.needsResolve(serviceType: type, old: o, new: n) { nil } else { new }
                     default: nil
                     }
                 }
@@ -61,11 +70,16 @@ public final class DeviceDiscovery {
         }
     }
 
-    private func resolve(_ result: NWBrowser.Result, type: String) {
-        guard case .service(let serviceName, _, _, _) = result.endpoint else { return }
+    private nonisolated static func service(_ result: NWBrowser.Result) -> (name: String, txt: [String: String])? {
+        guard case .service(let serviceName, _, _, _) = result.endpoint else { return nil }
         var txt: [String: String] = [:]
         if case .bonjour(let record) = result.metadata { txt = record.dictionary }
-        guard let parsed = Self.parse(serviceType: type, serviceName: serviceName, txt: txt) else { return }
+        return (serviceName, txt)
+    }
+
+    private func resolve(_ result: NWBrowser.Result, type: String) {
+        guard let service = Self.service(result),
+              let parsed = Self.parse(serviceType: type, serviceName: service.name, txt: service.txt) else { return }
 
         // 프록시는 0.0.0.0에 묶여 있어 기기 주소는 늘 IPv4다. IPv6로 연결되면 맞출 수 없다.
         let params = NWParameters.tcp

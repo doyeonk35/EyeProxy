@@ -9,7 +9,6 @@ struct MainWindow: View {
     @State private var searchFindID = UUID()
 
     var body: some View {
-        @Bindable var model = model
         VStack(spacing: 0) {
             split
             Divider()
@@ -38,7 +37,7 @@ struct MainWindow: View {
         }
         // 창에 끌어다 놓은 세션·HAR 파일을 새 탭으로.
         .dropDestination(for: URL.self) { urls, _ in
-            let files = urls.filter { ["eyeproxy", "har"].contains($0.pathExtension.lowercased()) }
+            let files = urls.filter { $0.isFileURL && ["eyeproxy", "har"].contains($0.pathExtension.lowercased()) }
             guard !files.isEmpty else { return false }
             Task { await model.open(files, openWindow: openWindow) }
             return true
@@ -47,7 +46,9 @@ struct MainWindow: View {
         .onChange(of: model.rules.loadWarnings.count, initial: true) { _, count in
             if count > 0 { model.showRuleWarnings = true }
         }
-        .alert("규칙 파일 경고", isPresented: $model.showRuleWarnings) {
+        // 앱 전체 알림이므로 앞 탭 창 하나에서만 띄운다.
+        .alert("규칙 파일 경고", isPresented: Binding(get: { model.showRuleWarnings && model.activeTab === tab },
+                                                set: { model.showRuleWarnings = $0 })) {
             Button("확인") { model.rules.clearWarnings() }
         } message: {
             Text(model.rules.loadWarnings.joined(separator: "\n"))

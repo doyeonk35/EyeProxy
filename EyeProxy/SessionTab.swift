@@ -14,6 +14,8 @@ final class SessionTab: Identifiable {
     let processes: ProcessRegistry
     /// nil = 라이브 탭.
     let fileURL: URL?
+    /// 실행 탭만 필터 규칙을 저장한다(스펙 §4.1). 다른 탭의 규칙은 그 탭에만 남는다.
+    let persistsRules: Bool
     var isLive: Bool { fileURL == nil }
 
     /// 라이브: 사이드바에서 고른 항목 이름(없거나 All Requests면 "All Requests"). 파일: 파일 이름.
@@ -119,6 +121,7 @@ final class SessionTab: Identifiable {
         self.session = session
         self.processes = processes
         self.fileURL = fileURL
+        persistsRules = restoreSavedRules
     }
 
     func clear() {
@@ -242,7 +245,7 @@ final class SessionTab: Identifiable {
 
     /// 규칙이 바뀌었다: 저장하고, 가벼운 규칙만 바뀌었으면 바로, 본문 규칙이 바뀌었으면 디바운스 뒤 백그라운드에서 판정한다(스펙 §4 성능).
     private func filterRulesChanged() {
-        model.settings.filterRules = filter
+        if persistsRules { model.settings.filterRules = filter }
         rulesDebounce?.cancel()
         rulesDebounce = nil
         let body = filter.activeBodyRules

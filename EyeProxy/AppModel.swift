@@ -314,7 +314,7 @@ final class AppModel {
     }
 
     private func startDiscoveryIfRemoteDeviceSeen() {
-        guard discovery == nil, devices.devices.contains(where: { !FlowFilter.isLoopback($0.address) && !$0.address.isEmpty }) else { return }
+        guard discovery == nil, devices.hasRemoteDevice(ownAddresses: { lanAddresses }) else { return }
         let found = DeviceDiscovery { [weak self] device in
             guard let self, devices.applyDiscovered(device) else { return }
             try? devices.save()
@@ -413,7 +413,7 @@ final class AppModel {
         for url in urls {
             if let id = await open(url) { openWindow(id: "main", value: id) }
         }
-        if systemError != nil, tabs.isEmpty { showMainWindow(openWindow: openWindow) }
+        if systemError != nil, !tabs.values.contains(where: { $0.window != nil }) { showMainWindow(openWindow: openWindow) }
     }
 
     /// File ▸ Open… ⌘O.

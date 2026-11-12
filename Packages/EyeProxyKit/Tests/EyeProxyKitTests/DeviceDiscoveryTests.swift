@@ -16,3 +16,10 @@ import Testing
     #expect(DeviceDiscovery.parse(serviceType: "_googlecast._tcp", serviceName: "Google-TV-0000", txt: [:]) == nil)
 }
 @Test func normalizesMappedIPv4() { #expect(DeviceDiscovery.normalize("::ffff:192.0.2.10") == "192.0.2.10") }
+@Test func txtOnlyChangeDoesNotResolveAgain() {
+    let type = "_companion-link._tcp"
+    let old = (name: "테스트 iPhone", txt: ["rpMd": "iPhone15,2", "rpBA": "00:00:00:00:00:01"])
+    #expect(!DeviceDiscovery.needsResolve(serviceType: type, old: old, new: (old.name, ["rpMd": "iPhone15,2", "rpBA": "00:00:00:00:00:02"])))
+    #expect(DeviceDiscovery.needsResolve(serviceType: type, old: old, new: ("거실 iPhone", old.txt)))
+    #expect(DeviceDiscovery.needsResolve(serviceType: type, old: old, new: (old.name, ["rpMd": "iPad14,1"])))
+}
