@@ -188,7 +188,7 @@ All
 
 창 맨 아래 한 줄.
 
-- **Clear**: 세션 지우기(⌘K)와 같다.
+- **Clear**: Clear Session(⌘K)와 같다.
 - **Filter**: 필터 막대 보이기·숨기기. 막대가 보이거나 켜진 규칙이 있으면 강조된다.
 - **Auto Select**: View ▸ Auto Select the Latest Request와 같은 스위치. 켜면 강조된다.
 - 가운데 `선택/보이는 행 rows selected`(예: `1/106 rows selected`). 필터에 가려진 선택은 세지 않는다.
@@ -222,10 +222,10 @@ All
 **Delete / Delete All**
 - **Flow ▸ Delete**(⌫): 선택한 행을 지운다. 목록에 포커스가 있을 때만 켜지므로 필터 막대·코멘트 시트에서 ⌫는 글자만 지운다. 지운 뒤 선택은 화면에서 바로 아래 행(없으면 위)으로. 필터에 가려 안 보이는 선택 행은 지우지 않는다. 우클릭 ▸ Delete는 우클릭한 행(선택 안에서 우클릭하면 선택 전체)을 지운다.
 - **Flow ▸ Delete All**: **보이는 행만** 지운다(칩·필터 막대·사이드바가 걸러 낸 행은 남김). 숨겨진 행이 있을 때만 "보이는 N개를 지웁니다. 숨겨진 M개는 남습니다." 확인을 받는다 — Block List로 숨긴 행(툴바 눈 토글 꺼짐)만 있어도 숨겨진 행으로 센다. 메인 창이 앞에 있고 보이는 행이 있을 때만 켜진다.
-- 전부 지우기는 예전처럼 File ▸ 세션 지우기(⌘K, 툴바 지우기 버튼, 하단 바 Clear). 지운 흐름의 코멘트·Highlight·프로세스 귀속도 같이 지운다. 되돌리기(⌘Z)는 없다.
+- 전부 지우기는 예전처럼 File ▸ Clear Session(⌘K, 툴바 지우기 버튼, 하단 바 Clear). 지운 흐름의 코멘트·Highlight·프로세스 귀속도 같이 지운다. 되돌리기(⌘Z)는 없다.
 - Add/Edit Comment…는 한 행만 선택했을 때 켜진다.
 
-**Auto Select**: View ▸ Auto Select the Latest Request 또는 하단 바 Auto Select(기본 끔, 앱 설정에 저장). 켜면 **보이는 목록**의 가장 최근 요청(시작 시각 기준, 정렬과 무관)을 선택하고 그 행으로 스크롤한다 — 상세도 따라 바뀐다. 기본 정렬에서는 최신이 맨 위라 스크롤이 거의 없다. 필터에 걸려 안 보이는 요청은 따라가지 않고, 필터를 바꾸면 그 필터의 최신 행으로 옮긴다. 사용자가 클릭·키보드로 다른 행을 고르면 **꺼진다**(메뉴 체크도 꺼짐, 보던 행을 빼앗지 않기 위해). Delete·세션 열기처럼 앱이 선택을 옮길 때는 꺼지지 않는다.
+**Auto Select**: View ▸ Auto Select the Latest Request 또는 하단 바 Auto Select(기본 끔, 앱 설정에 저장). 켜면 **보이는 목록**의 가장 최근 요청(시작 시각 기준, 정렬과 무관)을 선택하고 그 행으로 스크롤한다 — 상세도 따라 바뀐다. 기본 정렬에서는 최신이 맨 위라 스크롤이 거의 없다. 필터에 걸려 안 보이는 요청은 따라가지 않고, 필터를 바꾸면 그 필터의 최신 행으로 옮긴다. 사용자가 클릭·키보드로 다른 행을 고르면 **꺼진다**(메뉴 체크도 꺼짐, 보던 행을 빼앗지 않기 위해). Delete·파일 열기처럼 앱이 선택을 옮길 때는 꺼지지 않는다.
 
 ## 상세 패널
 
@@ -295,6 +295,38 @@ All
 - **목록·사이드바, 또는 포커스 없음**: 필터 막대를 보이고 규칙 칸에 포커스를 준다(목록 거르기).
 - **찾기 막대·검색칸에 입력 중**: 그 자리에 머문다(다른 곳으로 튀지 않는다).
 
+## 세션 탭
+
+메인 창은 Proxyman처럼 한 창 안의 **탭**으로 여러 개를 연다(macOS 창 탭).
+
+```
+File ▸ New Session ⌘T · Open… ⌘O · Open Recent ▸ (최근 파일 · Clear Menu) · Save Session… ⌘S · Clear Session ⌘K · Close ⌘W · Close All ⌥⌘W
+View ▸ Select Next Tab ⇧⌘] · Select Previous Tab ⇧⌘[
+사이드바 항목 우클릭 ▸ Open as New Tab   (앱·기기·도메인·경로)
+```
+
+- **라이브 탭**: 앱에 라이브 세션이 하나라, 라이브 탭은 모두 같은 캡처를 본다. 어느 탭에서든 Clear·Delete·Highlight·코멘트를 하면 모든 라이브 탭에 반영된다. 필터·선택·정렬·사이드바 선택은 탭마다 따로다. New Session(⌘T)은 모든 요청 보기·빈 필터로 시작하고, 탭 제목은 사이드바에서 고른 항목 이름(없으면 `All Requests`)이다.
+- **Open as New Tab**: 같은 세션을 보는 새 탭을 열고 그 항목을 고른 상태로 둔다. 파일 탭에서 고르면 같은 파일 세션을 본다.
+- **파일 탭**: `.eyeproxy`·`.har`를 열면 새 탭이 생기고 제목은 파일 이름이다. 라이브 요청은 들어오지 않고, 여기서 한 Clear·Delete·Highlight는 그 탭에만 적용된다. 저장하지 않고 닫아도 묻지 않는다(Save Session…으로 미리 저장). 이미 열린 파일은 그 탭으로 이동한다.
+- **파일 여는 방법**: Open…(⌘O), Open Recent, 창에 끌어다 놓기, Finder 더블클릭·`open -a`. Open Recent는 macOS 최근 문서 목록이라 열거나 저장할 때 올라가고, 없는 파일을 고르면 오류 알림과 함께 목록에서 빠진다. Clear Menu로 비운다.
+- **Save Session…(⌘S)**: 앞 탭의 세션 전체를 저장한다(라이브 탭이면 라이브 세션 전체). 저장해도 탭은 남는다.
+- **닫기**: Close(⌘W)는 앞 탭, Close All(⌥⌘W)은 macOS 기본 동작이라 Prog 창을 **전부** 닫는다(Compose·Breakpoints·설정 포함). 창이 다 닫혀도 프록시는 계속 돈다 — Dock 아이콘, 상태 막대 메뉴 Show Prog, ⌘T로 다시 연다. 실행하면 라이브 탭 하나로 시작한다.
+- Show Tab Bar·Show All Tabs·Move Tab to New Window·Merge All Windows·탭 우클릭은 macOS 기본 메뉴다. 뒤에 있는 탭은 목록을 다시 계산하지 않고 앞으로 나올 때 한 번 계산한다.
+
+### 원격 기기 이름 자동 찾기
+
+설정 ▸ 연결된 기기에서 직접 붙인 이름 외에, 같은 네트워크의 Bonjour 광고에서 이름을 찾아 기기에 붙인다.
+
+| 광고 | 주로 알리는 기기 | 이름 | 종류 |
+|---|---|---|---|
+| `_airplay._tcp` | Apple TV, Mac | 서비스 이름 | TXT `model` |
+| `_companion-link._tcp` | iPhone, iPad, Apple TV | 서비스 이름 | TXT `rpMd` |
+| `_googlecast._tcp` | Chromecast, Google TV | TXT `fn` | 없음 |
+
+- 우선순위는 **직접 붙인 이름 > 자동 이름 > IP**. 직접 붙인 이름을 지우면 자동 이름이 보이고, 이름 칸의 안내 글자도 자동 이름이다. 자동 종류는 종류가 "알 수 없음"일 때만 채운다(`AppleTV`·`iPhone`·`iPad`로 시작하는 모델 값).
+- 이름은 사이드바 Remote devices, Client 열, Export, 설정 ▸ 연결된 기기에 쓰이고 `devices.json`에도 저장돼 기기가 꺼져도 남는다. 같은 IP에서 다른 이름이 광고되면 새 이름으로 바꾼다.
+- 루프백이 아닌 기기가 **처음 트래픽을 보낼 때**(또는 실행 때 `devices.json`에 원격 기기가 있으면) 찾기를 시작해 앱이 도는 동안 계속 듣는다. 그때 macOS **로컬 네트워크 권한** 창이 한 번 뜬다. 이 Mac 트래픽만 쓰면 뜨지 않는다. 거부하거나 이름을 알리지 않는 기기는 지금처럼 IP로 보이고 알림은 없다.
+
 ## Export·HAR 열기
 
 ```
@@ -303,7 +335,7 @@ Flow
   Save Requests…
   Export  ▸ as HAR (HTTP Archive)… / as CSV… / as Prog Session…
 목록 우클릭  ▸ … / Highlight ▸ / Export ▸ (같은 세 항목) / Delete
-File ▸ 세션 열기… ⌘O   (.eyeproxy와 .har)
+File ▸ Open… ⌘O   (.eyeproxy와 .har, 새 파일 탭으로 열림)
 ```
 
 - **범위**: Flow ▸ Export는 보이는 선택 행, 선택이 없으면(또는 선택이 모두 필터에 숨었으면) 보이는 행 전체. 우클릭 ▸ Export는 우클릭한 행(선택 안에서 우클릭하면 선택 전체). 파일 안의 순서는 목록 정렬과 상관없이 ID 오름차순.
@@ -313,7 +345,7 @@ File ▸ 세션 열기… ⌘O   (.eyeproxy와 .har)
 - **HAR 1.2**: `log.creator`는 `Prog` + 앱 버전, 항목 하나가 흐름 하나. 본문은 압축을 풀어 `content.text`·`postData.text`에 담고(텍스트가 아니면 `encoding: "base64"`), `content.size`는 풀린 크기, `bodySize`는 전송 크기다. 풀어서 바이트가 달라졌을 때만 원본 바이트를 `_prog.rawResponseBody`·`_prog.rawRequestBody`(base64)에 함께 넣는다 — 다른 도구는 풀린 본문을 읽고, Prog로 다시 열면 원본 바이트가 그대로 돌아온다. 응답이 없으면 `response.status = 0` + `_prog.error`, 미완료면 `time = 0` + `_prog.incomplete`. 세부 타이밍은 없어 `timings`는 send 0 / wait = time / receive 0.
 - **`_prog` 확장 필드**(HAR 규칙의 `_` 접두, 값 없는 필드는 생략): `number`(안정 번호), `comment`, `highlight{color, strikethrough}`, `tools`(적용된 도구 이름), `client`, `isTunnel`, `isDecrypted`, `originalURL`, `sentURL`, `error`, `incomplete`, `rawRequestBody`, `rawResponseBody`.
 - **CSV**: 열 `ID, Method, URL, Status, Code, Client, Start, Duration (ms), Request Size, Response Size, SSL, Edited, Highlight, Comment`. RFC 4180 따옴표, 줄 끝 CRLF, 본문은 넣지 않는다. 앱이 쓰는 파일은 Excel에서 한글이 깨지지 않게 UTF-8 BOM으로 시작한다(Kit `FlowExport.csv`는 BOM 없이 문자열만 돌려준다).
-- **HAR 열기**: File ▸ 세션 열기…(⌘O)에서 `.har`를 고르면 현재 세션을 **교체**한다(`.eyeproxy` 열기와 같다). Prog가 내보낸 HAR은 번호·코멘트·Highlight·도구 표시·터널·복호화 여부·원래/실제 URL을 복원한다. 번호가 겹치거나 0 이하인 게 하나라도 있으면 번호는 전부 파일 순서대로 다시 매긴다. 클라이언트 이름은 아직 복원하지 않는다(Client 열이 빈다). 다른 도구(Chrome·Proxyman 등)의 HAR은 파일 순서대로 1부터 번호를 매기고 관대하게 읽는다 — request·method·url이 없는 항목만 건너뛰고 형식이 틀린 나머지 필드는 기본값. 읽을 수 있는 항목이 없거나 JSON이 아니면 "HAR 파일을 열지 못했습니다: <이유>" 알림.
+- **HAR 열기**: File ▸ Open…(⌘O)에서 `.har`를 고르면 **새 파일 탭**으로 열린다(`.eyeproxy`와 같다, 아래 "세션 탭" 절). Prog가 내보낸 HAR은 번호·코멘트·Highlight·도구 표시·터널·복호화 여부·원래/실제 URL을 복원한다. 번호가 겹치거나 0 이하인 게 하나라도 있으면 번호는 전부 파일 순서대로 다시 매긴다. 클라이언트 이름(`_prog.client`)은 그 요청의 클라이언트 값으로 되살려, Client 열·사이드바 Remote devices 묶음·다시 내보내기에 그대로 나온다(값이 없으면 "가져온 요청"으로 묶인다). 다른 도구(Chrome·Proxyman 등)의 HAR은 파일 순서대로 1부터 번호를 매기고 관대하게 읽는다 — request·method·url이 없는 항목만 건너뛰고 형식이 틀린 나머지 필드는 기본값. 읽을 수 있는 항목이 없거나 JSON이 아니면 "HAR 파일을 열지 못했습니다: <이유>" 알림.
 - `.har`는 Prog가 `com.tv.eyeproxy.har`(`public.json` 계열)로 가져와 선언한다. 같은 확장자를 다른 앱(예: Proxyman)이 선언해도 열기·저장 패널이 받는다.
 
 **API(CLI·MCP용)**: 직렬화·파싱은 `EyeProxyKit`의 순수 함수이고, 앱은 범위 결정과 저장·열기 패널만 맡는다. 나중에 붙을 CLI·MCP 스킬도 같은 함수를 부른다.
@@ -367,7 +399,7 @@ struct ExportItem { flow: Flow; number: Int; comment: String?; highlight: FlowHi
 | 단축키 | 동작 | 언제 |
 |---|---|---|
 | ⌘R | 기록 일시정지 / 다시 시작 | |
-| ⌘K | 세션 지우기(하단 바 Clear) | |
+| ⌘K | Clear Session(하단 바 Clear) | |
 | ⌥⌘C | Compose | |
 | ⌘↩ / ⌥⌘↩ | Repeat / Edit and Repeat… | |
 | ⌫ | Delete | 목록 포커스 |
@@ -382,7 +414,11 @@ struct ExportItem { flow: Flow; number: Int; comment: String?; highlight: FlowHi
 | ⌥⌘N | No Caching 켜기·끄기 | |
 | ⇧⌘R | Restart Server | |
 | ⌘D | Certificate 창 | |
-| ⌘O | 세션 열기(.eyeproxy·.har) | |
+| ⌘T | New Session(새 라이브 탭) | |
+| ⌘O | Open…(.eyeproxy·.har, 새 파일 탭) | |
+| ⌘S | Save Session… | |
+| ⌘W / ⌥⌘W | Close / Close All | |
+| ⇧⌘] / ⇧⌘[ | Select Next Tab / Select Previous Tab | 탭이 둘 이상일 때 |
 | ⌘, | 설정 | |
 
 ## 툴팁
@@ -491,13 +527,20 @@ Proxyman 등 다른 프록시가 9090을 쓰고 있으면 시작에 실패한다
 - 다른 앱이 ⇧⌘X를 전역 단축키로 잡고 있으면 Strikethrough 단축키가 Prog에 닿지 않는다(메뉴로는 된다).
 - Breakpoint 등으로 본문을 **같은 길이로만** 고치고 시작 줄·헤더가 그대로면 Raw·본문 탭이 갱신되지 않는다. M3U8 탭은 응답 Breakpoint 편집 뒤에도 갱신되지 않는다.
 - M3U8 URI 열이 넓어 기본 분할에서는 가로 스크롤이나 열 너비 조절이 필요하다.
-- `.har`는 File ▸ 세션 열기…(⌘O)로만 연다. Finder 더블클릭·`open -a`는 지원하지 않는다(문서 열기 처리 없음).
-- HAR에서 클라이언트 이름(`_prog.client`)은 복원하지 않아 가져온 흐름의 Client 열이 비고 사이드바 기기·프로세스로 나뉘지 않는다(다음 묶음).
 - 다른 도구의 HAR: 복호화 여부는 `https` 여부로 추정하고(`wss`는 복호화 안 함으로), 시각을 못 읽은 항목은 앞 항목의 시각, URL의 사용자 정보·대문자 scheme·명시한 기본 포트는 따로 다루지 않는다.
 - CSV는 `=`·`+`·`-`·`@`로 시작하는 값을 그대로 쓴다(수식 주입 방어 없음). 믿을 수 없는 트래픽의 CSV는 Excel에서 열 때 주의한다.
 - 빨간 점이 떠 있는 동안 메뉴 막대가 라이트↔다크로 바뀔 때 눈 색이 따라 바뀌는지는 실제 막대에서 확인하지 못했다(그릴 때마다 막대 외관을 읽도록 구현, 오프라인 렌더로만 확인).
 - 메뉴 툴팁은 개발 Mac(최신 macOS)에서만 확인했다. macOS 15와 상태 막대·우클릭 메뉴의 툴팁 표시는 미확인.
 - 툴바 버튼 묶음 안쪽 여백·버튼 간격은 SwiftUI에 API가 없어 시스템 기본을 따른다. 상태 캡슐의 위아래 여백은 툴바 행 높이에 묻혀 보이지 않는다.
+
+## 알려진 제한(세션 탭·기기 이름)
+
+- 탭은 다시 실행할 때 복원되지 않는다(실행하면 라이브 탭 하나).
+- HAR에서 되살린 클라이언트 이름이 Client 값이라, 가져온 요청의 IP Address 필터는 IP가 아니라 이름에 걸린다.
+- 이름을 알리지 않는 기기는 IP로 보인다. 직접 붙인 이름은 IP에 묶여 있어, 공유기가 IP를 바꾸면 다시 붙여야 한다. 자동 이름은 IPv4 주소만 맞춘다.
+- Close All(⌥⌘W)은 Compose·Breakpoints·설정 창도 닫는다(보내지 않은 Compose 편집은 사라진다).
+- 파일을 받으며 시작하면 SwiftUI가 여는 Breakpoints 창을 닫는데 잠깐 보일 수 있고, 새 탭이 잠깐 별도 창으로 깜빡일 수 있다.
+- 개발 빌드(Debug)가 문서 종류를 선언해, 이 Info.plist가 든 릴리스가 나오기 전에는 Finder가 Debug 빌드를 `.eyeproxy` 기본 앱으로 고를 수 있다.
 
 ## 알려진 제한(찾기·거르기)
 
