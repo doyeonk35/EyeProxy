@@ -115,3 +115,43 @@ import EyeProxyCore
     r.observe(.requestStarted(.fixture(client: "192.0.2.6", decrypted: false)))
     #expect(r.hasRemoteDevice(ownAddresses: { ["192.0.2.5"] }))
 }
+
+private func tempDevicesURL() throws -> (dir: URL, url: URL) {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return (dir, dir.appendingPathComponent("devices.json"))
+}
+
+@Test @MainActor func androidKindIsWrittenCompatibly() throws {
+    let (dir, url) = try tempDevicesURL()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let r = DeviceRegistry(storageURL: url)
+    r.observe(.requestStarted(.fixture(client: "192.0.2.30", decrypted: false)))
+    r.rename("192.0.2.30", name: nil, kind: .googleTV)
+    try r.save()
+    let objects = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [[String: Any]])
+    #expect(objects[0]["kind"] as? String == "unknown")
+    #expect(objects[0]["extendedKind"] as? String == "googleTV")
+    #expect(DeviceRegistry(storageURL: url).devices.first?.kind == .googleTV)
+}
+
+@Test @MainActor func legacyKindsHaveNoExtendedKey() throws {
+    let (dir, url) = try tempDevicesURL()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let r = DeviceRegistry(storageURL: url)
+    r.observe(.requestStarted(.fixture(client: "192.0.2.32", decrypted: false)))
+    r.rename("192.0.2.32", name: nil, kind: .appleTV)
+    try r.save()
+    let objects = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [[String: Any]])
+    #expect(objects[0]["extendedKind"] == nil)
+    #expect(objects[0]["kind"] as? String == "appleTV")
+}
+
+@Test @MainActor func unknownKindValueDoesNotCorruptFile() throws {
+    let (dir, url) = try tempDevicesURL()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    try Data(#"[{"address":"192.0.2.31","kind":"smartFridge","lastSeen":"2026-11-13T00:00:00Z","flowCount":1,"decryptedCount":0,"tlsFailureCount":0}]"#.utf8).write(to: url)
+    let r = DeviceRegistry(storageURL: url)
+    #expect(r.devices.count == 1 && r.devices[0].kind == .unknown)
+    #expect(try !FileManager.default.contentsOfDirectory(atPath: dir.path).contains { $0.contains("corrupt") })
+}

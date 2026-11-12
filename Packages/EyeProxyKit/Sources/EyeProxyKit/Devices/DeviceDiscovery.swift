@@ -18,15 +18,16 @@ public final class DeviceDiscovery {
     public nonisolated static func parse(serviceType: String, serviceName: String, txt: [String: String]) -> (name: String, kind: DeviceKind?)? {
         let name: String
         let model: String?
+        var castModel: String?
         switch serviceType {
         case "_airplay._tcp": name = serviceName; model = txt["model"]
         case "_companion-link._tcp": name = serviceName; model = txt["rpMd"]
-        case "_googlecast._tcp": name = txt["fn"] ?? ""; model = nil
+        case "_googlecast._tcp": name = txt["fn"] ?? ""; model = nil; castModel = txt["md"]
         default: return nil
         }
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
-        return (trimmed, model.flatMap(kind(forModel:)))
+        return (trimmed, serviceType == "_googlecast._tcp" ? castKind(model: castModel) : model.flatMap(kind(forModel:)))
     }
 
     /// `.changed`는 TXT가 자주 바뀌어 온다. 찾은 이름·종류가 바뀌었을 때만 다시 연결한다.
@@ -38,6 +39,14 @@ public final class DeviceDiscovery {
 
     public nonisolated static func normalize(_ address: String) -> String {
         address.hasPrefix("::ffff:") ? String(address.dropFirst(7)) : address
+    }
+
+    /// Cast 광고의 모델명(`md`)으로 종류를 짐작한다. 스피커·디스플레이(Nest·Home)와 모르는 값은 nil.
+    public nonisolated static func castKind(model: String?) -> DeviceKind? {
+        guard let m = model?.trimmingCharacters(in: .whitespaces).lowercased(), !m.isEmpty else { return nil }
+        if ["google home", "google nest", "nest"].contains(where: m.hasPrefix) { return nil }
+        if m.contains("google tv") || m.hasPrefix("chromecast") { return .googleTV }
+        return .androidTV
     }
 
     private nonisolated static func kind(forModel model: String) -> DeviceKind? {

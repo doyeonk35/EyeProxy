@@ -152,6 +152,8 @@ struct SidebarView: View {
         case .appleTV: "appletv"
         case .iPhone: "iphone"
         case .iPad: "ipad"
+        case .androidTV, .googleTV: "tv"
+        case .androidPhone: "smartphone"
         case .unknown: "display"
         }
     }

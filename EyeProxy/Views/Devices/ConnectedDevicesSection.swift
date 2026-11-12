@@ -19,6 +19,9 @@ struct ConnectedDevicesSection: View {
         case .appleTV: "Apple TV"
         case .iPhone: "iPhone"
         case .iPad: "iPad"
+        case .androidTV: "Android TV"
+        case .googleTV: "Google TV"
+        case .androidPhone: String(localized: "Android 폰")
         case .unknown: String(localized: "알 수 없음")
         }
     }

@@ -13,7 +13,23 @@ public struct DiscoveredDevice: Equatable, Sendable {
     }
 }
 
-public enum DeviceKind: String, Codable, CaseIterable, Sendable { case thisMac, appleTV, iPhone, iPad, unknown }
+public enum DeviceKind: String, Codable, CaseIterable, Sendable {
+    case thisMac, appleTV, iPhone, iPad, androidTV, googleTV, androidPhone, unknown
+
+    /// 모르는 값은 `.unknown`으로 읽는다(옛·새 앱이 같은 파일을 쓴다).
+    public init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = DeviceKind(rawValue: raw) ?? .unknown
+    }
+
+    /// 옛 앱(1.3.0)이 읽을 수 있는 `kind` 값.
+    public var legacy: DeviceKind {
+        switch self {
+        case .androidTV, .googleTV, .androidPhone: .unknown
+        default: self
+        }
+    }
+}
 
 public struct Device: Identifiable, Codable, Equatable, Sendable {
     public var id: String { address }
@@ -35,6 +51,36 @@ public struct Device: Identifiable, Codable, Equatable, Sendable {
         self.flowCount = flowCount
         self.decryptedCount = decryptedCount
         self.tlsFailureCount = tlsFailureCount
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case address, name, autoName, kind, extendedKind, lastSeen, flowCount, decryptedCount, tlsFailureCount
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        address = try c.decode(String.self, forKey: .address)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        autoName = try c.decodeIfPresent(String.self, forKey: .autoName)
+        let legacyKind = try c.decodeIfPresent(DeviceKind.self, forKey: .kind) ?? .unknown
+        kind = try c.decodeIfPresent(DeviceKind.self, forKey: .extendedKind) ?? legacyKind
+        lastSeen = try c.decode(Date.self, forKey: .lastSeen)
+        flowCount = try c.decodeIfPresent(Int.self, forKey: .flowCount) ?? 0
+        decryptedCount = try c.decodeIfPresent(Int.self, forKey: .decryptedCount) ?? 0
+        tlsFailureCount = try c.decodeIfPresent(Int.self, forKey: .tlsFailureCount) ?? 0
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(address, forKey: .address)
+        try c.encodeIfPresent(name, forKey: .name)
+        try c.encodeIfPresent(autoName, forKey: .autoName)
+        try c.encode(kind.legacy, forKey: .kind)
+        if kind != kind.legacy { try c.encode(kind, forKey: .extendedKind) }
+        try c.encode(lastSeen, forKey: .lastSeen)
+        try c.encode(flowCount, forKey: .flowCount)
+        try c.encode(decryptedCount, forKey: .decryptedCount)
+        try c.encode(tlsFailureCount, forKey: .tlsFailureCount)
     }
 
     public var displayName: String {

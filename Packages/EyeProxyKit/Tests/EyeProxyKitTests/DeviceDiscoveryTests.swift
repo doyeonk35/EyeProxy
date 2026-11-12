@@ -10,7 +10,7 @@ import Testing
 }
 @Test func parsesGoogleCastFriendlyName() {
     let r = DeviceDiscovery.parse(serviceType: "_googlecast._tcp", serviceName: "Google-TV-0000", txt: ["fn": "안방 TV", "md": "Chromecast"])
-    #expect(r?.name == "안방 TV"); #expect(r?.kind == nil)
+    #expect(r?.name == "안방 TV"); #expect(r?.kind == .googleTV)
 }
 @Test func googleCastWithoutFriendlyNameIsIgnored() {
     #expect(DeviceDiscovery.parse(serviceType: "_googlecast._tcp", serviceName: "Google-TV-0000", txt: [:]) == nil)
@@ -22,4 +22,15 @@ import Testing
     #expect(!DeviceDiscovery.needsResolve(serviceType: type, old: old, new: (old.name, ["rpMd": "iPhone15,2", "rpBA": "00:00:00:00:00:02"])))
     #expect(DeviceDiscovery.needsResolve(serviceType: type, old: old, new: ("거실 iPhone", old.txt)))
     #expect(DeviceDiscovery.needsResolve(serviceType: type, old: old, new: (old.name, ["rpMd": "iPad14,1"])))
+}
+
+@Test func castModelMapsToAndroidKinds() {
+    #expect(DeviceDiscovery.castKind(model: "Google TV Streamer") == .googleTV)
+    #expect(DeviceDiscovery.castKind(model: "Chromecast") == .googleTV)
+    #expect(DeviceDiscovery.castKind(model: "SHIELD Android TV") == .androidTV)
+    #expect(DeviceDiscovery.castKind(model: "BRAVIA 4K VH2") == .androidTV)
+    #expect(DeviceDiscovery.castKind(model: "Google Nest Mini") == nil)
+    #expect(DeviceDiscovery.castKind(model: "Google Home") == nil)
+    #expect(DeviceDiscovery.castKind(model: "Nest Hub") == nil)
+    #expect(DeviceDiscovery.castKind(model: nil) == nil)
 }
