@@ -3,6 +3,53 @@
     <channel>
         <title>EyeProxy</title>
         <item>
+            <title>1.3.0</title>
+            <pubDate>Thu, 12 Nov 2026 20:15:56 +0900</pubDate>
+            <sparkle:version>9</sparkle:version>
+            <sparkle:shortVersionString>1.3.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<!doctype html><html><head><meta charset="utf-8"><style>
+:root { color-scheme: light dark; }
+body { font: 13px -apple-system, sans-serif; margin: 12px 16px; line-height: 1.45; }
+.release { font-size: 26px; font-weight: 700; margin: 4px 0 6px; padding-bottom: 8px; border-bottom: 1px solid #8884; }
+.release .v { color: #2f7cf6; }
+h2 { font-size: 17px; margin: 18px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #8884; }
+h3 { font-size: 14px; margin: 14px 0 4px; }
+ul { margin: 4px 0; padding-left: 20px; }
+li { margin: 3px 0; }
+code { font: 12px ui-monospace, Menlo, monospace; background: #8882; padding: 0 3px; border-radius: 3px; }
+a { color: #2f7cf6; }
+</style></head><body>
+<div class="release">Release <span class="v">1.3.0</span> - 2026-11-12</div>
+<p>세션을 탭으로 나눠 쓰고, 저장한 파일을 새 탭으로 여는 버전이다. 자세한 설명은 README의 세션 탭 절.</p>
+<h2>세션 탭</h2>
+<ul><li>
+창 탭(네이티브 탭)으로 세션을 여러 개 둔다. 탭마다 필터·선택·정렬·사이드바 선택이 따로 있고, 라이브 탭끼리는 같은 캡처를 공유한다.
+</li><li>
+<b>New Session</b> ⌘T, <b>Close</b> ⌘W, <b>Close All</b> ⌥⌘W(도구 창까지 Prog 창을 모두 닫음), 다음·이전 탭 ⇧⌘]·⇧⌘[.
+</li><li>
+사이드바 항목 우클릭 <b>Open as New Tab</b>.
+</li></ul>
+<h2>파일 열기</h2>
+<ul><li>
+파일은 새 파일 탭으로 열리고, 더 이상 라이브 세션을 덮어쓰지 않는다.
+</li><li>
+<b>Open…</b> ⌘O, <b>Open Recent ▸ Clear Menu</b>, 끌어다 놓기, Finder 더블클릭, <code>open -a</code>로 연다. 앱이 문서 종류를 선언했다.
+</li><li>
+<b>Save Session</b> ⌘S.
+</li><li>
+HAR를 가져오면 클라이언트 이름이 복원되고 사이드바가 이름별로 묶는다.
+</li></ul>
+<h2>원격 기기 이름</h2>
+<ul><li>
+원격 기기 이름을 Bonjour 광고(AirPlay·Companion Link·Google Cast)에서 자동으로 가져온다. 직접 정한 이름이 항상 우선한다.
+</li><li>
+원격 기기가 처음 트래픽을 보내면 macOS <b>로컬 네트워크</b> 권한 창이 한 번 뜬다. 허용해야 이름을 찾는다.
+</li></ul>
+</body></html>]]></description>
+            <enclosure url="https://tving-prog.web.app/1.3.0/Prog-1.3.0.zip" length="9343627" type="application/octet-stream" sparkle:edSignature="luOZGQI61MvD4prnphFkMPe1iAJNgNl89vkkvzt8E7SpmrvLzzv72a2DKIO20Hjs9BwJQJqu7Nw25oahqJdsAg=="/>
+        </item>
+        <item>
             <title>1.2.0</title>
             <pubDate>Wed, 11 Nov 2026 13:51:40 +0900</pubDate>
             <sparkle:version>8</sparkle:version>
