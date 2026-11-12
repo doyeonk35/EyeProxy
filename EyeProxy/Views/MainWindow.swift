@@ -26,6 +26,7 @@ struct MainWindow: View {
         .sheet(isPresented: Binding(get: { tab.commentingFlowID != nil }, set: { if !$0 { tab.commentingFlowID = nil } })) {
             if let id = tab.commentingFlowID { CommentSheet(id: id) }
         }
+        .sheet(item: Bindable(tab).groupSheet) { HostGroupSheet(request: $0) }
         // 새로 멈춘 건이 생기면 Breakpoint 창을 앞으로(스펙 §5.1). 관찰은 앱 수준(AppModel.observeBreakpoints)이 한다.
         .onAppear { model.openBreakpointsWindow = { openWindow(id: "breakpoints") } }
         // Finder·`open -a`로 연 파일의 탭 창을 연다. 앞 탭(없거나 아직 창이 없으면 아무 탭)이 한 번만 가져간다.

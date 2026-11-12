@@ -109,6 +109,11 @@ final class SessionTab: Identifiable {
     var pendingDeleteAll: (ids: Set<FlowID>, hiddenCount: Int)?
     /// Flow ▸ Add Comment…로 코멘트를 편집 중인 흐름. 메인 창이 시트를 띄운다.
     var commentingFlowID: FlowID?
+    /// File ▸ New Domain or App…·그룹 Edit… 시트. 메인 창이 띄운다.
+    var groupSheet: GroupSheetRequest?
+
+    /// New Domain or App 시트의 처음 값: 지금 사이드바 선택으로 미리 채운다.
+    func newGroupDraft() -> HostGroup { HostGroup.draft(from: sidebarSelection) }
 
     init(model: AppModel, session: SessionStore, processes: ProcessRegistry, fileURL: URL?, restoreSavedRules: Bool) {
         // 마지막 필터 규칙을 되살린다. 켜진 규칙이 있으면 막대를 보인 채로 시작한다.
@@ -346,7 +351,15 @@ final class SessionTab: Identifiable {
         let flows = sidebarFlows
         sidebarFlowCount = flows.count
         sidebarTree = SidebarTree.build(flows: flows, attribution: processes.attribution, devices: model.devices.devices,
-                                        pinned: model.settings.pinnedHosts, runtimes: model.simulatorRuntimes).filtered(sidebarFilterText)
+                                        pinned: model.settings.pinnedHosts, runtimes: model.simulatorRuntimes,
+                                        groups: model.settings.hostGroups).filtered(sidebarFilterText)
         pathTrees = Dictionary(uniqueKeysWithValues: expandedDomains.map { ($0, SidebarTree.pathTree(for: $0, flows: flows)) })
     }
+}
+
+/// 그룹 시트 요청. 편집이면 저장할 때 같은 id의 그룹을 바꾼다.
+struct GroupSheetRequest: Identifiable {
+    let id = UUID()
+    var draft: HostGroup
+    let isEditing: Bool
 }

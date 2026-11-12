@@ -155,6 +155,13 @@ final class AppModel {
         return new.id
     }
 
+    /// 그룹 Edit… 저장 뒤: 그 그룹을 고른 탭들이 새 정의로 거르게 한다.
+    func replaceGroupSelection(_ g: HostGroup) {
+        for tab in tabs.values {
+            if case .group(let old)? = tab.sidebarSelection, old.id == g.id { tab.sidebarSelection = .group(g) }
+        }
+    }
+
     /// 탭 창이 닫혔다. 닫힌 탭은 다시 계산하지 않는다.
     func closeTab(_ id: UUID) {
         tabs[id]?.isOnScreen = false

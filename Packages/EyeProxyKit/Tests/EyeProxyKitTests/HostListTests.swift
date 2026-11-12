@@ -36,3 +36,8 @@ private func parse(_ s: String) throws -> HostList.Parsed { try HostList.parse(D
     let r = HostList.merge(["B.example.com", "c.example.com"], into: ["a.example.com", "b.example.com"])
     #expect(r.merged == ["a.example.com", "b.example.com", "c.example.com"]); #expect(r.added == ["c.example.com"])
 }
+
+@Test func patternsFromTextSplitsLinesAndCommas() {
+    let p = HostList.patterns(fromText: "api.example.com, *.Example.org\n\nhttps://cdn.example.net/x ,bad/host,api.example.com")
+    #expect(p.patterns == ["api.example.com", "*.example.org", "cdn.example.net"]); #expect(p.rejected == 1)
+}

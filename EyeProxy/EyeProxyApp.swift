@@ -35,6 +35,12 @@ import SwiftUI
             }
             CommandGroup(replacing: .newItem) {
                 NewSessionButton(model: model)
+                Button("New Domain or App…") {
+                    if let tab = model.activeTab { tab.groupSheet = .init(draft: tab.newGroupDraft(), isEditing: false) }
+                }
+                .keyboardShortcut("k", modifiers: [.command, .shift])
+                .disabled(model.activeTab == nil)
+                .help("도메인·앱 묶음을 고른 새 탭 (⇧⌘K)")
             }
             CommandGroup(after: .newItem) {
                 OpenCommands(model: model)

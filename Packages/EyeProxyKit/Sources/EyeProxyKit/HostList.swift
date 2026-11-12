@@ -12,7 +12,7 @@ public enum HostList {
         guard data.count <= maxFileSize else { throw .tooLarge }
         guard var text = String(data: data, encoding: .utf8) else { throw .notText }
         if text.hasPrefix("\u{FEFF}") { text.removeFirst() }
-        var lines: [String] = [], rejected = 0
+        var lines: [String] = []
         if text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{") {
             guard let hosts = ProxymanImporter.sslHosts(Data(text.utf8)) else { throw .invalidJSON }
             lines = hosts
@@ -22,7 +22,16 @@ public enum HostList {
                 return !t.isEmpty && !t.hasPrefix("#")
             }
         }
-        var seen = Set<String>(), patterns: [String] = []
+        return normalized(lines)
+    }
+
+    /// 그룹 시트 도메인 칸: 줄이나 쉼표로 나눈 항목. 빈 항목은 버린 것으로 세지 않는다.
+    public static func patterns(fromText text: String) -> Parsed {
+        normalized(text.split { $0.isNewline || $0 == "," }.filter { !$0.allSatisfy(\.isWhitespace) }.map(String.init))
+    }
+
+    private static func normalized(_ lines: [String]) -> Parsed {
+        var seen = Set<String>(), patterns: [String] = [], rejected = 0
         for l in lines {
             guard let p = normalize(l) else { rejected += 1; continue }
             if seen.insert(p).inserted { patterns.append(p) }

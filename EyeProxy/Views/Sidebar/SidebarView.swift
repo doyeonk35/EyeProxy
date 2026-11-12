@@ -2,7 +2,7 @@ import AppKit
 import EyeProxyKit
 import SwiftUI
 
-/// Proxyman 하이어라키(스펙 §5): Favorites ▸ Pinned, Remote devices, All ▸ All Requests·Apps·Domains, 맨 아래 필터 칸.
+/// Proxyman 하이어라키(스펙 §5): Favorites ▸ Pinned·Groups, Remote devices, All ▸ All Requests·Apps·Domains, 맨 아래 필터 칸.
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
     @Environment(SessionTab.self) private var tab
@@ -26,6 +26,14 @@ struct SidebarView: View {
                         ForEach(tree.pinned) { domainRow($0, icon: "pin.fill") }
                     } label: {
                         Label("Pinned", systemImage: "pin")
+                    }
+                    DisclosureGroup(isExpanded: expansion("groups")) {
+                        if tree.groups.isEmpty, tab.sidebarFilterText.isEmpty {
+                            Text("⇧⌘K로 그룹 만들기").foregroundStyle(.secondary)
+                        }
+                        ForEach(tree.groups) { groupRow($0) }
+                    } label: {
+                        Label("Groups", systemImage: "square.stack")
                     }
                 }
                 if !tree.remoteDevices.isEmpty {
@@ -147,6 +155,28 @@ struct SidebarView: View {
                     NSPasteboard.general.setString(host, forType: .string)
                 }
                 .help("도메인 이름 복사")
+            }
+    }
+
+    /// Favorites ▸ Groups 줄(스펙 §4.1): 배지는 그룹에 맞는 요청 수.
+    private func groupRow(_ node: GroupNode) -> some View {
+        let g = node.group
+        return Label(g.displayName, systemImage: "folder")
+            .badge(node.count)
+            .tag(SidebarItem.group(g))
+            .contextMenu {
+                openAsNewTab(.group(g))
+                Divider()
+                Button("Edit…") { tab.groupSheet = .init(draft: g, isEditing: true) }
+                    .help("이 그룹의 도메인·앱 고치기")
+                Button("Enable SSL Proxying") { Task { await model.enableSSLProxying(forHosts: g.hostPatterns) } }
+                    .disabled(g.hostPatterns.isEmpty)
+                    .help("이 그룹의 도메인 패턴을 SSL Proxying List에 넣고 복호화 켜기")
+                Button("Export…") { model.exportHostList(g.hostPatterns, suggestedName: g.displayName) }
+                    .disabled(g.hostPatterns.isEmpty)
+                    .help("이 그룹의 도메인 패턴을 호스트 목록 파일로 저장")
+                Button("Delete") { model.settings.deleteGroup(id: g.id) }
+                    .help("Groups에서 지우기 — 이미 이 그룹을 보는 탭은 그대로")
             }
     }
 
