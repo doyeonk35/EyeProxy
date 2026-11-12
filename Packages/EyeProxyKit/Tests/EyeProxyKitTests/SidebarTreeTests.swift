@@ -108,3 +108,12 @@ private func sample() -> (flows: [Flow], attribution: [FlowID: ProcessIdentity],
     let t = SidebarTree.build(flows: [flow("", "https://a/")], attribution: [:], devices: [], pinned: [], runtimes: [:])
     #expect(t.remoteDevices.count == 1 && t.remoteDevices[0].displayName == "가져온 요청" && t.remoteDevices[0].kind == .unknown)
 }
+
+@Test func treeCountsGroups() {
+    let flows = ["https://api.example.com/", "https://cdn.example.org/", "https://other.net/"].map { flow("127.0.0.1", $0) }
+    let g = HostGroup(name: "", hostPatterns: ["*.example.com", "cdn.example.org"], apps: [])
+    let t = SidebarTree.build(flows: flows, attribution: [:], devices: [], pinned: [], runtimes: [:], groups: [g])
+    #expect(t.groups.first?.count == 2)
+    #expect(t.filtered("example.org").groups.count == 1)
+    #expect(t.filtered("zzz").groups.isEmpty)
+}

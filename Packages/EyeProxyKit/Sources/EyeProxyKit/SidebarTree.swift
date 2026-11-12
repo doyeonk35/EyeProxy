@@ -40,12 +40,19 @@ public struct PathNode: Identifiable, Sendable {
     public var id: String { fullPath }
 }
 
+public struct GroupNode: Identifiable, Sendable {
+    public let group: HostGroup
+    public let count: Int
+    public var id: UUID { group.id }
+}
+
 /// 사이드바에서 고른 줄. 목록 거르기에 더할 조건은 `apply(to:)`.
-public enum SidebarItem: Hashable, Sendable {
+public enum SidebarItem: Hashable, Sendable, Codable {
     case allFlows
     case host(String)
     case scope(FlowScope)
     case path(host: String, prefix: String)
+    case group(HostGroup)
 
     public func apply(to f: inout FlowFilter) {
         switch self {
@@ -53,6 +60,7 @@ public enum SidebarItem: Hashable, Sendable {
         case .host(let host): f.host = host
         case .scope(let s): (f.device, f.process, f.host) = (s.device, s.process, s.host)
         case .path(let host, let prefix): (f.host, f.pathPrefix) = (host, prefix)
+        case .group(let g): f.group = g
         }
     }
 }
@@ -60,6 +68,7 @@ public enum SidebarItem: Hashable, Sendable {
 /// Proxyman 하이어라키: Favorites ▸ Pinned, Remote devices ▸ 도메인, All ▸ Apps(이 Mac) ▸ 도메인 / Domains.
 public struct SidebarTree: Sendable {
     public let pinned: [HostNode]
+    public let groups: [GroupNode]
     public let remoteDevices: [DeviceNode]
     public let apps: [AppNode]
     /// Apps 줄 개수 = 이 Mac(루프백) 흐름 수.
@@ -73,10 +82,15 @@ public struct SidebarTree: Sendable {
     /// 경로 트리 깊이 상한. 그보다 깊은 경로는 마지막 마디에 합친다.
     public static let pathDepthLimit = 4
 
-    public static func build(flows: [Flow], attribution: [FlowID: ProcessIdentity], devices: [Device], pinned: [String], runtimes: [String: String]) -> SidebarTree {
+    public static func build(flows: [Flow], attribution: [FlowID: ProcessIdentity], devices: [Device], pinned: [String], runtimes: [String: String], groups: [HostGroup] = []) -> SidebarTree {
         let all = hostNodes(flows)
         let counts = Dictionary(uniqueKeysWithValues: all.map { ($0.host, $0.count) })
         let pinnedNodes = pinned.map { HostNode(host: $0, count: counts[$0] ?? 0) }
+
+        let groupNodes = groups.map { g -> GroupNode in
+            let m = HostGroupMatcher(g)
+            return GroupNode(group: g, count: flows.reduce(0) { $0 + (m.matches(host: $1.request.host, process: attribution[$1.id]?.groupKey) ? 1 : 0) })
+        }
 
         let local = flows.filter { FlowFilter.isLoopback($0.clientAddress) }
         let remote = flows.filter { !FlowFilter.isLoopback($0.clientAddress) }
@@ -103,7 +117,7 @@ public struct SidebarTree: Sendable {
 
         // = pathSegments가 비지 않음(배열을 만들지 않고).
         let withPaths = Set(flows.lazy.filter { $0.request.path.prefix { $0 != "?" && $0 != "#" }.contains { $0 != "/" } }.map(\.request.host))
-        return SidebarTree(pinned: pinnedNodes, remoteDevices: remoteDevices, apps: apps, appsCount: local.count, domains: all, hostsWithPaths: withPaths)
+        return SidebarTree(pinned: pinnedNodes, groups: groupNodes, remoteDevices: remoteDevices, apps: apps, appsCount: local.count, domains: all, hostsWithPaths: withPaths)
     }
 
     private static func hostNodes(_ flows: [Flow]) -> [HostNode] {
@@ -150,6 +164,6 @@ public struct SidebarTree: Sendable {
             let h = hit(d.displayName) || hit(d.address) ? d.hosts : hosts(d.hosts)
             return h.isEmpty ? nil : DeviceNode(address: d.address, displayName: d.displayName, kind: d.kind, count: d.count, hosts: h)
         }
-        return SidebarTree(pinned: hosts(pinned), remoteDevices: devices, apps: apps, appsCount: appsCount, domains: hosts(domains), hostsWithPaths: hostsWithPaths)
+        return SidebarTree(pinned: hosts(pinned), groups: groups.filter { hit($0.group.displayName) || $0.group.hostPatterns.contains(where: hit) }, remoteDevices: devices, apps: apps, appsCount: appsCount, domains: hosts(domains), hostsWithPaths: hostsWithPaths)
     }
 }

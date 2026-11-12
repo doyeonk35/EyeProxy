@@ -1,4 +1,5 @@
 import EyeProxyCore
+import Foundation
 import Testing
 @testable import EyeProxyKit
 
@@ -49,4 +50,19 @@ private func typed(_ url: String, status: Int, _ type: String) -> Flow {
     var b = FlowFilter(host: "h"); b.rules = [FilterRule(text: "q")]; b.protocols = [.http]; b.contentKinds = [.css]; b.statusClasses = [5]
     #expect(!b.isBarEmpty); b.clearBar()
     #expect(b.isBarEmpty && b.rules.first?.text == "q" && b.host == "h")
+}
+
+private func groupFlows() -> [Flow] {
+    ["https://api.example.com/", "https://cdn.example.org/", "https://other.net/"].map { Flow.fixture(url: $0, method: "GET", status: 200) }
+}
+@Test func sidebarGroupFiltersFlows() {
+    var f = FlowFilter()
+    SidebarItem.group(HostGroup(name: "", hostPatterns: ["*.example.com", "cdn.example.org"], apps: [])).apply(to: &f)
+    #expect(groupFlows().filter { f.matches($0) }.count == 2)
+}
+@Test func groupIsNotPersistedInFilter() throws {
+    var f = FlowFilter(); f.rules = [FilterRule(text: "q")]
+    f.group = HostGroup(name: "g", hostPatterns: ["a"], apps: [])
+    let back = try JSONDecoder().decode(FlowFilter.self, from: JSONEncoder().encode(f))
+    #expect(back.group == nil && back.rules == f.rules)
 }

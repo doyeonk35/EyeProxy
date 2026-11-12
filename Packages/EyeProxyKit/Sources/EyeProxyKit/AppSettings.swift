@@ -20,6 +20,7 @@ public final class AppSettings {
     public var bypassHosts: [String] { didSet { defaults.set(bypassHosts, forKey: "eyeproxy.bypassHosts") } }
     public var layout: FlowLayout { didSet { defaults.set(layout.rawValue, forKey: "eyeproxy.layout") } }
     public var pinnedHosts: [String] { didSet { defaults.set(pinnedHosts, forKey: "eyeproxy.pinnedHosts") } }
+    public var hostGroups: [HostGroup] { didSet { defaults.set(try? JSONEncoder().encode(hostGroups), forKey: "eyeproxy.hostGroups") } }
     public var wrapLongLines: Bool { didSet { defaults.set(wrapLongLines, forKey: "eyeproxy.wrapLongLines") } }
     public var appearance: Appearance { didSet { defaults.set(appearance.rawValue, forKey: "eyeproxy.appearance") } }
     public var toolSwitches: ToolSwitches {
@@ -91,6 +92,7 @@ public final class AppSettings {
         bypassHosts = defaults.stringArray(forKey: "eyeproxy.bypassHosts") ?? ["localhost", "127.0.0.1", "*.local"]
         layout = defaults.string(forKey: "eyeproxy.layout").flatMap(FlowLayout.init(rawValue:)) ?? .classic
         pinnedHosts = defaults.stringArray(forKey: "eyeproxy.pinnedHosts") ?? []
+        hostGroups = defaults.data(forKey: "eyeproxy.hostGroups").flatMap { try? JSONDecoder().decode([HostGroup].self, from: $0) } ?? []
         wrapLongLines = defaults.object(forKey: "eyeproxy.wrapLongLines") as? Bool ?? true
         appearance = defaults.string(forKey: "eyeproxy.appearance").flatMap(Appearance.init(rawValue:)) ?? .system
         mapLocalDefaultFolder = defaults.string(forKey: "eyeproxy.mapLocalDefaultFolder")
@@ -126,6 +128,12 @@ public final class AppSettings {
         (fontSize, tabWidth, useMonospacedFont, wrapLongLines) = (13, 2, false, true)
         (showInvisibles, alternativeRowBackgrounds, appearance) = (false, true, .system)
     }
+
+    public func saveGroup(_ g: HostGroup) {
+        if let i = hostGroups.firstIndex(where: { $0.id == g.id }) { hostGroups[i] = g } else { hostGroups.append(g) }
+    }
+
+    public func deleteGroup(id: UUID) { hostGroups.removeAll { $0.id == id } }
 
     public func togglePin(_ host: String) {
         if let i = pinnedHosts.firstIndex(of: host) { pinnedHosts.remove(at: i) } else { pinnedHosts.append(host) }

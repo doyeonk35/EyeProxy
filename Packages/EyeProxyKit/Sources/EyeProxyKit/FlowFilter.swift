@@ -2,7 +2,7 @@ import EyeProxyCore
 import Foundation
 
 /// 사이드바 트리에서 선택한 행이 가리키는 범위.
-public struct FlowScope: Hashable, Sendable {
+public struct FlowScope: Hashable, Sendable, Codable {
     public var device: String?
     public var process: String?
     public var host: String?
@@ -26,6 +26,8 @@ public struct FlowFilter: Equatable, Sendable, Codable {
     public var combineWithOr = false
     public var device: String? = nil
     public var host: String? = nil
+    /// 사이드바 그룹: 도메인 패턴이나 앱에 맞는 흐름만. 저장하지 않는다.
+    public var group: HostGroup? = nil
     /// 사이드바 경로 노드: 쿼리를 뺀 경로가 이 경로이거나 그 아래(세그먼트 경계, "/v3"는 "/v30"을 고르지 않는다).
     public var pathPrefix: String? = nil
     /// ProcessIdentity.groupKey. 귀속 없는 흐름의 키는 `unknownProcessKey`.
@@ -106,10 +108,12 @@ public struct PreparedFilter {
     /// 켜진 본문 규칙(순서대로). `bodyHits`·`matches(bodyHits:)`의 배열이 이 순서를 따른다.
     public let bodyRules: [FilterRule]
     private let prefixSegments: [Substring]?
+    private let groupMatcher: HostGroupMatcher?
 
     init(_ filter: FlowFilter) {
         self.filter = filter
         prefixSegments = filter.pathPrefix.map(FlowFilter.pathSegments)
+        groupMatcher = filter.group.map(HostGroupMatcher.init)
         var active: [(rule: FilterRule, regex: NSRegularExpression?, body: Int?)] = []
         var bodyRules: [FilterRule] = []
         for r in filter.rules where r.isEnabled && !r.text.isEmpty {
@@ -136,6 +140,7 @@ public struct PreparedFilter {
         if let device = f.device, !FlowFilter.sameDevice(flow.clientAddress, device) { return false }
         if let wanted = f.process, (process ?? FlowFilter.unknownProcessKey) != wanted { return false }
         if let host = f.host, flow.request.host != host { return false }
+        if let groupMatcher, !groupMatcher.matches(host: flow.request.host, process: process) { return false }
         if let prefixSegments, !FlowFilter.pathSegments(flow.request.path).starts(with: prefixSegments) { return false }
         if !f.protocols.isEmpty, !f.protocols.contains(FlowProtocol.of(flow)) { return false }
         if !f.contentKinds.isEmpty, !f.contentKinds.contains(ContentKind.of(flow)) { return false }

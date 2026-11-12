@@ -25,6 +25,7 @@ final class SessionTab: Identifiable {
         case nil, .allFlows?: return "All Requests"
         case .host(let host)?: return host
         case .path(let host, let prefix)?: return host + prefix
+        case .group(let g)?: return g.displayName
         case .scope(let s)?:
             if let host = s.host { return host }
             if let process = s.process { return sidebarTree.apps.first { $0.groupKey == process }?.displayName ?? process }

@@ -150,3 +150,14 @@ import Testing
     d.set(-5, forKey: "eyeproxy.requestTimeout")
     #expect(AppSettings(defaults: d).requestTimeout == 0)
 }
+
+@Test @MainActor func hostGroupsPersistAndReplaceByID() {
+    let d = UserDefaults(suiteName: UUID().uuidString)!
+    let s = AppSettings(defaults: d)
+    var a = HostGroup(name: "a", hostPatterns: ["*.example.com"], apps: [])
+    let b = HostGroup(name: "b", hostPatterns: [], apps: ["com.example.app"])
+    s.saveGroup(a); s.saveGroup(b); a.name = "새 이름"; s.saveGroup(a)
+    #expect(AppSettings(defaults: d).hostGroups == [a, b])
+    s.deleteGroup(id: b.id)
+    #expect(AppSettings(defaults: d).hostGroups == [a])
+}
