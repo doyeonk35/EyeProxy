@@ -351,21 +351,18 @@ final class AppModel {
 
     // MARK: - 동작
 
-    func enableSSLProxying(for host: String) async {
-        if !settings.sslPatterns.contains(host) { settings.sslPatterns.append(host) }
+    /// SSL Proxying List 합치기는 모두 여기로(스펙 §4.5): 대소문자 무시·중복 빼고 뒤에 붙인 뒤 SSL을 켜고 적용한다.
+    func enableSSLProxying(forHosts hosts: [String]) async {
+        settings.sslPatterns = HostList.merge(hosts, into: settings.sslPatterns).merged
         settings.sslEnabled = true
         await applySettingsToServer()
     }
 
-    /// HTTPS Response 안내의 "Enable all domains from <앱>": 그 앱(`ProcessIdentity.groupKey`)의 흐름이 쓴 모든 호스트를 넣는다.
+    func enableSSLProxying(for host: String) async { await enableSSLProxying(forHosts: [host]) }
+
+    /// HTTPS Response 안내의 "Enable all domains from <앱>"·사이드바 앱 우클릭: 그 앱(`ProcessIdentity.groupKey`)의 흐름이 쓴 모든 호스트를 넣는다.
     func enableSSLProxying(forHostsOfApp groupKey: String, in tab: SessionTab) async {
-        var patterns = settings.sslPatterns
-        for flow in tab.session.flows where tab.processes.attribution[flow.id]?.groupKey == groupKey && !patterns.contains(flow.request.host) {
-            patterns.append(flow.request.host)
-        }
-        settings.sslPatterns = patterns
-        settings.sslEnabled = true
-        await applySettingsToServer()
+        await enableSSLProxying(forHosts: tab.session.flows.filter { tab.processes.attribution[$0.id]?.groupKey == groupKey }.map(\.request.host))
     }
 
     // MARK: - 세션 파일

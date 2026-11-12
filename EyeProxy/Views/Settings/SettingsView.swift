@@ -224,10 +224,21 @@ private struct SSLSettings: View {
         Form {
             Toggle("SSL Proxying 사용", isOn: $settings.sslEnabled)
                 .onChange(of: settings.sslEnabled) { _, _ in Task { await model.applySettingsToServer() } }
-            Section("호스트 패턴 (예: api.example.com, *.example.com)") {
+            Section {
                 StringListEditor(items: $settings.sslPatterns, placeholder: "호스트 패턴") {
                     Task { await model.applySettingsToServer() }
                 }
+                HStack {
+                    Button("가져오기…") { Task { await model.importSSLList() } }
+                        .help("호스트 목록 파일(.txt) 또는 Proxyman SSL 목록에서 가져오기")
+                    Button("내보내기…") { model.exportHostList(settings.sslPatterns, suggestedName: "ssl-proxying-list") }
+                        .disabled(settings.sslPatterns.isEmpty)
+                        .help("지금 목록을 호스트 목록 파일로 저장")
+                }
+            } header: {
+                Text("호스트 패턴 (예: api.example.com, *.example.com)")
+            } footer: {
+                Text("한 줄에 패턴 하나. 팀 공용 목록은 파일로 주고받아 가져오세요.")
             }
         }
         .formStyle(.grouped)

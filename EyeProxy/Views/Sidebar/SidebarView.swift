@@ -37,7 +37,12 @@ struct SidebarView: View {
                                 Label(device.displayName, systemImage: icon(device.kind))
                                     .badge(device.count)
                                     .tag(SidebarItem.scope(FlowScope(device: device.address)))
-                                    .contextMenu { openAsNewTab(.scope(FlowScope(device: device.address))) }
+                                    .contextMenu {
+                                        openAsNewTab(.scope(FlowScope(device: device.address)))
+                                        enableAllDomains("이 기기가 이 탭에서 쓴 모든 도메인을 SSL Proxying List에 넣기") {
+                                            await model.enableSSLProxying(forHosts: tab.session.flows.filter { $0.clientAddress == device.address }.map(\.request.host))
+                                        }
+                                    }
                             }
                         }
                     }
@@ -54,7 +59,12 @@ struct SidebarView: View {
                                 Label { Text(app.displayName) } icon: { AppIcon(path: app.path) }
                                     .badge(app.count)
                                     .tag(SidebarItem.scope(FlowScope(device: SidebarTree.thisMac, process: app.groupKey)))
-                                    .contextMenu { openAsNewTab(.scope(FlowScope(device: SidebarTree.thisMac, process: app.groupKey))) }
+                                    .contextMenu {
+                                        openAsNewTab(.scope(FlowScope(device: SidebarTree.thisMac, process: app.groupKey)))
+                                        enableAllDomains("이 앱이 이 탭에서 쓴 모든 도메인을 SSL Proxying List에 넣기") {
+                                            await model.enableSSLProxying(forHostsOfApp: app.groupKey, in: tab)
+                                        }
+                                    }
                             }
                         }
                     } label: {
@@ -144,6 +154,12 @@ struct SidebarView: View {
     private func openAsNewTab(_ item: SidebarItem) -> some View {
         Button("Open as New Tab") { openWindow(id: "main", value: model.newTabID(sharing: tab, selecting: item)) }
             .help("이 항목을 고른 새 탭 열기")
+    }
+
+    /// 기기·앱 우클릭(스펙 §4.5): 그 기기·앱이 이 탭 세션에서 쓴 호스트 전부. 사이드바 거르기와 무관하다.
+    private func enableAllDomains(_ help: LocalizedStringKey, _ action: @escaping @MainActor () async -> Void) -> some View {
+        Button("Enable SSL Proxying for All Domains") { Task { await action() } }
+            .help(help)
     }
 
     private func icon(_ kind: DeviceKind) -> String {
