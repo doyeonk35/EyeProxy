@@ -288,3 +288,21 @@ private let m2 = "00:00:5e:00:53:02"
     let old = DeviceRegistry(storageURL: url).devices
     #expect(old.count == 1 && old[0].mac == nil && old[0].id == "192.0.2.31")
 }
+
+/// 1.3.0이 다시 저장하면 `mac`이 빠져 한 주소에 MAC 없는 기록이 둘 남는다. 불러올 때 하나로 합친다.
+@Test @MainActor func macLessDuplicatesAreMergedOnLoad() throws {
+    let (dir, url) = try tempDevicesURL()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    try Data(#"""
+    [{"address":"192.0.2.20","kind":"unknown","lastSeen":"2027-01-15T09:00:00Z","flowCount":3,"decryptedCount":1,"tlsFailureCount":0},
+     {"address":"192.0.2.20","name":"거실 TV","kind":"appleTV","lastSeen":"2027-01-15T08:00:00Z","flowCount":5,"decryptedCount":2,"tlsFailureCount":1},
+     {"address":"192.0.2.21","mac":"00:00:5e:00:53:01","kind":"unknown","lastSeen":"2027-01-15T07:00:00Z","flowCount":1,"decryptedCount":0,"tlsFailureCount":0},
+     {"address":"192.0.2.21","kind":"unknown","lastSeen":"2027-01-15T06:00:00Z","flowCount":1,"decryptedCount":0,"tlsFailureCount":0}]
+    """#.utf8).write(to: url)
+    let r = DeviceRegistry(storageURL: url)
+    #expect(Set(r.devices.map(\.id)).count == r.devices.count)
+    #expect(r.devices.count == 3)
+    let merged = try #require(r.device(at: "192.0.2.20"))
+    #expect(merged.displayName == "거실 TV" && merged.kind == .appleTV && merged.flowCount == 3)
+    #expect(r.devices.contains { $0.id == "00:00:5e:00:53:01" })
+}

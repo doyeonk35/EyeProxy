@@ -114,7 +114,7 @@ public final class DeviceRegistry {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         do {
-            devices = try decoder.decode([Device].self, from: data)
+            devices = Self.mergingMACLessDuplicates(try decoder.decode([Device].self, from: data))
         } catch {
             // 손상된 파일을 덮어쓰지 않도록 옆으로 치워 둔다. 실패하면 save()를 막아 원본을 보존한다.
             let fm = FileManager.default
@@ -192,6 +192,26 @@ public final class DeviceRegistry {
         guard !candidates.isEmpty else { return false }
         let own = Set(ownAddresses())
         return candidates.contains { !own.contains($0.address) }
+    }
+
+    /// 1.3.0이 다시 저장하면 `mac`이 빠져 한 주소에 MAC 없는 기록이 여럿 남는다(id가 겹친다).
+    /// lastSeen이 가장 늦은 기록 하나만 남기고, 그 기록에 없는 이름·자동 이름·종류(알 수 없음일 때)만 다른 기록에서 채운다.
+    /// 개수는 남긴 기록의 값을 쓴다. MAC 있는 기록은 그대로 둔다.
+    private static func mergingMACLessDuplicates(_ loaded: [Device]) -> [Device] {
+        var result: [Device] = []
+        var kept: [String: Int] = [:]  // 주소 → result 위치
+        for device in loaded.sorted(by: { $0.lastSeen > $1.lastSeen }) {
+            guard device.mac == nil else { result.append(device); continue }
+            guard let i = kept[device.address] else {
+                kept[device.address] = result.count
+                result.append(device)
+                continue
+            }
+            if result[i].name?.isEmpty ?? true { result[i].name = device.name }
+            if result[i].autoName?.isEmpty ?? true { result[i].autoName = device.autoName }
+            if result[i].kind == .unknown { result[i].kind = device.kind }
+        }
+        return result
     }
 
     public func save() throws {
