@@ -95,7 +95,6 @@ extension AppModel {
     }
 
     /// File ▸ 세션 열기의 HAR 경로(스펙 §8.5): 현재 세션을 교체. 번호·코멘트·Highlight를 복원하고 프로세스 귀속은 비운다.
-    /// 클라이언트 문자열은 이번엔 복원하지 않는다(기기 앱 귀속과 함께 다음 묶음).
     func importHAR(from url: URL) async throws {
         let imported = try await Task.detached { try FlowImport.har(Data(contentsOf: url)) }.value
         session.replace(

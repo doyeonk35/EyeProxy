@@ -33,6 +33,13 @@ private func sample() -> (flows: [Flow], attribution: [FlowID: ProcessIdentity],
     #expect(local.remoteDevices.isEmpty && local.apps.count == 1 && local.apps[0].count == 2)
 }
 
+@Test func importedFlowsGroupByClientName() {
+    let flows = [flow("iPhone 15", "https://a.example.com/"), flow("iPhone 15", "https://b.example.com/"),
+                 flow("", "https://c.example.com/"), flow("Apple TV", "https://d.example.com/")]
+    let names = SidebarTree.build(flows: flows, attribution: [:], devices: [], pinned: [], runtimes: [:]).remoteDevices.map(\.displayName)
+    #expect(Set(names) == ["iPhone 15", "Apple TV", "가져온 요청"])
+}
+
 @Test func treeKeepsPinnedAndCountsMatch() {
     let (flows, attribution, t) = sample()
     #expect(t.pinned.map(\.host) == ["gw.example.com", "api.example.com"] && t.pinned.map(\.count) == [0, 3])

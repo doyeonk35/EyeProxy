@@ -63,7 +63,7 @@ public enum FlowImport {
             guard let status = r.status, status > 0 else { return nil }
             return FlowResponse(status: status, reason: r.statusText ?? "", headers: r.headers, body: body(raw: p?.rawResponseBody, r.content))
         }
-        var flow = Flow(id: FlowID(), clientAddress: "", startedAt: started, request: request, response: response,
+        var flow = Flow(id: FlowID(), clientAddress: p?.client ?? "", startedAt: started, request: request, response: response,
                         completedAt: p?.incomplete == true ? nil : started.addingTimeInterval(max(e.time ?? 0, 0) / 1000),
                         error: p?.error, isDecrypted: p?.isDecrypted ?? (scheme == "https"), isTunnel: p?.isTunnel ?? false)
         flow.annotations = (p?.tools ?? []).map { .tool($0) }

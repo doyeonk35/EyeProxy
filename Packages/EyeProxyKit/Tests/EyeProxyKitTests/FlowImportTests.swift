@@ -87,6 +87,17 @@ private func urls(_ f: Flow) -> (original: String?, sent: String?) {
     #expect(imported[2].flow.response == nil && imported[3].flow.response == nil)
 }
 
+@Test func harRoundTripRestoresClientAsAddress() throws {
+    let items = [
+        ExportItem(flow: flow(), number: 1, client: "iPhone 15"),
+        ExportItem(flow: flow(), number: 2, client: ""),
+        ExportItem(flow: flow(), number: 3, client: nil),
+    ]
+    let imported = try roundTrip(items)
+    #expect(imported.map(\.flow.clientAddress) == ["iPhone 15", "", ""])
+    #expect(imported.map(\.client) == ["iPhone 15", "", nil])
+}
+
 @Test func foreignHARWithoutProgExtensionImportsWithDefaults() throws {
     // Chrome DevTools 모양 최소 픽스처: time은 소수, 시각은 오프셋·소수 초 유무가 섞임, 선택 필드 일부 없음
     let har = #"""
