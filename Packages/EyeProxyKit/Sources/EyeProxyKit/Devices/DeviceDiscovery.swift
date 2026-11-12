@@ -67,7 +67,10 @@ public final class DeviceDiscovery {
         if case .bonjour(let record) = result.metadata { txt = record.dictionary }
         guard let parsed = Self.parse(serviceType: type, serviceName: serviceName, txt: txt) else { return }
 
-        let conn = NWConnection(to: result.endpoint, using: .tcp)
+        // 프록시는 0.0.0.0에 묶여 있어 기기 주소는 늘 IPv4다. IPv6로 연결되면 맞출 수 없다.
+        let params = NWParameters.tcp
+        (params.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options)?.version = .v4
+        let conn = NWConnection(to: result.endpoint, using: params)
         let onFound = self.onFound
         // 한 번만 처리하고 닫는다.
         nonisolated(unsafe) var done = false
