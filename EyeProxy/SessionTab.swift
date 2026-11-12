@@ -115,10 +115,12 @@ final class SessionTab: Identifiable {
     /// New Domain or App 시트의 처음 값: 지금 사이드바 선택으로 미리 채운다.
     func newGroupDraft() -> HostGroup { HostGroup.draft(from: sidebarSelection) }
 
-    init(model: AppModel, session: SessionStore, processes: ProcessRegistry, fileURL: URL?, restoreSavedRules: Bool) {
+    /// `initialFilter`: 복원한 탭의 규칙. 있으면 저장된 규칙·빈 필터 대신 이것으로 시작한다.
+    init(model: AppModel, session: SessionStore, processes: ProcessRegistry, fileURL: URL?, restoreSavedRules: Bool,
+         initialFilter: FlowFilter? = nil) {
         // 마지막 필터 규칙을 되살린다. 켜진 규칙이 있으면 막대를 보인 채로 시작한다.
         // 저장 프로퍼티를 모두 채우기 전에 넣으므로 `didSet`(규칙 저장·판정)을 거치지 않는다.
-        let saved = restoreSavedRules ? model.settings.filterRules : FlowFilter()
+        let saved = initialFilter ?? (restoreSavedRules ? model.settings.filterRules : FlowFilter())
         filter = saved
         appliedRules = saved
         bodyMatchRules = saved.activeBodyRules

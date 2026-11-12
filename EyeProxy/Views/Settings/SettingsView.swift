@@ -48,6 +48,8 @@ private struct GeneralSettings: View {
                 }
                 .fixedSize()
                 .help("목록 URL·Client 열이 길 때 말줄임(…) 위치")
+                Toggle("Restore Tabs at Launch", isOn: $settings.restoreTabsAtLaunch)
+                    .help("다시 실행할 때 종료 전에 열려 있던 탭 다시 열기")
             }
             Section {
                 TextField("Port Number:", text: $draft)

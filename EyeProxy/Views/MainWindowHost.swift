@@ -31,6 +31,13 @@ struct MainWindowHost: NSViewRepresentable {
             tab.window = window
             if window.isKeyWindow { model.activeTab = tab }
             tab.isOnScreen = window.occlusionState.contains(.visible)
+            // 탭 복원: 복원한 탭 창이 모두 붙으면 종료 때 앞이던 탭을 앞으로 낸다. 붙은 창이 key가 된 다음에 낸다.
+            if model.restoredTabsAwaitingWindow.remove(tab.id) != nil, model.restoredTabsAwaitingWindow.isEmpty,
+               let id = model.pendingKeyTabID {
+                model.pendingKeyTabID = nil
+                let front = model.tab(id)?.window
+                Task { @MainActor in front?.makeKeyAndOrderFront(nil) }
+            }
             let center = NotificationCenter.default
             observers = [
                 center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak model, weak tab] _ in

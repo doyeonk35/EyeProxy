@@ -34,8 +34,15 @@ final class AppModel {
     private(set) var tabs: [UUID: SessionTab] = [:]
     /// 메뉴 명령이 다루는 탭(앞 창의 탭).
     var activeTab: SessionTab?
-    /// 실행할 때 여는 라이브 탭. 마지막 필터 규칙을 되살린다.
-    @ObservationIgnored private(set) lazy var mainTab = makeTab(fileURL: nil, session: liveSession, processes: processes, restoreSavedRules: true)
+    /// 실행할 때 여는 라이브 탭. 마지막 필터 규칙을 되살린다(복원 저장본에 라이브 탭이 있으면 그 상태).
+    @ObservationIgnored private(set) lazy var mainTab = makeMainTab()
+    /// 지난 종료 때 열려 있던 탭(Restore Tabs at Launch). 첫 라이브 탭은 `mainTab`에, 나머지는 `restoreTabs()`가 연다.
+    @ObservationIgnored private let restorePlan: RestorePlan?
+    @ObservationIgnored private var restoreTask: Task<Void, Never>?
+    /// 복원을 마치면 앞으로 낼 탭. 복원한 탭 창이 모두 붙은 뒤 `MainWindowHost`가 앞으로 내고 비운다.
+    @ObservationIgnored var pendingKeyTabID: UUID?
+    /// 복원해서 창을 기다리는 탭. 나중에 붙는 창이 key를 가져가므로 모두 붙은 뒤에 앞 탭을 정한다.
+    @ObservationIgnored var restoredTabsAwaitingWindow: Set<UUID> = []
     /// Finder·`open -a`로 연 파일의 탭(`AppDelegate`). 앞 탭의 `MainWindow`가 창을 열고 비운다.
     var pendingOpenTabIDs: [UUID] = []
     /// 우클릭 ▸ Tools로 열 새 규칙. 해당 도구 창이 꺼내 편집기를 연다.
@@ -107,6 +114,7 @@ final class AppModel {
         try? FileManager.default.createDirectory(at: Self.supportDirectory, withIntermediateDirectories: true)
         devices = DeviceRegistry(storageURL: Self.supportDirectory.appending(path: "devices.json"))
         (certificateAuthority, caSaveError) = Self.loadOrCreateCA()
+        restorePlan = settings.restoreTabsAtLaunch ? settings.openTabs?.restorePlan() : nil
         startDiscoveryIfRemoteDeviceSeen()
         // 이 실행은 아직 캡처를 켜지 않았으므로 백업이 있으면 이전 실행이 복원하지 못한 것이다.
         pendingProxyRestore = systemProxy.pendingRestore()
@@ -126,10 +134,85 @@ final class AppModel {
     }
 
     /// 탭을 만들어 `tabs`에 등록한다.
-    func makeTab(fileURL: URL?, session: SessionStore, processes: ProcessRegistry, restoreSavedRules: Bool) -> SessionTab {
-        let tab = SessionTab(model: self, session: session, processes: processes, fileURL: fileURL, restoreSavedRules: restoreSavedRules)
+    func makeTab(fileURL: URL?, session: SessionStore, processes: ProcessRegistry, restoreSavedRules: Bool,
+                 initialFilter: FlowFilter? = nil) -> SessionTab {
+        let tab = SessionTab(model: self, session: session, processes: processes, fileURL: fileURL,
+                             restoreSavedRules: restoreSavedRules, initialFilter: initialFilter)
         tabs[tab.id] = tab
         return tab
+    }
+
+    private func makeMainTab() -> SessionTab {
+        let main = restorePlan?.main
+        let tab = makeTab(fileURL: nil, session: liveSession, processes: processes, restoreSavedRules: true, initialFilter: main?.filter)
+        if let main { tab.sidebarSelection = currentSelection(main.selection) }
+        return tab
+    }
+
+    /// 저장본의 그룹은 지금 정의로 바꾼다. 지워진 그룹이면 All Requests.
+    private func currentSelection(_ item: SidebarItem?) -> SidebarItem? {
+        guard case .group(let g)? = item else { return item }
+        return settings.hostGroups.first { $0.id == g.id }.map(SidebarItem.group) ?? .allFlows
+    }
+
+    /// 지난 종료 때의 나머지 탭을 저장 순서대로 다시 만들어 창을 연다(`pendingOpenTabIDs`). 몇 번 불러도 한 번만 돈다.
+    func restoreTabs() async {
+        let task = restoreTask ?? Task { await runRestore() }
+        restoreTask = task
+        await task.value
+    }
+
+    private func runRestore() async {
+        guard let plan = restorePlan else { return }
+        var created: [Int: UUID] = [:]
+        var fileTabs: [String: SessionTab] = [:]   // 경로 → 처음 복원한 탭. 같은 파일의 다음 탭은 그 세션을 같이 본다.
+        for (i, s) in plan.rest.enumerated() {
+            let restored: SessionTab
+            if let path = s.filePath {
+                let url = URL(fileURLWithPath: path)
+                let key = url.standardizedFileURL.path
+                if let first = fileTabs[key], let t = tab(newTabID(sharing: first, selecting: .allFlows)) {
+                    restored = t
+                } else if let id = await open(url, quiet: true), let t = tab(id) {
+                    restored = t
+                    fileTabs[key] = t
+                } else {
+                    continue   // 사라졌거나 읽지 못한 파일은 조용히 건너뛴다
+                }
+                restored.filter = s.filter   // 규칙 저장은 `persistsRules`인 mainTab만 한다
+                restored.isFilterBarVisible = s.filter.hasActiveRules
+            } else {
+                restored = makeTab(fileURL: nil, session: liveSession, processes: processes, restoreSavedRules: false, initialFilter: s.filter)
+            }
+            restored.sidebarSelection = currentSelection(s.selection)
+            created[i] = restored.id
+            restoredTabsAwaitingWindow.insert(restored.id)
+            pendingOpenTabIDs.append(restored.id)
+        }
+        let keyID: UUID? = switch plan.active {
+        case .main: mainTab.id
+        case .rest(let i): created[i]
+        case .none: nil
+        }
+        if restoredTabsAwaitingWindow.isEmpty {
+            if let keyID { tab(keyID)?.window?.makeKeyAndOrderFront(nil) }
+        } else {
+            pendingKeyTabID = keyID
+        }
+    }
+
+    /// 종료할 때 저장할 탭(Restore Tabs at Launch): 앞 창의 탭 막대 순서, 그 뒤에 다른 창의 탭. 창이 없는 탭은 뺀다.
+    func snapshotTabs() -> OpenTabs {
+        let front = activeTab?.window ?? tabs.values.lazy.compactMap(\.window).first
+        let windows = (front.map { $0.tabbedWindows ?? [$0] } ?? [])
+            + NSApp.orderedWindows.flatMap { $0.tabbedWindows ?? [$0] }
+            + tabs.values.compactMap(\.window)   // 최소화 등으로 위 목록에 없는 창
+        var ordered: [SessionTab] = []
+        for window in windows {
+            if let t = tabs.values.first(where: { $0.window === window }), !ordered.contains(where: { $0 === t }) { ordered.append(t) }
+        }
+        return OpenTabs(tabs: ordered.map { TabSnapshot(filePath: $0.fileURL?.path, selection: $0.sidebarSelection, filter: $0.filter) },
+                        activeIndex: ordered.firstIndex { $0 === activeTab })
     }
 
     func tab(_ id: UUID) -> SessionTab? { tabs[id] }
@@ -376,7 +459,8 @@ final class AppModel {
 
     /// 세션·HAR 파일을 새 파일 탭으로 읽는다(스펙 §4.3). 창은 부르는 쪽이 `openWindow(id: "main", value:)`로 연다.
     /// 이미 열린 파일이면 그 탭 창을 앞으로 내고 nil. 실패하면 `systemError`에 쓰고 nil — 탭을 만들지 않는다.
-    func open(_ url: URL) async -> UUID? {
+    /// `quiet`(탭 복원): 실패해도 알리지 않고 Open Recent 목록을 건드리지 않는다.
+    func open(_ url: URL, quiet: Bool = false) async -> UUID? {
         if bringOpenTab(for: url) { return nil }
         let session = SessionStore()
         let processes = ProcessRegistry()
@@ -390,6 +474,7 @@ final class AppModel {
                 processes.replace(loaded.processes)
             }
         } catch {
+            if quiet { return nil }
             systemError = if case FlowImportError.invalidHAR(let reason) = error {
                 String(localized: "HAR 파일을 열지 못했습니다: \(reason)")
             } else {
@@ -401,7 +486,7 @@ final class AppModel {
         // 읽는 동안 같은 파일이 열렸으면(연달아 더블클릭) 그 탭으로.
         if bringOpenTab(for: url) { return nil }
         let tab = makeTab(fileURL: url, session: session, processes: processes, restoreSavedRules: false)
-        noteRecent(url)
+        if !quiet { noteRecent(url) }
         return tab.id
     }
 

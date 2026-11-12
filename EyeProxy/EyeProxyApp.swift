@@ -226,6 +226,7 @@ private struct LayoutPicker: View {
             await model.startServer()
             await model.autoOverrideSystemProxyAtLaunch()
         }
+        Task { [model] in await model.restoreTabs() }
         observeAppearance()
         model.refreshRecent()
     }
@@ -248,8 +249,13 @@ private struct LayoutPicker: View {
     /// 창이 하나도 없으면 메인 창을 띄운다 — 그 창이 대기 탭을 열고 오류 알림도 거기 뜬다.
     func application(_ application: NSApplication, open urls: [URL]) {
         Task { [model] in
+            // 실행할 때 온 파일도 복원한 탭 뒤에 붙는다. 연 파일이 앞에 오도록 복원의 앞 탭은 내지 않는다.
+            await model.restoreTabs()
             for url in urls {
-                if let id = await model.open(url) { model.pendingOpenTabIDs.append(id) }
+                if let id = await model.open(url) {
+                    model.pendingOpenTabIDs.append(id)
+                    model.pendingKeyTabID = nil
+                }
             }
             // Dock 클릭처럼 SwiftUI가 기본 메인 창(라이브 탭)을 연다.
             if !model.tabs.values.contains(where: { $0.window != nil }) { _ = NSApp.delegate?.applicationOpenUntitledFile?(NSApp) }
@@ -284,6 +290,8 @@ private struct LayoutPicker: View {
             alert.addButton(withTitle: String(localized: "취소"))
             guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
         }
+        // Restore Tabs at Launch: 종료가 확정된 첫 진입에서 한 번 저장한다(끄면 지운다).
+        if quitTask == nil { model.settings.openTabs = model.settings.restoreTabsAtLaunch ? model.snapshotTabs() : nil }
         // 멈춘 Breakpoint는 모두 원본대로 보낸다(§5.1).
         model.breakpoints.releaseAll()
         if quitTask != nil { return .terminateLater }
