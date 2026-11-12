@@ -69,7 +69,7 @@ private struct DeviceRow: View {
     }
 
     private func update(name: String?, kind: DeviceKind) {
-        model.devices.rename(device.address, name: name, kind: kind)
+        model.devices.rename(id: device.id, name: name, kind: kind)
         try? model.devices.save()   // 실패해도 메모리에는 남고 종료 시 다시 저장한다
     }
 }

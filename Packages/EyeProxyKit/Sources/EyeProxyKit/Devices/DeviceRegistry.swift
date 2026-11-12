@@ -32,8 +32,12 @@ public enum DeviceKind: String, Codable, CaseIterable, Sendable {
 }
 
 public struct Device: Identifiable, Codable, Equatable, Sendable {
-    public var id: String { address }
-    public let address: String
+    /// 같은 주소에 기록이 여럿이어도 겹치지 않는다(MAC 규칙, 스펙 §4.3.1).
+    public var id: String { mac ?? address }
+    /// MAC이 같은 기록이 새 주소에서 보이면 바뀐다.
+    public var address: String
+    /// ARP 표에서 읽은 MAC. 같은 L2 망이 아니면 없다.
+    public var mac: String?
     public var name: String?
     /// Bonjour 광고에서 찾은 이름. 직접 붙인 `name`이 없을 때만 보인다.
     public var autoName: String?
@@ -54,12 +58,13 @@ public struct Device: Identifiable, Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case address, name, autoName, kind, extendedKind, lastSeen, flowCount, decryptedCount, tlsFailureCount
+        case address, mac, name, autoName, kind, extendedKind, lastSeen, flowCount, decryptedCount, tlsFailureCount
     }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         address = try c.decode(String.self, forKey: .address)
+        mac = try c.decodeIfPresent(String.self, forKey: .mac)
         name = try c.decodeIfPresent(String.self, forKey: .name)
         autoName = try c.decodeIfPresent(String.self, forKey: .autoName)
         let legacyKind = try c.decodeIfPresent(DeviceKind.self, forKey: .kind) ?? .unknown
@@ -73,6 +78,7 @@ public struct Device: Identifiable, Codable, Equatable, Sendable {
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(address, forKey: .address)
+        try c.encodeIfPresent(mac, forKey: .mac)  // 새 키: 1.3.0은 모르는 키를 무시한다
         try c.encodeIfPresent(name, forKey: .name)
         try c.encodeIfPresent(autoName, forKey: .autoName)
         try c.encode(kind.legacy, forKey: .kind)
@@ -96,9 +102,14 @@ public final class DeviceRegistry {
     @ObservationIgnored private var storageURL: URL?
     /// 트래픽보다 먼저 온 광고를 기억해 둔다(저장하지 않는다).
     @ObservationIgnored private var discovered: [String: DiscoveredDevice] = [:]
+    @ObservationIgnored private let macLookup: @MainActor (String) -> String?
+    /// 주소마다 마지막으로 ARP 표를 읽은 시각(이벤트 날짜, 저장하지 않는다).
+    @ObservationIgnored private var macCheckedAt: [String: Date] = [:]
+    public static let macCheckInterval: TimeInterval = 60
 
-    public init(storageURL: URL?) {
+    public init(storageURL: URL?, macLookup: @escaping @MainActor (String) -> String? = { _ in nil }) {
         self.storageURL = storageURL
+        self.macLookup = macLookup
         guard let storageURL, let data = try? Data(contentsOf: storageURL) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -131,8 +142,18 @@ public final class DeviceRegistry {
         }
     }
 
-    public func rename(_ address: String, name: String?, kind: DeviceKind) {
-        guard let i = devices.firstIndex(where: { $0.address == address }) else { return }
+    /// 그 주소의 lastSeen이 가장 늦은 기록(그 주소를 대표한다). `devices`는 lastSeen 내림차순이다.
+    public func device(at address: String) -> Device? {
+        devices.first { $0.address == address }
+    }
+
+    /// 그 주소를 대표하는 기록인지. 아니면 "이전" 기록이다.
+    public func isCurrent(_ device: Device) -> Bool {
+        self.device(at: device.address)?.id == device.id
+    }
+
+    public func rename(id: String, name: String?, kind: DeviceKind) {
+        guard let i = devices.firstIndex(where: { $0.id == id }) else { return }
         devices[i].name = name
         devices[i].kind = kind
     }
@@ -154,6 +175,16 @@ public final class DeviceRegistry {
         return device != before
     }
 
+    /// 이 Mac의 LAN 주소 기록에 종류(알 수 없음일 때만)와 컴퓨터 이름을 넣는다(스펙 §4.3.2). 바뀌면 true.
+    @discardableResult
+    public func markThisMac(_ address: String, name: String?) -> Bool {
+        guard !FlowFilter.isLoopback(address), let i = devices.firstIndex(where: { $0.address == address }) else { return false }
+        let before = devices[i]
+        if devices[i].kind == .unknown { devices[i].kind = .thisMac }
+        if let name, !name.isEmpty { devices[i].autoName = name }
+        return devices[i] != before
+    }
+
     /// 다른 기기에서 온 트래픽이 있었는지(기기 찾기 시작 조건, 스펙 §3).
     /// 루프백·주소 없음(`unknown`)·이 Mac의 주소는 빼고, 이 Mac의 주소는 후보가 있을 때만 묻는다.
     public func hasRemoteDevice(ownAddresses: () -> [String]) -> Bool {
@@ -171,15 +202,41 @@ public final class DeviceRegistry {
     }
 
     private func update(_ address: String, at date: Date, _ change: (inout Device) -> Void) {
-        let i = devices.firstIndex { $0.address == address } ?? {
-            let isLocal = address == "127.0.0.1" || address == "::1"
-            var device = Device(address: address, kind: isLocal ? .thisMac : .unknown, lastSeen: date)
-            if let found = discovered[address] { _ = applyDiscovery(found, to: &device) }
-            devices.append(device)
-            return devices.count - 1
-        }()
+        var current = devices.firstIndex { $0.address == address }
+        if let mac = lookUpMAC(address, at: date) {
+            if let i = current, devices[i].mac == mac {
+                // 1. 그대로 둔다
+            } else if let j = devices.firstIndex(where: { $0.mac == mac }) {
+                // 2. 그 MAC의 기록(다른 주소, 또는 같은 주소의 "이전" 기록)이 이 주소로 옮겨 온다
+                devices[j].address = address
+                devices[j].lastSeen = date
+                current = j
+            } else if let i = current, devices[i].mac == nil {
+                devices[i].mac = mac  // 3. 옛 기록이 MAC을 배운다
+            } else {
+                current = append(address, mac: mac, at: date)  // 4. 이 주소를 다른 기기가 받았다
+            }
+        }
+        let i = current ?? append(address, mac: nil, at: date)
         devices[i].lastSeen = max(devices[i].lastSeen, date)
         change(&devices[i])
         devices.sort { $0.lastSeen > $1.lastSeen }
+    }
+
+    private func append(_ address: String, mac: String?, at date: Date) -> Int {
+        let isLocal = address == "127.0.0.1" || address == "::1"
+        var device = Device(address: address, kind: isLocal ? .thisMac : .unknown, lastSeen: date)
+        device.mac = mac
+        if let found = discovered[address] { _ = applyDiscovery(found, to: &device) }
+        devices.append(device)
+        return devices.count - 1
+    }
+
+    /// 루프백·주소 없음이 아니고, 그 주소를 `macCheckInterval` 안에 읽지 않았을 때만 ARP 표를 읽는다.
+    private func lookUpMAC(_ address: String, at date: Date) -> String? {
+        guard !FlowFilter.isLoopback(address), !address.isEmpty, address != "unknown" else { return nil }
+        if let last = macCheckedAt[address], date.timeIntervalSince(last) < Self.macCheckInterval { return nil }
+        macCheckedAt[address] = date
+        return macLookup(address)
     }
 }
