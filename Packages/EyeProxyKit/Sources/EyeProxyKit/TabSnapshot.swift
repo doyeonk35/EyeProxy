@@ -41,3 +41,11 @@ public struct RestorePlan: Equatable, Sendable {
     public var rest: [TabSnapshot]        // 나머지, 저장 순서
     public var active: Active
 }
+
+extension TabSnapshot {
+    /// 복원할 출처: 저장본의 그룹은 지금 정의(같은 id)로 바꾼다. 지워졌거나 Favorites에 저장하지 않은 그룹이면 저장본의 사본을 그대로 쓴다.
+    public static func restoredSelection(_ item: SidebarItem?, groups: [HostGroup]) -> SidebarItem? {
+        guard case .group(let g)? = item else { return item }
+        return groups.first { $0.id == g.id }.map(SidebarItem.group) ?? item
+    }
+}

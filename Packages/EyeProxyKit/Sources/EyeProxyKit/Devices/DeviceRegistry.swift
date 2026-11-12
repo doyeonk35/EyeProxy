@@ -195,7 +195,8 @@ public final class DeviceRegistry {
     }
 
     /// 1.3.0이 다시 저장하면 `mac`이 빠져 한 주소에 MAC 없는 기록이 여럿 남는다(id가 겹친다).
-    /// lastSeen이 가장 늦은 기록 하나만 남기고, 그 기록에 없는 이름·자동 이름·종류(알 수 없음일 때)만 다른 기록에서 채운다.
+    /// lastSeen이 가장 늦은 기록 하나만 남기고, 그 기록에 없는 자동 이름·종류(알 수 없음일 때)만 다른 기록에서 채운다.
+    /// 직접 붙인 이름은 옮기지 않는다: 버린 기록은 그 주소를 예전에 쓰던 다른 기기("이전")일 수 있다.
     /// 개수는 남긴 기록의 값을 쓴다. MAC 있는 기록은 그대로 둔다.
     private static func mergingMACLessDuplicates(_ loaded: [Device]) -> [Device] {
         var result: [Device] = []
@@ -207,7 +208,6 @@ public final class DeviceRegistry {
                 result.append(device)
                 continue
             }
-            if result[i].name?.isEmpty ?? true { result[i].name = device.name }
             if result[i].autoName?.isEmpty ?? true { result[i].autoName = device.autoName }
             if result[i].kind == .unknown { result[i].kind = device.kind }
         }

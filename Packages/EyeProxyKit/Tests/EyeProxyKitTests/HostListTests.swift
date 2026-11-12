@@ -41,3 +41,10 @@ private func parse(_ s: String) throws -> HostList.Parsed { try HostList.parse(D
     let p = HostList.patterns(fromText: "api.example.com, *.Example.org\n\nhttps://cdn.example.net/x ,bad/host,api.example.com")
     #expect(p.patterns == ["api.example.com", "*.example.org", "cdn.example.net"]); #expect(p.rejected == 1)
 }
+
+@Test func decryptsAllHTTPSCatchesWildcardOnlyPatterns() {
+    for p in ["*", "*.*", "?*", "*?", "**"] { #expect(HostList.decryptsAllHTTPS(["api.example.com", p]), "\(p)") }
+    #expect(!HostList.decryptsAllHTTPS(["*.example.com", "v?.example.net", "api.example.org"]))
+    #expect(!HostList.decryptsAllHTTPS([""]))
+    #expect(!HostList.decryptsAllHTTPS([]))
+}

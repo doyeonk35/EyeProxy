@@ -150,14 +150,8 @@ final class AppModel {
     private func makeMainTab() -> SessionTab {
         let main = restorePlan?.main
         let tab = makeTab(fileURL: nil, session: liveSession, processes: processes, restoreSavedRules: true, initialFilter: main?.filter)
-        if let main { tab.sidebarSelection = currentSelection(main.selection) }
+        if let main { tab.sidebarSelection = TabSnapshot.restoredSelection(main.selection, groups: settings.hostGroups) }
         return tab
-    }
-
-    /// 저장본의 그룹은 지금 정의로 바꾼다. 지워진 그룹이면 All Requests.
-    private func currentSelection(_ item: SidebarItem?) -> SidebarItem? {
-        guard case .group(let g)? = item else { return item }
-        return settings.hostGroups.first { $0.id == g.id }.map(SidebarItem.group) ?? .allFlows
     }
 
     /// 지난 종료 때의 나머지 탭을 저장 순서대로 다시 만들어 창을 연다(`pendingOpenTabIDs`). 몇 번 불러도 한 번만 돈다.
@@ -189,7 +183,7 @@ final class AppModel {
             } else {
                 restored = makeTab(fileURL: nil, session: liveSession, processes: processes, restoreSavedRules: false, initialFilter: s.filter)
             }
-            restored.sidebarSelection = currentSelection(s.selection)
+            restored.sidebarSelection = TabSnapshot.restoredSelection(s.selection, groups: settings.hostGroups)
             created[i] = restored.id
             restoredTabsAwaitingWindow.insert(restored.id)
             pendingOpenTabIDs.append(restored.id)
@@ -453,6 +447,7 @@ final class AppModel {
 
     /// SSL Proxying List 합치기는 모두 여기로(스펙 §4.5): 대소문자 무시·중복 빼고 뒤에 붙인 뒤 SSL을 켜고 적용한다.
     func enableSSLProxying(forHosts hosts: [String]) async {
+        guard !hosts.isEmpty else { return }
         settings.sslPatterns = HostList.merge(hosts, into: settings.sslPatterns).merged
         settings.sslEnabled = true
         await applySettingsToServer()

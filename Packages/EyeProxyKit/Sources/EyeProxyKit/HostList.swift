@@ -48,6 +48,11 @@ public enum HostList {
         return s.isEmpty || !s.allSatisfy(ok.contains) ? nil : s
     }
 
+    /// 사실상 모든 호스트에 맞는 패턴(`*`·`?`·`.`로만 된 것, 예: `*`, `*.*`, `?*`)이 있는지. 모든 HTTPS를 복호화한다는 경고용.
+    public static func decryptsAllHTTPS(_ patterns: [String]) -> Bool {
+        patterns.contains { !$0.isEmpty && $0.allSatisfy { "*?.".contains($0) } }
+    }
+
     public static func serialize(_ patterns: [String]) -> Data {
         let head = "# Prog host list — 한 줄에 호스트 패턴 하나. *는 임의 문자열, ?는 한 글자."
         return Data(([head] + patterns).joined(separator: "\n").appending("\n").utf8)

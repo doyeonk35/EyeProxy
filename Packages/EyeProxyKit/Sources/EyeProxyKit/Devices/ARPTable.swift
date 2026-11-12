@@ -1,6 +1,6 @@
 import Darwin
 
-/// ARP 표(`arp -a`와 같은 표)에서 IPv4 주소의 MAC을 읽는다. 외부 도구·권한 없이 sysctl만 쓴다(스펙 §4.3.1).
+/// ARP 표(`arp -a`와 같은 표)에서 IPv4 주소의 MAC을 읽는다. 외부 도구 없이 sysctl만 쓴다(스펙 §4.3.1). 로컬 네트워크 권한이 없으면 표가 비어 nil일 수 있다.
 public enum ARPTable {
     /// sysctl(CTL_NET, PF_ROUTE, 0, AF_INET, NET_RT_FLAGS, RTF_LLINFO)로 표를 읽어 그 IPv4의 MAC. 실패·없음이면 nil.
     public static func macAddress(for ipv4: String) -> String? {

@@ -36,3 +36,15 @@ private func file(_ p: String) -> TabSnapshot { TabSnapshot(filePath: p, selecti
     let s = TabSnapshot(filePath: nil, selection: .group(g), filter: f)
     #expect(try JSONDecoder().decode(TabSnapshot.self, from: JSONEncoder().encode(s)) == s)
 }
+
+@Test func restoredSelectionPrefersCurrentGroupElseKeepsSnapshotCopy() {
+    let saved = HostGroup(name: "옛 이름", hostPatterns: ["*.example.com"], apps: [])
+    var current = saved
+    current.name = "새 이름"
+    current.hostPatterns = ["*.example.org"]
+    #expect(TabSnapshot.restoredSelection(.group(saved), groups: [current]) == .group(current))
+    let unsaved = HostGroup(name: "저장 안 한 그룹", hostPatterns: ["api.example.net"], apps: [])
+    #expect(TabSnapshot.restoredSelection(.group(unsaved), groups: [current]) == .group(unsaved))
+    #expect(TabSnapshot.restoredSelection(.host("api.example.com"), groups: [current]) == .host("api.example.com"))
+    #expect(TabSnapshot.restoredSelection(nil, groups: [current]) == nil)
+}
