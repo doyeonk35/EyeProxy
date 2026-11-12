@@ -11,9 +11,7 @@ extension AppModel {
         let added = HostList.merge(list.patterns, into: settings.sslPatterns).added.count
         var notes: [String] = []
         if list.rejected > 0 { notes.append(String(localized: "형식이 맞지 않는 줄 \(list.rejected)개는 버렸습니다.")) }
-        if list.patterns.contains(where: { $0.allSatisfy { $0 == "*" } }) {
-            notes.append(String(localized: "`*`가 있어 모든 HTTPS를 복호화합니다."))
-        }
+        if let note = Self.allHTTPSNote(list.patterns) { notes.append(note) }
         let alert = NSAlert()
         alert.messageText = String(localized: "호스트 패턴 \(list.patterns.count)개(새로 \(added)개)를 SSL Proxying List에 더할까요?")
         alert.informativeText = notes.joined(separator: "\n")
@@ -29,6 +27,24 @@ extension AppModel {
             settings.saveGroup(HostGroup(name: url.deletingPathExtension().lastPathComponent, hostPatterns: list.patterns, apps: []))
         }
         infoMessage = String(localized: "SSL Proxying List에 \(added)개를 더했습니다.")
+    }
+
+    /// `*`만으로 된 패턴이 있으면 모든 HTTPS를 복호화한다는 안내(가져오기·그룹 켜기 공용). 없으면 nil.
+    static func allHTTPSNote(_ patterns: [String]) -> String? {
+        patterns.contains(where: { $0.allSatisfy { $0 == "*" } }) ? String(localized: "*가 있어 모든 HTTPS를 복호화합니다.") : nil
+    }
+
+    /// 그룹 우클릭 Enable SSL Proxying: `*`가 있으면 확인을 받은 뒤에만 더한다.
+    func enableSSLProxyingConfirmingAllHTTPS(forHosts hosts: [String]) async {
+        if let note = Self.allHTTPSNote(hosts) {
+            let alert = NSAlert()
+            alert.messageText = String(localized: "호스트 패턴 \(hosts.count)개를 SSL Proxying List에 더할까요?")
+            alert.informativeText = note
+            alert.addButton(withTitle: String(localized: "추가"))
+            alert.addButton(withTitle: String(localized: "취소"))
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        await enableSSLProxying(forHosts: hosts)
     }
 
     /// 열기 패널로 호스트 목록 파일을 골라 읽는다. 취소면 nil, 읽지 못하거나 쓸 호스트가 없으면 `systemError`를 쓰고 nil.

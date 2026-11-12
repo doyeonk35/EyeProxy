@@ -169,7 +169,7 @@ struct SidebarView: View {
                 Divider()
                 Button("Edit…") { tab.groupSheet = .init(draft: g, isEditing: true) }
                     .help("이 그룹의 도메인·앱 고치기")
-                Button("Enable SSL Proxying") { Task { await model.enableSSLProxying(forHosts: g.hostPatterns) } }
+                Button("Enable SSL Proxying") { Task { await model.enableSSLProxyingConfirmingAllHTTPS(forHosts: g.hostPatterns) } }
                     .disabled(g.hostPatterns.isEmpty)
                     .help("이 그룹의 도메인 패턴을 SSL Proxying List에 넣고 복호화 켜기")
                 Button("Export…") { model.exportHostList(g.hostPatterns, suggestedName: g.displayName) }
