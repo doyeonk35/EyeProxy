@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MainToolbar: ToolbarContent {
     let model: AppModel
+    let tab: SessionTab
     @Environment(\.openWindow) private var openWindow
 
     var body: some ToolbarContent {
@@ -12,7 +13,7 @@ struct MainToolbar: ToolbarContent {
             Button(settings.isRecording ? "기록 일시정지" : "기록 다시 시작",
                    systemImage: settings.isRecording ? "pause.fill" : "play.fill") { settings.isRecording.toggle() }
                 .help(settings.isRecording ? "기록 일시정지 (⌘R)" : "기록 다시 시작 (⌘R)")
-            Button("지우기", systemImage: "trash") { model.clear() }
+            Button("지우기", systemImage: "trash") { tab.clear() }
                 .help("세션의 모든 요청 지우기 (⌘K)")
             Button("Compose", systemImage: "square.and.pencil") { openWindow(id: "compose") }
                 .help("요청을 직접 만들어 보내기 (⌥⌘C)")
@@ -46,9 +47,9 @@ struct MainToolbar: ToolbarContent {
                 Label("SSL 프록싱", systemImage: settings.sslEnabled ? "lock.fill" : "lock.open")
             }
             .help("HTTPS 복호화(SSL 프록싱) 켜기/끄기")
-            @Bindable var model = model
-            Toggle(isOn: $model.filter.includeHidden) {
-                Label("숨긴 요청 보기", systemImage: model.filter.includeHidden ? "eye" : "eye.slash")
+            @Bindable var tab = tab
+            Toggle(isOn: $tab.filter.includeHidden) {
+                Label("숨긴 요청 보기", systemImage: tab.filter.includeHidden ? "eye" : "eye.slash")
             }
             .toggleStyle(.button)
             .help("Block List로 숨긴 요청도 목록에 보이기")

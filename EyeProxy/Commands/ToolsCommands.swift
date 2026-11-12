@@ -29,92 +29,97 @@ private struct FlowMenu: View {
     @FocusedValue(\.visibleFlowCount) private var visibleCount
     @Environment(\.openWindow) private var openWindow
 
-    // 포커스 값은 켜짐·꺼짐 판단에만 쓴다. 대상은 실행 시점의 선택(`model.selectedFlowIDs`)이다 —
+    // 포커스 값은 켜짐·꺼짐 판단에만 쓴다. 대상은 실행 시점의 선택(`activeTab.selectedFlowIDs`)이다 —
     // Auto Select가 앱이 뒤에 있을 때도 선택을 바꾸므로 마지막 메뉴 렌더 때 잡힌 값은 낡을 수 있다.
     var body: some View {
         let ids = selection ?? []
-        let current = { selection == nil ? [] : model.selectedFlowIDs }
+        let noTab = model.activeTab == nil
+        let current = { selection == nil ? [] : model.activeTab?.selectedFlowIDs ?? [] }
         Button("Repeat") { model.repeatFlows(current()) }
             .keyboardShortcut(.return, modifiers: .command)
-            .disabled(ids.isEmpty)
+            .disabled(ids.isEmpty || noTab)
             .help("선택한 요청을 그대로 다시 보내기 (⌘↩)")
         Button("Edit and Repeat…") {
-            guard let id = current().first, current().count == 1, let flow = model.session.flow(id) else { return }
+            guard let id = current().first, current().count == 1, let flow = model.activeTab?.session.flow(id) else { return }
             model.composeSeed = flow.request
             openWindow(id: "compose")
         }
         .keyboardShortcut(.return, modifiers: [.command, .option])
-        .disabled(ids.count != 1)
+        .disabled(ids.count != 1 || noTab)
         .help("선택한 요청을 Compose에서 고쳐 보내기 (⌥⌘↩)")
         Divider()
-        let id = model.selectedFlowID
-        Button(id.flatMap { model.session.comments[$0] } == nil ? "Add Comment…" : "Edit Comment…") {
-            if selection != nil, let id = model.selectedFlowID { model.commentingFlowID = id }
+        let tab = model.activeTab
+        let id = tab?.selectedFlowID
+        Button(id.flatMap { tab?.session.comments[$0] } == nil ? "Add Comment…" : "Edit Comment…") {
+            if selection != nil, let tab = model.activeTab, let id = tab.selectedFlowID { tab.commentingFlowID = id }
         }
-        .disabled(ids.count != 1)
+        .disabled(ids.count != 1 || noTab)
         .help("선택한 요청의 코멘트 쓰기·고치기")
         Divider()
-        HighlightMenu(model: model) { selection == nil ? [] : model.visibleSelectedFlowIDs }
+        HighlightMenu(tab: tab) { selection == nil ? [] : model.activeTab?.visibleSelectedFlowIDs ?? [] }
         Divider()
-        Button("Delete") { if listSelection != nil { model.deleteFlows(model.selectedFlowIDs) } }
+        Button("Delete") { if listSelection != nil, let tab = model.activeTab { tab.deleteFlows(tab.selectedFlowIDs) } }
             .keyboardShortcut(.delete, modifiers: [])
-            .disabled((listSelection ?? []).isEmpty)
+            .disabled((listSelection ?? []).isEmpty || noTab)
             .help("선택한 요청을 목록에서 지우기 (⌫)")
-        Button("Delete All") { model.deleteVisibleFlows() }
-            .disabled((visibleCount ?? 0) == 0)
+        Button("Delete All") { model.activeTab?.deleteVisibleFlows() }
+            .disabled((visibleCount ?? 0) == 0 || noTab)
             .help("목록에 보이는 요청 모두 지우기(숨은 요청은 남김)")
         Divider()
         // 필터가 숨긴 선택은 저장하지 않는다 → 보이는 선택이 없으면 끈다.
-        Button("Save Requests…") { Task { await model.saveRequests() } }
-            .disabled(selection == nil || model.visibleSelectedFlowIDs.isEmpty)
+        Button("Save Requests…") { Task { await model.activeTab?.saveRequests() } }
+            .disabled(selection == nil || (tab?.visibleSelectedFlowIDs ?? []).isEmpty)
             .help("선택한 요청을 Prog 세션 파일로 저장")
         // 선택이 있으면 선택, 없으면 보이는 행 전체(스펙 §8.4).
-        ExportMenu(model: model) { model.selectedFlowIDs }
+        ExportMenu(tab: tab) { model.activeTab?.selectedFlowIDs ?? [] }
             .disabled((visibleCount ?? 0) == 0)
     }
 }
 
 /// Flow ▸ Export와 목록 우클릭 ▸ Export(스펙 §8.4).
 struct ExportMenu: View {
-    let model: AppModel
+    /// nil이면(앞 탭 없음) 끈다.
+    let tab: SessionTab?
     /// 실행 시점에 읽는다(Flow 메뉴는 현재 선택, 우클릭은 클릭한 행). 비면 보이는 행 전체.
     let ids: () -> Set<FlowID>
 
     var body: some View {
         Menu("Export") {
-            Button("as HAR (HTTP Archive)…") { Task { await model.export(.har, scope: ids()) } }
+            Button("as HAR (HTTP Archive)…") { Task { await tab?.export(.har, scope: ids()) } }
                 .help("HAR 1.2 파일로 저장")
-            Button("as CSV…") { Task { await model.export(.csv, scope: ids()) } }
+            Button("as CSV…") { Task { await tab?.export(.csv, scope: ids()) } }
                 .help("CSV 표 파일로 저장(Excel에서 열림)")
-            Button("as Prog Session…") { Task { await model.export(.session, scope: ids()) } }
+            Button("as Prog Session…") { Task { await tab?.export(.session, scope: ids()) } }
                 .help("Prog 세션 파일로 저장")
         }
+        .disabled(tab == nil)
         .help("선택한 요청(없으면 보이는 요청 전체)을 파일로 내보내기")
     }
 }
 
 /// Flow ▸ Highlight와 목록 우클릭 ▸ Highlight(스펙 §4). 색 ⌘1…⌘6, 취소선 ⇧⌘X(⌥⌘S는 사이드바 토글과 겹친다), 되돌리기 ⌘0.
 struct HighlightMenu: View {
-    let model: AppModel
+    /// nil이면(앞 탭 없음) 끈다.
+    let tab: SessionTab?
     /// 실행 시점에 읽는다(Flow 메뉴는 현재 선택, 우클릭은 클릭한 행).
     let ids: () -> Set<FlowID>
 
     var body: some View {
         Menu("Highlight") {
             ForEach(Array(HighlightColor.allCases.enumerated()), id: \.element) { i, color in
-                Button(color.rawValue.capitalized) { model.session.setHighlight(color, for: ids()) }
+                Button(color.rawValue.capitalized) { tab?.session.setHighlight(color, for: ids()) }
                     .keyboardShortcut(KeyEquivalent(Character(String(i + 1))))
                     .help("요청 행을 \(color.rawValue.capitalized) 색으로 표시 (⌘\(i + 1))")
             }
             Divider()
-            Button("Strikethrough") { model.session.toggleStrikethrough(for: ids()) }
+            Button("Strikethrough") { tab?.session.toggleStrikethrough(for: ids()) }
                 .keyboardShortcut("x", modifiers: [.command, .shift])
                 .help("요청 행에 취소선 긋기/지우기 (⇧⌘X)")
-            Button("Reset") { model.session.resetHighlight(for: ids()) }
+            Button("Reset") { tab?.session.resetHighlight(for: ids()) }
                 .keyboardShortcut("0")
                 .help("색과 취소선 모두 지우기 (⌘0)")
         }
-        .disabled(ids().isEmpty)
+        .disabled(tab == nil || ids().isEmpty)
         .help("요청 행에 색·취소선 표시")
     }
 }

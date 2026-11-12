@@ -3,28 +3,28 @@ import SwiftUI
 
 /// 목록 위 한 줄 필터 바(스펙 §6). 묶음 안은 OR, 묶음 사이·검색어·사이드바와는 AND. 저장하지 않는다.
 struct FilterBarView: View {
-    @Environment(AppModel.self) private var model
+    @Environment(SessionTab.self) private var tab
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                chip("All", selected: model.filter.isBarEmpty, help: "분류 필터 모두 해제") { model.filter.clearBar() }
+                chip("All", selected: tab.filter.isBarEmpty, help: "분류 필터 모두 해제") { tab.filter.clearBar() }
                 Divider().frame(height: 14)
                 ForEach(FlowProtocol.allCases, id: \.self) { p in
-                    chip(p.rawValue, selected: model.filter.protocols.contains(p), help: Self.help(p)) {
-                        model.filter.protocols.formSymmetricDifference([p])
+                    chip(p.rawValue, selected: tab.filter.protocols.contains(p), help: Self.help(p)) {
+                        tab.filter.protocols.formSymmetricDifference([p])
                     }
                 }
                 Divider().frame(height: 14)
                 ForEach(ContentKind.allCases, id: \.self) { kind in
-                    chip(kind.rawValue, selected: model.filter.contentKinds.contains(kind), help: Self.help(kind)) {
-                        model.filter.contentKinds.formSymmetricDifference([kind])
+                    chip(kind.rawValue, selected: tab.filter.contentKinds.contains(kind), help: Self.help(kind)) {
+                        tab.filter.contentKinds.formSymmetricDifference([kind])
                     }
                 }
                 Divider().frame(height: 14)
                 ForEach(1...5, id: \.self) { c in
-                    chip("\(c)xx", selected: model.filter.statusClasses.contains(c), help: "상태 코드 \(c)xx 응답만 보기") {
-                        model.filter.statusClasses.formSymmetricDifference([c])
+                    chip("\(c)xx", selected: tab.filter.statusClasses.contains(c), help: "상태 코드 \(c)xx 응답만 보기") {
+                        tab.filter.statusClasses.formSymmetricDifference([c])
                     }
                 }
             }

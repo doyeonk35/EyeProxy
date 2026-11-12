@@ -101,7 +101,7 @@ struct MatchRuleFields: View {
     }
 
     private var selectedFlowURL: String {
-        model.selectedFlowID.flatMap { model.session.flow($0) }.map { MatchRule.urlString($0.request, includeQuery: true) } ?? ""
+        model.activeTab.flatMap { tab in tab.selectedFlowID.flatMap { tab.session.flow($0) } }.map { MatchRule.urlString($0.request, includeQuery: true) } ?? ""
     }
 }
 

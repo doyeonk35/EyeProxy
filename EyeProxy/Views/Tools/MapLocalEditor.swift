@@ -15,7 +15,7 @@ struct MapLocalWindow: View {
             editorStyle: .window(id: "map-local-editor"),
             helpURL: URL(string: "https://docs.proxyman.com/advanced-features/map-local"),
             prefill: { rule, pending in
-                model.editorMessages[rule.id] = MapLocalMessage.text(for: model.session.flow(pending.flowID)?.response)
+                model.editorMessages[rule.id] = MapLocalMessage.text(for: model.activeTab?.session.flow(pending.flowID)?.response)
             }
         ) {
             Menu("Default Local File Folder") {

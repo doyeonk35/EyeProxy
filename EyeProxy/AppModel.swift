@@ -17,7 +17,8 @@ final class AppModel {
     static let caDirectory = supportDirectory.appending(path: "ca")
 
     let settings = AppSettings()
-    let session = SessionStore()
+    /// 라이브 세션(앱에 하나). 라이브 탭은 모두 이 세션과 `processes`를 같이 쓴다(스펙 §4.1).
+    let liveSession = SessionStore()
     let processes = ProcessRegistry()
     let rules = RuleStore(directory: AppModel.rulesDirectory)
     let breakpoints = BreakpointCenter()
@@ -28,63 +29,12 @@ final class AppModel {
     /// 새로 만든 CA를 저장하지 못했으면 그 이유. 매 실행 새 루트 CA가 되므로 Task 15 인증서 화면에서 표시한다.
     let caSaveError: String?
     private(set) var serverState: ServerState = .stopped
-    /// 목록 필터. 규칙·AND/OR가 바뀌면 저장하고 목록에 반영한다(`filterRulesChanged`).
-    var filter = FlowFilter() {
-        didSet {
-            if filter.rules != oldValue.rules || filter.combineWithOr != oldValue.combineWithOr { filterRulesChanged() }
-            // 칩·숨김 보기 같은 나머지 조건은 바로 반영한다(규칙은 `appliedRules`가 바뀔 때).
-            var rest = filter
-            (rest.rules, rest.combineWithOr) = (oldValue.rules, oldValue.combineWithOr)
-            if rest != oldValue { refreshVisibleRows() }
-        }
-    }
-    /// 목록 위 필터 막대(스펙 §4). 숨겨도 켜진 규칙은 계속 적용된다.
-    var isFilterBarVisible = false {
-        // 막대 안에 포커스가 있었는데 숨기면(Esc·하단 Filter 버튼) 포커스를 목록으로 돌려 ⌫·화살표가 바로 동작하게.
-        didSet { if !isFilterBarVisible, filterBarHasFocus { filterBarHasFocus = false; focusFlowList = true } }
-    }
-    /// 필터 막대 안에 포커스가 있다(막대가 알린다). 그리기에는 쓰지 않는다.
-    @ObservationIgnored var filterBarHasFocus = false
-    /// 목록 표에 포커스를 달라는 한 번짜리 요청. 목록이 받아서 끈다.
-    var focusFlowList = false
-    /// ⌘F가 막대를 보이면 막대가 현재 규칙 검색칸에 포커스를 주고 끈다.
-    var focusFilterBar = false
-    /// 켜진(적용되는) 규칙이 있다 — 하단 바 Filter 버튼 강조.
-    var hasActiveFilterRules: Bool { filter.hasActiveRules }
-    /// 목록에 실제로 적용 중인 규칙·AND/OR. 본문 규칙이 바뀌면 백그라운드 판정이 끝난 뒤에 바뀐다(그동안 이전 결과 유지).
-    private var appliedRules = FlowFilter() { didSet { refreshVisibleRows() } }
-    /// 본문 규칙(`bodyMatchRules`) 판정 결과. 흐름 id → 판정한 본문 크기·규칙마다 결과.
-    private var bodyMatches: [FlowID: BodyMatch] = [:]
-    @ObservationIgnored private var bodyMatchRules: [FilterRule] = []
-    @ObservationIgnored private var bodyJob: Task<Void, Never>?
-    @ObservationIgnored private var bodyJobGeneration = 0
-    /// 돌고 있는 `bodyJob`이 새 규칙 전체 판정인가(아니면 새 흐름만 보는 부분 판정).
-    @ObservationIgnored private var bodyJobIsFull = false
-    @ObservationIgnored private var rulesDebounce: Task<Void, Never>?
-    /// 목록 선택(여러 건 가능 — Repeat). 상세·코멘트 등 한 건용 동작은 `selectedFlowID`를 쓴다.
-    var selectedFlowIDs: Set<FlowID> = []
-    /// 정확히 한 건이 선택됐을 때 그 흐름.
-    var selectedFlowID: FlowID? {
-        get { selectedFlowIDs.count == 1 ? selectedFlowIDs.first : nil }
-        set { selectedFlowIDs = newValue.map { [$0] } ?? [] }
-    }
-    /// 기본은 ID 내림차순(최신이 맨 위, Proxyman). 열 머리로 바꾼 정렬은 저장하지 않는다.
-    var sortOrder: [KeyPathComparator<FlowRow>] = [KeyPathComparator(\.number, order: .reverse)] { didSet { refreshVisibleRows() } }
-    var sidebarSelection: SidebarItem? = .allFlows { didSet { refreshVisibleRows() } }
-    /// 목록에 보이는 흐름(세션 순서)과 행(정렬 순서). 사용자 조작은 바로, 트래픽(세션·귀속·본문 판정 변화)은
-    /// 묶어서 최대 `rowsRefreshInterval`마다 다시 계산한다 — 요청이 쏟아져도 메인 스레드가 매 이벤트 전체를 다시 거르지 않게(스펙 §1).
-    private(set) var visibleFlows: [Flow] = []
-    private(set) var visibleRows: [FlowRow] = []
-    /// 사이드바 트리·"전체" 개수. 목록처럼 트래픽 중에는 묶어서 다시 만든다.
-    private(set) var sidebarTree = SidebarTree.build(flows: [], attribution: [:], devices: [], pinned: [], runtimes: [:])
-    private(set) var sidebarFlowCount = 0
-    /// 사이드바 아래 필터 칸: 줄 이름으로 거른다.
-    var sidebarFilterText = "" { didSet { sidebarRefresh.now() } }
-    /// 경로 트리를 펼친 도메인. 펼친 도메인만 경로 트리를 만든다(사이드바와 같이 묶어서 갱신).
-    var expandedDomains: Set<String> = [] { didSet { sidebarRefresh.now() } }
-    private(set) var pathTrees: [String: [PathNode]] = [:]
-    @ObservationIgnored private lazy var rowsRefresh = ThrottledRefresh { [weak self] in self?.computeVisibleRows() }
-    @ObservationIgnored private lazy var sidebarRefresh = ThrottledRefresh { [weak self] in self?.computeSidebar() }
+    /// 열린 탭. 키 = 탭 id.
+    private(set) var tabs: [UUID: SessionTab] = [:]
+    /// 메뉴 명령이 다루는 탭(앞 창의 탭).
+    var activeTab: SessionTab?
+    /// 실행할 때 여는 라이브 탭. 마지막 필터 규칙을 되살린다.
+    @ObservationIgnored private(set) lazy var mainTab = makeTab(fileURL: nil, session: liveSession, processes: processes, restoreSavedRules: true)
     /// 우클릭 ▸ Tools로 열 새 규칙. 해당 도구 창이 꺼내 편집기를 연다.
     var pendingNewRule: PendingNewRule?
     /// 별도 창 편집기(`ToolEditorStyle.window`)로 넘기는 규칙. 키 = 규칙 id.
@@ -98,10 +48,6 @@ final class AppModel {
     var developmentPlatform: DevPlatform = .httpClients
     /// Android 섹션의 탭. Certificate 메뉴가 바꾼 뒤 창을 연다.
     var androidTab: AndroidTab = .device
-    /// Flow ▸ Delete All 확인 대기(필터가 숨긴 행이 있을 때만). 목록이 alert를 띄운다.
-    var pendingDeleteAll: (ids: Set<FlowID>, hiddenCount: Int)?
-    /// Flow ▸ Add Comment…로 코멘트를 편집 중인 흐름. 메인 창이 시트를 띄운다.
-    var commentingFlowID: FlowID?
     /// Edit and Repeat…로 Compose 창에 채울 요청. Compose 창이 꺼내 쓴다.
     var composeSeed: FlowRequest?
     /// 규칙 파일 경고(`rules.loadWarnings`) alert. 새 경고가 생기거나 툴바 경고를 누르면 켠다.
@@ -168,16 +114,19 @@ final class AppModel {
             .flatMap { ProxymanImporter.isSafeWriteTarget($0) ? $0 : nil }
         observeTools()
         observeBreakpoints()
-        // 마지막 필터 규칙을 되살린다. 켜진 규칙이 있으면 막대를 보인 채로 시작한다.
-        filter = settings.filterRules
-        appliedRules = filter
-        bodyMatchRules = filter.activeBodyRules
-        isFilterBarVisible = filter.hasActiveRules
-        refreshVisibleRows()
-        sidebarRefresh.now()
+        activeTab = mainTab
         // 백업 없이 VPN 복사본만 남은 경우(종료 때 관리자 인증 취소 등)도 시작 시 알린다.
         Task { await refreshEffectiveProxyWarning() }
     }
+
+    /// 탭을 만들어 `tabs`에 등록한다.
+    func makeTab(fileURL: URL?, session: SessionStore, processes: ProcessRegistry, restoreSavedRules: Bool) -> SessionTab {
+        let tab = SessionTab(model: self, session: session, processes: processes, fileURL: fileURL, restoreSavedRules: restoreSavedRules)
+        tabs[tab.id] = tab
+        return tab
+    }
+
+    func tab(_ id: UUID) -> SessionTab? { tabs[id] }
 
     /// 손상(한쪽 파일만 있음·읽기 실패)이면 기존 파일을 덮어쓰지 않고 이번 실행만 임시 CA를 쓴다.
     /// 저장 실패(caSaveError)는 기기 윈도우에 표시한다. ponytail: 손상으로 임시 CA를 쓰는 경우는 아직 UI에 알리지 않음.
@@ -323,21 +272,21 @@ final class AppModel {
     private func handle(_ event: FlowEvent) {
         let isNewFlow = if case .requestStarted = event { true } else { false }
         // 기록 중지 상태에서도 이미 보이는 요청의 응답·실패는 반영한다.
-        if settings.isRecording || !isNewFlow { session.apply(event) }
+        if settings.isRecording || !isNewFlow { liveSession.apply(event) }
         devices.observe(event)
         if case .annotated(let id, .unrecorded) = event { processes.remove(id) }
         // 소켓 조회는 비동기로 하고, 결과가 오면 귀속만 기록한다. 실제로 세션에 반영된 흐름만.
-        if case .requestStarted(let flow) = event, session.number(flow.id) != nil,
+        if case .requestStarted(let flow) = event, liveSession.number(flow.id) != nil,
            FlowFilter.sameDevice(flow.clientAddress, "127.0.0.1"), let port = flow.clientPort, let proxyPort = runningPort {
             let id = flow.id
             Task { [resolver, processes] in
                 // 조회 중에 미기록(Allow List)으로 빠진 흐름은 귀속하지 않는다.
-                guard let identity = await resolver.resolve(port: port, proxyPort: proxyPort), session.number(id) != nil else { return }
+                guard let identity = await resolver.resolve(port: port, proxyPort: proxyPort), liveSession.number(id) != nil else { return }
                 processes.set(identity, for: id)
                 // Advanced ▸ Hide Unnecessary Apple Requests from iOS Simulators: Block List 숨김과 같은 `.hidden`(눈 토글로 보기).
                 if settings.hideAppleSimulatorRequests,
                    SimulatorNoise.isAppleNoise(host: flow.request.host, clientIsSimulator: identity.simulator != nil) {
-                    session.apply(.annotated(id: id, .hidden))
+                    liveSession.apply(.annotated(id: id, .hidden))
                 }
                 // 기기 창을 열지 않아도 시뮬레이터 런타임(플랫폼 표기)을 알 수 있게 처음 보는 udid면 목록을 갱신한다.
                 if let sim = identity.simulator, !bootedSimulators.contains(where: { $0.udid == sim.udid }) { await refreshSimulators() }
@@ -354,9 +303,9 @@ final class AppModel {
     }
 
     /// HTTPS Response 안내의 "Enable all domains from <앱>": 그 앱(`ProcessIdentity.groupKey`)의 흐름이 쓴 모든 호스트를 넣는다.
-    func enableSSLProxying(forHostsOfApp groupKey: String) async {
+    func enableSSLProxying(forHostsOfApp groupKey: String, in tab: SessionTab) async {
         var patterns = settings.sslPatterns
-        for flow in session.flows where processes.attribution[flow.id]?.groupKey == groupKey && !patterns.contains(flow.request.host) {
+        for flow in tab.session.flows where tab.processes.attribution[flow.id]?.groupKey == groupKey && !patterns.contains(flow.request.host) {
             patterns.append(flow.request.host)
         }
         settings.sslPatterns = patterns
@@ -364,84 +313,30 @@ final class AppModel {
         await applySettingsToServer()
     }
 
-    func clear() {
-        session.clear()
-        processes.clear()
-        selectedFlowID = nil
-        // 지우면 목록이 비어 선택된 행이 사라진다 → 보이지 않는 필터가 남지 않게.
-        if let s = sidebarSelection, s != .allFlows { sidebarSelection = .allFlows }
-        bodyMatches = [:]
-        refreshVisibleRows()
-    }
+    // MARK: - 세션 파일
 
-    /// Flow ▸ Delete(스펙 §5). 보이는 행만 지운다 — 선택에 남은, 필터·사이드바가 숨긴 행은 몰래 지우지 않는다.
-    /// 선택이 지워지면 지운 행 바로 아래 보이는 행으로(없으면 위) 옮긴다.
-    func deleteFlows(_ ids: Set<FlowID>) {
-        // 트래픽 중 묶어 둔 목록은 최대 250 ms 늦다 — 지우기 전에 지금 화면과 같게 맞춘다.
-        refreshVisibleRows()
-        let order = visibleRows.map(\.id)
-        let ids = ids.intersection(order)
-        guard !ids.isEmpty else { return }
-        let next = order.lastIndex(where: ids.contains).flatMap { last in
-            order[(last + 1)...].first { !ids.contains($0) } ?? order[..<last].last { !ids.contains($0) }
-        }
-        session.remove(ids: ids)
-        for id in ids { processes.remove(id); bodyMatches[id] = nil }
-        refreshVisibleRows()
-        if !selectedFlowIDs.isDisjoint(with: ids) { selectedFlowID = next }
-    }
-
-    /// Flow ▸ Delete All: 보이는 행만 지운다. 필터·사이드바가 숨긴 행이 있으면 확인부터 받는다.
-    func deleteVisibleFlows() {
-        refreshVisibleRows()
-        let visible = Set(visibleFlows.map(\.id))
-        guard !visible.isEmpty else { return }
-        let hidden = session.flows.count - visible.count
-        if hidden > 0 { pendingDeleteAll = (visible, hidden) } else { deleteFlows(visible) }
-    }
-
-    // MARK: - 세션 파일 · cURL
-
-    func saveSession() async {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [Self.sessionType]
-        let stamp = DateFormatter()
-        stamp.locale = Locale(identifier: "en_US_POSIX")
-        stamp.dateFormat = "yyyyMMdd-HHmm"
-        panel.nameFieldStringValue = "Prog-\(stamp.string(from: .now)).\(SessionDocument.pathExtension)"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let (flows, log, attribution, comments, highlights, numbers) =
-            (session.flows, session.connectionLog, processes.attribution, session.comments, session.highlights, session.numbersByID)
-        do {
-            try await Task.detached {
-                try SessionDocument.save(flows: flows, connectionLog: log, processes: attribution, comments: comments,
-                                         highlights: highlights, numbers: numbers, to: url)
-            }.value
-        } catch {
-            systemError = String(localized: "세션을 저장하지 못했습니다: \(error.localizedDescription)")
-        }
-    }
-
+    /// 앞 탭의 세션을 연 파일로 교체한다.
     func openSession() async {
+        guard let tab = activeTab else { return }
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [Self.sessionType] + Self.harTypes
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             if url.pathExtension.lowercased() == "har" {
-                try await importHAR(from: url)
+                try await importHAR(from: url, into: tab)
             } else {
                 let loaded = try await Task.detached { try SessionDocument.load(from: url) }.value
-                session.replace(flows: loaded.flows, connectionLog: loaded.connectionLog, comments: loaded.comments,
-                                highlights: loaded.highlights, numbers: loaded.numbers)
-                processes.replace(loaded.processes)
+                tab.session.replace(flows: loaded.flows, connectionLog: loaded.connectionLog, comments: loaded.comments,
+                                    highlights: loaded.highlights, numbers: loaded.numbers)
+                tab.processes.replace(loaded.processes)
             }
             // 칩·숨김 보기는 처음으로, 필터 막대 규칙은 남긴다(저장된 마지막 설정).
             var fresh = FlowFilter()
-            (fresh.rules, fresh.combineWithOr) = (filter.rules, filter.combineWithOr)
-            filter = fresh
-            selectedFlowID = nil
-            sidebarSelection = .allFlows
+            (fresh.rules, fresh.combineWithOr) = (tab.filter.rules, tab.filter.combineWithOr)
+            tab.filter = fresh
+            tab.selectedFlowID = nil
+            tab.sidebarSelection = .allFlows
         } catch FlowImportError.invalidHAR(let reason) {
             systemError = String(localized: "HAR 파일을 열지 못했습니다: \(reason)")
         } catch {
@@ -449,172 +344,11 @@ final class AppModel {
         }
     }
 
-    func copyCurl(_ id: FlowID) {
-        guard let flow = session.flow(id) else { return }
-        NSPasteboard.general.clearContents()
-        // Tools ▸ Add --proxy flag into cURL command: 툴바 캡슐과 같은 IP·포트.
-        let proxy = settings.curlProxyFlag ? "http://\(lanAddresses.first ?? "127.0.0.1"):\(runningPort ?? settings.port)" : nil
-        NSPasteboard.general.setString(CurlExport.command(for: flow.request, proxy: proxy), forType: .string)
-    }
-
     /// Info.plist의 UTExportedTypeDeclarations와 일치해야 한다.
     nonisolated static let sessionType = UTType(exportedAs: "com.tv.eyeproxy.session", conformingTo: .package)
 
-    // MARK: - 목록
-
-    /// 사용자 조작(규칙·정렬·사이드바 선택·삭제): 보이는 행을 지금 다시 계산한다.
-    func refreshVisibleRows() { rowsRefresh.now() }
-
-    private func computeVisibleRows() {
-        let flows = computeVisibleFlows()
-        visibleFlows = flows
-        visibleRows = flows.map { FlowRow(flow: $0, number: session.number($0.id) ?? 0) }.sorted(using: sortOrder)
-    }
-
-    private func computeVisibleFlows() -> [Flow] {
-        var f = filter
-        (f.rules, f.combineWithOr) = (appliedRules.rules, appliedRules.combineWithOr)
-        sidebarSelection?.apply(to: &f)
-        let p = f.prepared()
-        // Client 이름은 계산이 무거워 Client 규칙이 있을 때만 만든다.
-        let needsClient = f.rules.contains { $0.isActive && $0.key == .client }
-        // 본문 규칙은 여기서 풀지 않고 백그라운드 판정 결과를 쓴다. 아직 판정 전(새 흐름·본문이 바뀐 흐름)이면 맞지 않음으로 두고 판정을 건다.
-        let usesBody = !p.bodyRules.isEmpty
-        var unmatched = false
-        let flows = session.flows.filter {
-            var hits: [Bool]?
-            if usesBody {
-                let cached = bodyMatches[$0.id]
-                if cached?.sizes != Self.bodySizes($0) { unmatched = true }
-                hits = cached?.hits ?? []
-            }
-            let subject = FilterSubject(flow: $0, number: session.number($0.id) ?? 0, comment: session.comments[$0.id],
-                                        highlight: session.highlights[$0.id], client: needsClient ? clientName(for: $0) : "")
-            return p.matches(subject, process: processKey(for: $0), bodyHits: hits)
-        }
-        if unmatched, bodyJob == nil, rulesDebounce == nil { startBodyMatching(appliedRules, full: false) }
-        return flows
-    }
-
-    // MARK: - 필터 막대
-
-    /// ⌘F(목록 쪽 포커스): 막대를 보이고 현재 규칙 검색칸에 포커스.
-    func showFilterBar() {
-        isFilterBarVisible = true
-        focusFilterBar = true
-    }
-
-    /// 판정한 흐름의 본문 크기. 바뀌면(응답 도착 등) 다시 판정한다.
-    private struct BodyMatch { let sizes: [Int]; let hits: [Bool] }
-    nonisolated private static func bodySizes(_ flow: Flow) -> [Int] { [flow.request.body.count, flow.response?.body.count ?? -1] }
-
-    /// 규칙이 바뀌었다: 저장하고, 가벼운 규칙만 바뀌었으면 바로, 본문 규칙이 바뀌었으면 디바운스 뒤 백그라운드에서 판정한다(스펙 §4 성능).
-    private func filterRulesChanged() {
-        settings.filterRules = filter
-        rulesDebounce?.cancel()
-        rulesDebounce = nil
-        let body = filter.activeBodyRules
-        if body == bodyMatchRules {
-            // 본문 규칙은 그대로다. 되돌린 입력의 새 전체 판정만 버리고(새 흐름 부분 판정은 계속),
-            // 꺼진·빈 규칙만 바뀌었으면 목록은 그대로 둔다.
-            if bodyJobIsFull { cancelBodyJob() }
-            if filter.rules.filter(\.isActive) != appliedRules.rules.filter(\.isActive)
-                || filter.combineWithOr != appliedRules.combineWithOr { appliedRules = filter }
-            return
-        }
-        cancelBodyJob()
-        if body.isEmpty {
-            (bodyMatches, bodyMatchRules) = ([:], [])
-            appliedRules = filter
-            return
-        }
-        rulesDebounce = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled, let self else { return }
-            rulesDebounce = nil
-            startBodyMatching(filter, full: true)
-        }
-    }
-
-    private func cancelBodyJob() {
-        bodyJob?.cancel()
-        bodyJob = nil
-        bodyJobIsFull = false
-        bodyJobGeneration += 1
-    }
-
-    /// 본문 규칙을 메인 밖에서 판정한다. full이면 모든 흐름을 새 규칙으로, 아니면 아직 판정하지 않은 흐름만.
-    /// 가장 최근에 시작한 작업의 결과만 반영한다(이전 작업은 취소).
-    private func startBodyMatching(_ rules: FlowFilter, full: Bool) {
-        bodyJob?.cancel()
-        bodyJobIsFull = full
-        bodyJobGeneration += 1
-        let generation = bodyJobGeneration
-        let flows = full ? session.flows : session.flows.filter { bodyMatches[$0.id]?.sizes != Self.bodySizes($0) }
-        bodyJob = Task.detached(priority: .userInitiated) { [weak self] in
-            let p = rules.prepared()
-            var result: [FlowID: BodyMatch] = [:]
-            for flow in flows {
-                if Task.isCancelled { return }
-                result[flow.id] = BodyMatch(sizes: Self.bodySizes(flow), hits: p.bodyHits(FilterSubject(flow: flow)))
-            }
-            await self?.applyBodyMatches(result, rules: rules, full: full, generation: generation)
-        }
-    }
-
-    private func applyBodyMatches(_ result: [FlowID: BodyMatch], rules: FlowFilter, full: Bool, generation: Int) {
-        guard generation == bodyJobGeneration else { return }
-        bodyJob = nil
-        bodyJobIsFull = false
-        guard full else { bodyMatches.merge(result) { $1 }; return }
-        // 그사이 가벼운 규칙·AND/OR만 바뀌었을 수 있다(본문 규칙이 바뀌었으면 generation이 달라 여기 오지 않는다).
-        bodyMatches = result
-        bodyMatchRules = rules.activeBodyRules
-        appliedRules = filter
-    }
-
-    /// View ▸ Auto Select(스펙 §6): 켜져 있으면 보이는 행 중 최신을 선택하고 그 id를 돌려준다(목록이 스크롤한다).
-    func selectLatestIfAuto() -> FlowID? {
-        guard settings.autoSelectLatest, let id = AutoSelect.latest(in: visibleFlows, number: { session.number($0) ?? 0 }) else { return nil }
-        selectedFlowID = id
-        return id
-    }
-
-    /// 목록에서 사용자가 바꾼 선택(클릭·키보드). 이 경로만 Auto Select를 끈다 —
-    /// Delete·세션 열기·Auto Select 같은 프로그램 선택은 `selectedFlowIDs`에 바로 쓰므로 끄지 않는다.
-    func userSelect(_ ids: Set<FlowID>) {
-        // 행이 바뀔 때 Table이 같은 선택을 다시 써도 사용자 변경으로 보지 않는다.
-        guard ids != selectedFlowIDs else { return }
-        if settings.autoSelectLatest, AutoSelect.shouldDisable(userSelected: ids, autoSelected: AutoSelect.latest(in: visibleFlows, number: { session.number($0) ?? 0 })) {
-            settings.autoSelectLatest = false
-        }
-        selectedFlowIDs = ids
-    }
-
-    func processKey(for flow: Flow) -> String? { processes.attribution[flow.id]?.groupKey }
-
-    /// 목록 Client 열과 Export가 같이 쓰는 이름: 프로세스 귀속 → (루프백이 아니면) 기기 이름 → 주소. 없으면 "".
-    func clientName(for flow: Flow) -> String {
-        if let identity = processes.attribution[flow.id] { return identity.displayName(runtimes: simulatorRuntimes) }
-        guard !FlowFilter.isLoopback(flow.clientAddress) else { return "" }
-        return devices.devices.first { $0.address == flow.clientAddress }?.displayName ?? flow.clientAddress
-    }
-
     var simulatorRuntimes: [String: String] {
         Dictionary(bootedSimulators.map { ($0.udid, $0.runtime) }, uniquingKeysWith: { a, _ in a })
-    }
-
-    /// 사이드바·배지가 세는 흐름. "숨김 포함"이 꺼져 있으면 Block List로 숨긴 흐름을 뺀다.
-    var sidebarFlows: [Flow] {
-        filter.includeHidden ? session.flows : session.flows.filter { !$0.annotations.contains(.hidden) }
-    }
-
-    private func computeSidebar() {
-        let flows = sidebarFlows
-        sidebarFlowCount = flows.count
-        sidebarTree = SidebarTree.build(flows: flows, attribution: processes.attribution, devices: devices.devices,
-                                        pinned: settings.pinnedHosts, runtimes: simulatorRuntimes).filtered(sidebarFilterText)
-        pathTrees = Dictionary(uniqueKeysWithValues: expandedDomains.map { ($0, SidebarTree.pathTree(for: $0, flows: flows)) })
     }
 
     // MARK: - 온보딩

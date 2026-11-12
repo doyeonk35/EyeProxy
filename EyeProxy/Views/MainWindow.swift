@@ -4,6 +4,7 @@ import SwiftUI
 
 struct MainWindow: View {
     @Environment(AppModel.self) private var model
+    let tab: SessionTab
     @Environment(\.openWindow) private var openWindow
     @State private var searchFindID = UUID()
 
@@ -14,15 +15,15 @@ struct MainWindow: View {
             Divider()
             BottomBar()
         }
-        .toolbar { MainToolbar(model: model) }
+        .toolbar { MainToolbar(model: model, tab: tab) }
         // Advanced ▸ Stay On Top: 켤 때·끌 때, 그리고 창이 새로 열려 앞으로 올 때마다 Prog 창 전체에 맞춘다.
         .onChange(of: model.settings.stayOnTop, initial: true) { _, on in StayOnTop.apply(on) }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             StayOnTop.apply(model.settings.stayOnTop)
         }
-        .focusedSceneValue(\.flowSearch, DetailFind(id: searchFindID, open: { model.showFilterBar() }))
-        .sheet(isPresented: Binding(get: { model.commentingFlowID != nil }, set: { if !$0 { model.commentingFlowID = nil } })) {
-            if let id = model.commentingFlowID { CommentSheet(id: id) }
+        .focusedSceneValue(\.flowSearch, DetailFind(id: searchFindID, open: { tab.showFilterBar() }))
+        .sheet(isPresented: Binding(get: { tab.commentingFlowID != nil }, set: { if !$0 { tab.commentingFlowID = nil } })) {
+            if let id = tab.commentingFlowID { CommentSheet(id: id) }
         }
         // 새로 멈춘 건이 생기면 Breakpoint 창을 앞으로(스펙 §5.1). 관찰은 앱 수준(AppModel.observeBreakpoints)이 한다.
         .onAppear { model.openBreakpointsWindow = { openWindow(id: "breakpoints") } }
@@ -35,6 +36,7 @@ struct MainWindow: View {
         } message: {
             Text(model.rules.loadWarnings.joined(separator: "\n"))
         }
+        .environment(tab)
     }
 
     private var split: some View {
@@ -45,7 +47,7 @@ struct MainWindow: View {
             VStack(spacing: 0) {
                 FilterBarView()
                 Divider()
-                if model.isFilterBarVisible {
+                if tab.isFilterBarVisible {
                     FilterRulesBar()
                     Divider()
                 }
@@ -67,15 +69,15 @@ struct MainWindow: View {
 
 /// Flow ▸ Add/Edit Comment… 시트. 빈 문자열로 저장하면 코멘트를 지운다.
 private struct CommentSheet: View {
-    @Environment(AppModel.self) private var model
+    @Environment(SessionTab.self) private var tab
     @Environment(\.dismiss) private var dismiss
     let id: FlowID
     @State private var text = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(model.session.comments[id] == nil ? "Add Comment" : "Edit Comment").font(.headline)
-            if let flow = model.session.flow(id) {
+            Text(tab.session.comments[id] == nil ? "Add Comment" : "Edit Comment").font(.headline)
+            if let flow = tab.session.flow(id) {
                 Text(flow.request.url).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             }
             TextField("코멘트", text: $text, axis: .vertical)
@@ -86,7 +88,7 @@ private struct CommentSheet: View {
                 Button("취소", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("저장") {
-                    model.session.setComment(text.trimmingCharacters(in: .whitespacesAndNewlines), for: id)
+                    tab.session.setComment(text.trimmingCharacters(in: .whitespacesAndNewlines), for: id)
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -94,7 +96,7 @@ private struct CommentSheet: View {
         }
         .padding(20)
         .frame(width: 420)
-        .onAppear { text = model.session.comments[id] ?? "" }
+        .onAppear { text = tab.session.comments[id] ?? "" }
     }
 }
 

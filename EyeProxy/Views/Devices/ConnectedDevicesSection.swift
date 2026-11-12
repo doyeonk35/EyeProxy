@@ -76,7 +76,7 @@ struct ConnectionLogSection: View {
 
     var body: some View {
         Section("연결 로그 (최근 50건)") {
-            let entries = model.session.connectionLog.suffix(50).reversed()
+            let entries = model.liveSession.connectionLog.suffix(50).reversed()
             if entries.isEmpty {
                 Text("기록 없음").foregroundStyle(.secondary)
             }

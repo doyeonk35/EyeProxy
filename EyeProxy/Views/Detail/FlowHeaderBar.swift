@@ -6,7 +6,7 @@ import SwiftUI
 /// 상세 머리(스펙 §7·§10): 왼쪽에 메서드 알약 위·상태 알약 아래, 오른쪽에 전체 URL을 여러 줄 모노 글꼴로
 /// (스킴 회색·호스트 파랑·경로와 쿼리 초록). 복사·cURL 버튼은 그대로.
 struct FlowHeaderBar: View {
-    @Environment(AppModel.self) private var model
+    @Environment(SessionTab.self) private var tab
     let flow: Flow
 
     var body: some View {
@@ -35,7 +35,7 @@ struct FlowHeaderBar: View {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(flow.request.url, forType: .string)
                 }
-                Button("cURL") { model.copyCurl(flow.id) }
+                Button("cURL") { tab.copyCurl(flow.id) }
             }
             .buttonStyle(.accessoryBar)
             .padding(.horizontal, 12)

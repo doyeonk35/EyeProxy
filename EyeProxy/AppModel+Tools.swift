@@ -83,6 +83,7 @@ extension AppModel {
         }
         let noCache = settings.toolSwitches.repeatNoCache
         let timeout = settings.requestTimeoutInterval   // Tools ▸ Request Timeout
+        guard let session = activeTab?.session else { return }
         // 목록 순서대로 보낸다.
         for flow in session.flows where ids.contains(flow.id) && !flow.isTunnel {
             let request = noCache ? NoCachingInterceptor.noCache(flow.request) : flow.request

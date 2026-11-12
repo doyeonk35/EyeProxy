@@ -4,13 +4,14 @@ import SwiftUI
 
 struct FlowDetailView: View {
     @Environment(AppModel.self) private var model
+    @Environment(SessionTab.self) private var tab
     /// 패널 상태는 여기서 쥔다 — 응답 쪽이 HTTPS 안내·실패·대기로 갈래가 바뀌어 MessagePane이 새로 만들어져도
     /// 마지막으로 고른 탭·표 거르기 보임·옵션이 흐름을 바꿔도 남는다(스펙 §7).
     @State private var requestPane = PaneState()
     @State private var responsePane = PaneState()
 
     var body: some View {
-        if let id = model.selectedFlowID, let flow = model.session.flow(id) {
+        if let id = tab.selectedFlowID, let flow = tab.session.flow(id) {
             VStack(spacing: 0) {
                 FlowHeaderBar(flow: flow)
                 panes(flow)
@@ -47,7 +48,7 @@ struct FlowDetailView: View {
     private func request(_ flow: Flow) -> some View {
         MessagePane(title: "Request", tabs: DetailTabs.request(flow.request), state: $requestPane,
                     headers: flow.request.headers, content: flow.request.body, flowID: flow.id, raw: .request(flow.request),
-                    query: Self.query(flow.request.path), summary: SummaryView.rows(flow, model: model))
+                    query: Self.query(flow.request.path), summary: SummaryView.rows(flow, tab: tab))
     }
 
     private static func query(_ path: String) -> [HTTPHeader] {
@@ -75,6 +76,7 @@ struct FlowDetailView: View {
 /// 앱을 모르면(원격 기기) 첫 버튼만.
 private struct HTTPSNotice: View {
     @Environment(AppModel.self) private var model
+    @Environment(SessionTab.self) private var tab
     let flow: Flow
 
     var body: some View {
@@ -90,10 +92,10 @@ private struct HTTPSNotice: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(listed)
                     .help("\(host)을(를) SSL Proxying 목록에 넣습니다")
-                if let app = model.processKey(for: flow) {
+                if let app = tab.processKey(for: flow) {
                     Text(verbatim: "or").foregroundStyle(.tertiary)
-                    Button { Task { await model.enableSSLProxying(forHostsOfApp: app) } } label: {
-                        Text(verbatim: "Enable all domains from \"\(model.clientName(for: flow))\"")
+                    Button { Task { await model.enableSSLProxying(forHostsOfApp: app, in: tab) } } label: {
+                        Text(verbatim: "Enable all domains from \"\(tab.clientName(for: flow))\"")
                     }
                     .help("이 앱이 연 모든 도메인을 SSL Proxying 목록에 넣습니다")
                 }

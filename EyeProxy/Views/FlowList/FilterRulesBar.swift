@@ -17,23 +17,23 @@ extension FocusedValues {
 
 /// 목록 위 Proxyman식 필터 막대: 한 줄 = 규칙 하나 `[켜짐] [키 ▾] [매칭 ▾] [검색어] − +`, 아래 단축키 안내와 AND/OR.
 struct FilterRulesBar: View {
-    @Environment(AppModel.self) private var model
+    @Environment(SessionTab.self) private var tab
     @FocusState private var focused: FilterRule.ID?
     /// 마지막으로 포커스가 있던 규칙. ⌘F는 이 규칙 검색칸으로 돌아온다.
     @State private var current: FilterRule.ID?
     @State private var actionsID = UUID()
 
     var body: some View {
-        @Bindable var model = model
+        @Bindable var tab = tab
         VStack(alignment: .leading, spacing: 4) {
-            ForEach($model.filter.rules) { $rule in row($rule) }
+            ForEach($tab.filter.rules) { $rule in row($rule) }
             HStack(spacing: 8) {
                 Text(verbatim: "Show ⌘F · New ⌘N · Remove ⇧⌘N · Up ⌘↑ · Down ⌘↓ · On/Off ⌘B · Hide ESC")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                Picker("", selection: $model.filter.combineWithOr) {
+                Picker("", selection: $tab.filter.combineWithOr) {
                     Text(verbatim: "AND").tag(false)
                     Text(verbatim: "OR").tag(true)
                 }
@@ -48,27 +48,27 @@ struct FilterRulesBar: View {
         .padding(.vertical, 5)
         .background(.bar)
         .focusedValue(\.filterBar, FilterBarActions(id: actionsID, perform: perform))
-        .onExitCommand { model.isFilterBarVisible = false }
-        .onAppear { if model.filter.rules.isEmpty { model.filter.rules = [FilterRule()] } }
+        .onExitCommand { tab.isFilterBarVisible = false }
+        .onAppear { if tab.filter.rules.isEmpty { tab.filter.rules = [FilterRule()] } }
         .onChange(of: focused) { _, id in
             if let id { current = id }
-            model.filterBarHasFocus = id != nil
+            tab.filterBarHasFocus = id != nil
         }
-        .onChange(of: model.focusFilterBar, initial: true) { _, on in
+        .onChange(of: tab.focusFilterBar, initial: true) { _, on in
             guard on else { return }
-            model.focusFilterBar = false
+            tab.focusFilterBar = false
             // 막대가 막 나타난 갱신 안에서는 포커스가 붙지 않아 다음 차례에 준다.
-            Task { focused = currentRule ?? model.filter.rules.first?.id }
+            Task { focused = currentRule ?? tab.filter.rules.first?.id }
         }
     }
 
     private var currentRule: FilterRule.ID? {
-        model.filter.rules.contains { $0.id == current } ? current : nil
+        tab.filter.rules.contains { $0.id == current } ? current : nil
     }
 
     private func row(_ rule: Binding<FilterRule>) -> some View {
         let r = rule.wrappedValue
-        let count = model.filter.rules.count
+        let count = tab.filter.rules.count
         return HStack(spacing: 6) {
             Toggle("", isOn: rule.isEnabled)
                 .toggleStyle(.checkbox)
@@ -118,7 +118,7 @@ struct FilterRulesBar: View {
     }
 
     private func perform(_ command: FilterBarCommand) {
-        let rules = model.filter.rules
+        let rules = tab.filter.rules
         let id = focused ?? currentRule
         let index = id.flatMap { id in rules.firstIndex { $0.id == id } }
         switch command {
@@ -126,24 +126,24 @@ struct FilterRulesBar: View {
         case .remove: if let id { remove(id) }
         case .up: if let index, index > 0 { focused = rules[index - 1].id }
         case .down: if let index, index + 1 < rules.count { focused = rules[index + 1].id }
-        case .toggle: if let index { model.filter.rules[index].isEnabled.toggle() }
+        case .toggle: if let index { tab.filter.rules[index].isEnabled.toggle() }
         }
     }
 
     /// 그 규칙 아래(없으면 맨 끝)에 빈 규칙을 넣고 검색칸에 포커스.
     private func add(after id: FilterRule.ID?) {
-        guard model.filter.rules.count < FlowFilter.maxRules else { return }
+        guard tab.filter.rules.count < FlowFilter.maxRules else { return }
         let rule = FilterRule()
-        let at = id.flatMap { id in model.filter.rules.firstIndex { $0.id == id } }.map { $0 + 1 } ?? model.filter.rules.endIndex
-        model.filter.rules.insert(rule, at: at)
+        let at = id.flatMap { id in tab.filter.rules.firstIndex { $0.id == id } }.map { $0 + 1 } ?? tab.filter.rules.endIndex
+        tab.filter.rules.insert(rule, at: at)
         focused = rule.id
     }
 
     /// 하나는 남긴다. 지운 자리의 다음(없으면 이전) 규칙으로 포커스.
     private func remove(_ id: FilterRule.ID) {
-        let rules = model.filter.rules
+        let rules = tab.filter.rules
         guard rules.count > 1, let i = rules.firstIndex(where: { $0.id == id }) else { return }
-        model.filter.rules.remove(at: i)
-        focused = model.filter.rules[min(i, model.filter.rules.count - 1)].id
+        tab.filter.rules.remove(at: i)
+        focused = tab.filter.rules[min(i, tab.filter.rules.count - 1)].id
     }
 }

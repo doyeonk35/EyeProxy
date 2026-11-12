@@ -5,6 +5,7 @@ import SwiftUI
 
 struct FlowListView: View {
     @Environment(AppModel.self) private var model
+    @Environment(SessionTab.self) private var tab
     @Environment(\.openWindow) private var openWindow
     // 열 구성이 바뀌어(Task 15b) 예전 저장값의 순서·폭이 섞이지 않게 키를 새로 쓴다.
     @AppStorage("eyeproxy.flowColumns.v2") private var columnCustomization = TableColumnCustomization<FlowRow>()
@@ -12,10 +13,10 @@ struct FlowListView: View {
     @FocusState private var tableFocused: Bool
 
     var body: some View {
-        @Bindable var model = model
-        let rows = model.visibleRows
+        @Bindable var tab = tab
+        let rows = tab.visibleRows
         let deviceNames = Dictionary(model.devices.devices.map { ($0.address, $0.displayName) }, uniquingKeysWith: { a, _ in a })
-        let comments = model.session.comments
+        let comments = tab.session.comments
 
         let latest = AutoSelect.latest(in: rows)
         // Advanced ▸ Use 24-Hour Time · Display Full Time Format.
@@ -30,7 +31,7 @@ struct FlowListView: View {
         // Proxyman 메인 목록과 같은 열·순서(Task 15b). 선택 열은 숨김 기본값.
         ScrollViewReader { proxy in
             // 사용자 선택만 `userSelect`를 거친다(Auto Select를 끄는 경로).
-            Table(rows, selection: Binding(get: { model.selectedFlowIDs }, set: { model.userSelect($0) }), sortOrder: $model.sortOrder, columnCustomization: $columnCustomization) {
+            Table(rows, selection: Binding(get: { tab.selectedFlowIDs }, set: { tab.userSelect($0) }), sortOrder: $tab.sortOrder, columnCustomization: $columnCustomization) {
                 Group {
                     TableColumn("", value: \.state) { (row: FlowRow) in cell(row) {
                         Circle().fill(FlowColors.state(row.state)).frame(width: 8, height: 8)
@@ -38,7 +39,7 @@ struct FlowListView: View {
                             .help(Self.stateText(row.state))
                             // 선택 행은 배경 대신 시스템 선택색이 보이므로 Highlight 색은 셀 높이만 한 막대로 보인다(스펙 §4).
                             .overlay(alignment: .leading) {
-                                if let color = model.session.highlights[row.id]?.color {
+                                if let color = tab.session.highlights[row.id]?.color {
                                     color.swiftUIColor.frame(width: 3).padding(.vertical, -RowHighlight.verticalBleed)
                                 }
                             }
@@ -52,7 +53,7 @@ struct FlowListView: View {
                     .width(min: 32, ideal: 48, max: 80)
                     .customizationID("id")
                     TableColumn("URL", value: \.url) { (row: FlowRow) in cell(row) {
-                        let struck = model.session.highlights[row.id]?.strikethrough ?? false
+                        let struck = tab.session.highlights[row.id]?.strikethrough ?? false
                         (Text(row.host).foregroundStyle(struck ? .secondary : .primary).strikethrough(struck)
                             + Text(row.flow.request.path).foregroundStyle(.secondary).strikethrough(struck))
                             .lineLimit(1).truncationMode(truncation)
@@ -60,8 +61,8 @@ struct FlowListView: View {
                     .width(min: 200, ideal: 360)
                     .customizationID("url")
                     TableColumn("Client") { (row: FlowRow) in cell(row) {
-                        let name = model.clientName(for: row.flow)
-                        if let identity = model.processes.attribution[row.id] {
+                        let name = tab.clientName(for: row.flow)
+                        if let identity = tab.processes.attribution[row.id] {
                             HStack(spacing: 5) {
                                 AppIcon(path: identity.path)
                                 Text(name)
@@ -73,7 +74,7 @@ struct FlowListView: View {
                     }}
                     .width(min: 80, ideal: 130, max: 240)
                     .customizationID("client")
-                    TableColumn("Method", value: \.method) { (row: FlowRow) in cell(row) { MethodTag(method: row.method, selected: model.selectedFlowIDs.contains(row.id)) }}
+                    TableColumn("Method", value: \.method) { (row: FlowRow) in cell(row) { MethodTag(method: row.method, selected: tab.selectedFlowIDs.contains(row.id)) }}
                         .width(min: 50, ideal: 70, max: 110)
                         .customizationID("method")
                     TableColumn("Status", value: \.state) { (row: FlowRow) in cell(row) { Text(Self.stateText(row.state)) }}
@@ -81,7 +82,7 @@ struct FlowListView: View {
                         .customizationID("state")
                     TableColumn("Code", value: \.status) { (row: FlowRow) in cell(row) {
                         if row.flow.response != nil {
-                            StatusTag(flow: row.flow, selected: model.selectedFlowIDs.contains(row.id))
+                            StatusTag(flow: row.flow, selected: tab.selectedFlowIDs.contains(row.id))
                         } else if row.state == .active {
                             Text("-").foregroundStyle(.secondary)
                         }
@@ -119,7 +120,7 @@ struct FlowListView: View {
                     .customizationID("ssl")
                     TableColumn("Edited", value: \.edited) { (row: FlowRow) in cell(row) {
                         HStack(spacing: 4) {
-                            ForEach(row.editedMarks, id: \.self) { EditedTag(mark: $0, selected: model.selectedFlowIDs.contains(row.id)) }
+                            ForEach(row.editedMarks, id: \.self) { EditedTag(mark: $0, selected: tab.selectedFlowIDs.contains(row.id)) }
                         }
                         .lineLimit(1)
                     }}
@@ -149,18 +150,18 @@ struct FlowListView: View {
             // AppKit이 창을 처음 key로 만들며 키 뷰 순서의 첫 검색칸에 포커스를 주므로, 그 뒤에 목록으로 되돌린다.
             .task { tableFocused = true }
             // 필터 막대를 숨기면(막대에 포커스가 있었을 때) 목록으로 돌아온다.
-            .onChange(of: model.focusFlowList) { _, on in
+            .onChange(of: tab.focusFlowList) { _, on in
                 guard on else { return }
-                model.focusFlowList = false
+                tab.focusFlowList = false
                 tableFocused = true
             }
             // 최신 행이 바뀔 때만 따라간다 — 응답 도착 같은 행 갱신으로 선택을 다시 쓰지 않는다. 켜면 바로 최신을 고른다.
             .onChange(of: latest) { followLatest(proxy) }
             .onChange(of: model.settings.autoSelectLatest, initial: true) { followLatest(proxy) }
             // Flow ▸ Repeat(⌘↩)는 메인 창이 key일 때만 켜진다 → 다른 창의 ⌘↩를 빼앗지 않는다.
-            .focusedSceneValue(\.flowSelection, model.selectedFlowIDs.isEmpty ? nil : model.selectedFlowIDs)
+            .focusedSceneValue(\.flowSelection, tab.selectedFlowIDs.isEmpty ? nil : tab.selectedFlowIDs)
             // Flow ▸ Delete(⌫)는 목록에 포커스가 있을 때만 켜진다 → 검색창·코멘트 시트의 ⌫를 빼앗지 않는다.
-            .focusedValue(\.flowListSelection, model.selectedFlowIDs)
+            .focusedValue(\.flowListSelection, tab.selectedFlowIDs)
             // Flow ▸ Delete All은 메인 창이 key이고 보이는 행이 있을 때만 → 창이 닫힌 뒤 확인 알림이 남지 않는다.
             .focusedSceneValue(\.visibleFlowCount, rows.count)
             .contextMenu(forSelectionType: FlowID.self) { ids in
@@ -168,7 +169,7 @@ struct FlowListView: View {
                     Button("Repeat") { model.repeatFlows(ids) }
                         .help("선택한 요청을 그대로 다시 보내기")
                 }
-                if ids.count == 1, let id = ids.first, let flow = model.session.flow(id) {
+                if ids.count == 1, let id = ids.first, let flow = tab.session.flow(id) {
                     Button("Edit and Repeat…") {
                         model.composeSeed = flow.request
                         openWindow(id: "compose")
@@ -179,9 +180,9 @@ struct FlowListView: View {
                         Task { await model.enableSSLProxying(for: flow.request.host) }
                     }
                     .help("이 호스트를 SSL Proxying List에 넣고 복호화 켜기")
-                    Button(model.session.comments[id] == nil ? "Add Comment…" : "Edit Comment…") { model.commentingFlowID = id }
+                    Button(tab.session.comments[id] == nil ? "Add Comment…" : "Edit Comment…") { tab.commentingFlowID = id }
                         .help("이 요청의 코멘트 쓰기·고치기")
-                    Button("Copy as cURL") { model.copyCurl(flow.id) }
+                    Button("Copy as cURL") { tab.copyCurl(flow.id) }
                     .help("이 요청을 cURL 명령으로 복사")
                     Menu("Tools") {
                         ForEach(Self.toolWindows, id: \.id) { tool in
@@ -196,17 +197,17 @@ struct FlowListView: View {
                 }
                 if !ids.isEmpty {
                     Divider()
-                    HighlightMenu(model: model) { ids }
-                    ExportMenu(model: model) { ids }
-                    Button("Delete") { model.deleteFlows(ids) }
+                    HighlightMenu(tab: tab) { ids }
+                    ExportMenu(tab: tab) { ids }
+                    Button("Delete") { tab.deleteFlows(ids) }
                         .help("선택한 요청을 목록에서 지우기")
                 }
             }
             // Flow ▸ Delete All에서 필터가 숨긴 행이 있을 때만(스펙 §5).
-            .alert(model.pendingDeleteAll.map { String(localized: "보이는 \($0.ids.count)개를 지웁니다. 숨겨진 \($0.hiddenCount)개는 남습니다.") } ?? "",
-                   isPresented: Binding(get: { model.pendingDeleteAll != nil }, set: { if !$0 { model.pendingDeleteAll = nil } }),
-                   presenting: model.pendingDeleteAll) { pending in
-                Button("지우기", role: .destructive) { model.deleteFlows(pending.ids) }
+            .alert(tab.pendingDeleteAll.map { String(localized: "보이는 \($0.ids.count)개를 지웁니다. 숨겨진 \($0.hiddenCount)개는 남습니다.") } ?? "",
+                   isPresented: Binding(get: { tab.pendingDeleteAll != nil }, set: { if !$0 { tab.pendingDeleteAll = nil } }),
+                   presenting: tab.pendingDeleteAll) { pending in
+                Button("지우기", role: .destructive) { tab.deleteFlows(pending.ids) }
                 Button("취소", role: .cancel) {}
             }
         }
@@ -214,12 +215,12 @@ struct FlowListView: View {
 
     /// 표가 새 행을 반영한 다음 고르고 스크롤한다 — 같은 갱신 안에서 바꾸면 아직 없는 행이라 스크롤되지 않는다.
     private func followLatest(_ proxy: ScrollViewProxy) {
-        Task { if let id = model.selectLatestIfAuto() { proxy.scrollTo(id) } }
+        Task { if let id = tab.selectLatestIfAuto() { proxy.scrollTo(id) } }
     }
 
     /// 모든 셀에 행 Highlight 배경을 깐다. 선택 행은 시스템 선택색이 우선이라 깔지 않는다(스펙 §4).
     private func cell(_ row: FlowRow, @ViewBuilder _ content: () -> some View) -> some View {
-        let color = model.selectedFlowIDs.contains(row.id) ? nil : model.session.highlights[row.id]?.color
+        let color = tab.selectedFlowIDs.contains(row.id) ? nil : tab.session.highlights[row.id]?.color
         return content().modifier(RowHighlight(color: color))
     }
 

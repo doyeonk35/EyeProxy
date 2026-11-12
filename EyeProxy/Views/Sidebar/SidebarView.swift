@@ -5,6 +5,7 @@ import SwiftUI
 /// Proxyman 하이어라키(스펙 §5): Favorites ▸ Pinned, Remote devices, All ▸ All Requests·Apps·Domains, 맨 아래 필터 칸.
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
+    @Environment(SessionTab.self) private var tab
     /// 기본값과 다르게 펼치거나 접은 줄의 키.
     @State private var toggled: Set<String> = []
     @State private var addingPin = false
@@ -12,13 +13,13 @@ struct SidebarView: View {
     @FocusState private var filterFocused: Bool
 
     var body: some View {
-        @Bindable var model = model
-        let tree = model.sidebarTree
+        @Bindable var tab = tab
+        let tree = tab.sidebarTree
         VStack(spacing: 0) {
-            List(selection: $model.sidebarSelection) {
+            List(selection: $tab.sidebarSelection) {
                 Section("Favorites") {
                     DisclosureGroup(isExpanded: expansion("pinned")) {
-                        if tree.pinned.isEmpty, model.sidebarFilterText.isEmpty {
+                        if tree.pinned.isEmpty, tab.sidebarFilterText.isEmpty {
                             Text("도메인을 우클릭해 고정").foregroundStyle(.secondary)
                         }
                         ForEach(tree.pinned) { domainRow($0, icon: "pin.fill") }
@@ -41,7 +42,7 @@ struct SidebarView: View {
                 }
                 Section("All") {
                     Label("All Requests", systemImage: "tray.full")
-                        .badge(model.sidebarFlowCount)
+                        .badge(tab.sidebarFlowCount)
                         .tag(SidebarItem.allFlows)
                     DisclosureGroup(isExpanded: expansion("apps")) {
                         ForEach(tree.apps) { app in
@@ -63,7 +64,7 @@ struct SidebarView: View {
                         ForEach(tree.domains) { domainRow($0, icon: "globe") }
                     } label: {
                         Label("Domains", systemImage: "globe")
-                            .badge(model.sidebarFlowCount)
+                            .badge(tab.sidebarFlowCount)
                     }
                 }
             }
@@ -72,11 +73,11 @@ struct SidebarView: View {
                 Button { addingPin = true } label: { Image(systemName: "plus") }
                     .buttonStyle(.borderless)
                     .help("Pinned에 도메인 추가")
-                TextField("Filter (⌘⇧F)", text: $model.sidebarFilterText)
+                TextField("Filter (⌘⇧F)", text: $tab.sidebarFilterText)
                     .textFieldStyle(.roundedBorder)
                     .controlSize(.small)
                     .focused($filterFocused)
-                    .onExitCommand { model.sidebarFilterText = "" }
+                    .onExitCommand { tab.sidebarFilterText = "" }
                     .help("사이드바 항목 이름으로 거르기 (⌘⇧F)")
             }
             .padding(.horizontal, 8)
@@ -89,7 +90,7 @@ struct SidebarView: View {
     /// 거르는 중이면 맞는 줄이 보이게 모두 펼친다.
     private func expansion(_ key: String, default open: Bool = true) -> Binding<Bool> {
         Binding(
-            get: { !model.sidebarFilterText.isEmpty || toggled.contains(key) != open },
+            get: { !tab.sidebarFilterText.isEmpty || toggled.contains(key) != open },
             set: { if $0 != open { toggled.insert(key) } else { toggled.remove(key) } }
         )
     }
@@ -98,12 +99,12 @@ struct SidebarView: View {
     @ViewBuilder
     private func domainRow(_ node: HostNode, icon: String) -> some View {
         let row = hostRow(node, icon: icon, tag: .host(node.host))
-        if model.sidebarTree.hostsWithPaths.contains(node.host) {
+        if tab.sidebarTree.hostsWithPaths.contains(node.host) {
             DisclosureGroup(isExpanded: Binding(
-                get: { model.expandedDomains.contains(node.host) },
-                set: { if $0 { model.expandedDomains.insert(node.host) } else { model.expandedDomains.remove(node.host) } }
+                get: { tab.expandedDomains.contains(node.host) },
+                set: { if $0 { tab.expandedDomains.insert(node.host) } else { tab.expandedDomains.remove(node.host) } }
             )) {
-                OutlineGroup(model.pathTrees[node.host] ?? [], children: \.childNodes) { path in
+                OutlineGroup(tab.pathTrees[node.host] ?? [], children: \.childNodes) { path in
                     Label("/" + path.segment, systemImage: path.children.isEmpty ? "doc" : "folder")
                         .badge(path.count)
                         .tag(SidebarItem.path(host: node.host, prefix: path.fullPath))

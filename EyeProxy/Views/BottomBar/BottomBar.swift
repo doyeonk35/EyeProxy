@@ -6,6 +6,7 @@ import SwiftUI
 /// 목록 수는 캐시된 `visibleFlows`(묶어서 갱신)만 읽는다 — 세션 흐름을 body에서 읽으면 요청마다 다시 그려진다.
 struct BottomBar: View {
     @Environment(AppModel.self) private var model
+    @Environment(SessionTab.self) private var tab
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
     @State private var showNoCaching = false
@@ -13,14 +14,14 @@ struct BottomBar: View {
     var body: some View {
         @Bindable var settings = model.settings
         HStack(spacing: 4) {
-            barButton("Clear", systemImage: "trash", on: false, help: "세션의 모든 요청 지우기 (⌘K)") { model.clear() }
-            barButton("Filter", systemImage: "line.3.horizontal.decrease", on: model.isFilterBarVisible || model.hasActiveFilterRules,
+            barButton("Clear", systemImage: "trash", on: false, help: "세션의 모든 요청 지우기 (⌘K)") { tab.clear() }
+            barButton("Filter", systemImage: "line.3.horizontal.decrease", on: tab.isFilterBarVisible || tab.hasActiveFilterRules,
                       help: "필터 막대 보이기·숨기기 (⌘F)") {
-                if model.isFilterBarVisible { model.isFilterBarVisible = false } else { model.showFilterBar() }
+                if tab.isFilterBarVisible { tab.isFilterBarVisible = false } else { tab.showFilterBar() }
             }
             barButton("Auto Select", systemImage: "arrow.down.to.line", on: settings.autoSelectLatest,
                       help: "새 요청이 오면 자동 선택 — 다른 행을 고르면 꺼짐") { settings.autoSelectLatest.toggle() }
-            Text(verbatim: "\(model.visibleSelectedFlowIDs.count)/\(model.visibleFlows.count) rows selected")
+            Text(verbatim: "\(tab.visibleSelectedFlowIDs.count)/\(tab.visibleFlows.count) rows selected")
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .frame(maxWidth: .infinity)
@@ -125,7 +126,7 @@ struct ResourceUsage: View {
             .task {
                 while !Task.isCancelled {
                     // task 안의 읽기는 관찰되지 않는다 → 세션이 바뀌어도 다시 그리지 않는다.
-                    let rate = Throughput.lastSecond(model.session.flows, now: .now)
+                    let rate = Throughput.lastSecond(model.liveSession.flows, now: .now)
                     text = Throughput.format(memory: Self.residentBytes(), up: rate.up, down: rate.down)
                     try? await Task.sleep(for: .seconds(1))
                 }

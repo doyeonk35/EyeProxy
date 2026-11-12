@@ -9,7 +9,7 @@ import SwiftUI
 
     var body: some Scene {
         Window("Prog", id: "main") {
-            MainWindow()
+            MainWindow(tab: model.mainTab)
                 .environment(model)
                 .frame(minWidth: 1100, minHeight: 700)
                 .task {
@@ -36,12 +36,15 @@ import SwiftUI
             CommandGroup(after: .newItem) {
                 Button("세션 열기…") { Task { await model.openSession() } }
                     .keyboardShortcut("o")
+                    .disabled(model.activeTab == nil)
                     .help("세션·HAR 파일을 열어 현재 세션 교체 (⌘O)")
-                Button("세션 저장…") { Task { await model.saveSession() } }
+                Button("세션 저장…") { Task { await model.activeTab?.saveSession() } }
                     .keyboardShortcut("s")
+                    .disabled(model.activeTab == nil)
                     .help("현재 세션 전체를 Prog 세션 파일로 저장 (⌘S)")
-                Button("세션 지우기") { model.clear() }
+                Button("세션 지우기") { model.activeTab?.clear() }
                     .keyboardShortcut("k")
+                    .disabled(model.activeTab == nil)
                     .help("세션의 모든 요청 지우기 (⌘K)")
             }
             CommandGroup(after: .pasteboard) {
@@ -126,9 +129,9 @@ import SwiftUI
 private struct CopyCurlButton: View {
     let model: AppModel
     var body: some View {
-        Button("cURL로 복사") { if let id = model.selectedFlowID { model.copyCurl(id) } }
+        Button("cURL로 복사") { if let tab = model.activeTab, let id = tab.selectedFlowID { tab.copyCurl(id) } }
             .keyboardShortcut("c", modifiers: [.command, .shift])
-            .disabled(model.selectedFlowID == nil)
+            .disabled(model.activeTab?.selectedFlowID == nil)
             .help("선택한 요청을 cURL 명령으로 복사 (⇧⌘C)")
     }
 }

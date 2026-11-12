@@ -165,7 +165,7 @@ struct NetworkConditionsWindow: View {
     private func consumePendingRule() {
         guard let pending = model.pendingNewRule, pending.windowID == "tool-network" else { return }
         model.pendingNewRule = nil
-        draft = Self.newRule(host: model.session.flow(pending.flowID)?.request.host ?? pending.match.hostPattern ?? "")
+        draft = Self.newRule(host: model.activeTab?.session.flow(pending.flowID)?.request.host ?? pending.match.hostPattern ?? "")
     }
 }
 
