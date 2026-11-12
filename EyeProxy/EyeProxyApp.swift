@@ -199,10 +199,14 @@ private struct LayoutPicker: View {
     let model = AppModel()
     private var quitTask: Task<Void, Never>?
     private var updaterController: SPUStandardUpdaterController?
+    /// 실행 완료 전에 파일 열기 이벤트가 왔다(파일로 실행). 상태 복원 실행과 구별한다.
+    private var didFinishLaunching = false
+    private var openedDocumentsAtLaunch = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 파일로 실행하면 SwiftUI가 메인 창 대신 첫 단일 창(Breakpoints)을 띄운다 — 닫는다. 메인 창은 `application(_:open:)`이 연다.
-        if notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool == false, model.breakpoints.pending.isEmpty {
+        didFinishLaunching = true
+        if openedDocumentsAtLaunch {
             NSApp.windows.filter { $0.identifier?.rawValue == "breakpoints" }.forEach { $0.close() }
         }
         let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
@@ -228,6 +232,7 @@ private struct LayoutPicker: View {
     }
 
     @objc private func handleOpenDocuments(_ event: NSAppleEventDescriptor, withReply reply: NSAppleEventDescriptor) {
+        if !didFinishLaunching { openedDocumentsAtLaunch = true }
         guard let list = event.paramDescriptor(forKeyword: keyDirectObject) else { return }
         let items = list.numberOfItems > 0 ? (1...list.numberOfItems).compactMap { list.atIndex($0) } : [list]
         application(NSApp, open: items.compactMap(\.fileURLValue))
